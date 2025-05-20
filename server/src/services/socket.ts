@@ -3,49 +3,49 @@ import { authenticateSocketConnection } from '../utils/socketAuth';
 import logger from '../utils/logger';
 import { User } from '../models';
 
-// 存储用户的活跃连接和订阅的资产
+// Store user's active connections and subscribed assets
 interface ActiveSubscription {
   userId: string;
   socketId: string;
   assets: string[];
 }
 
-// 活跃订阅列表
+// Active subscription list
 const activeSubscriptions: ActiveSubscription[] = [];
 
 /**
- * 设置Socket.IO连接和事件处理
- * @param io Socket.IO服务器实例
+ * Set up Socket.IO connection and event handling
+ * @param io Socket.IO server instance
  */
 export const setupSocketHandlers = (io: SocketIOServer) => {
-  // 添加认证中间件
+  // Add authentication middleware
   io.use(authenticateSocketConnection);
 
-  // 处理连接事件
+  // Handle connection event
   io.on('connection', (socket) => {
     const user = (socket as any).user as User;
-    logger.info(`Socket已连接: ${socket.id} (用户: ${user.name})`);
+    logger.info(`Socket connected: ${socket.id} (User: ${user.name})`);
 
-    // 处理用户订阅资产
+    // Handle user subscribing to assets
     socket.on('subscribe', (data) => {
       if (!data.assets || !Array.isArray(data.assets)) {
-        socket.emit('error', { message: '无效的订阅数据' });
+        socket.emit('error', { message: 'Invalid subscription data' });
         return;
       }
 
       const assets = data.assets as string[];
       
-      // 将此用户添加到订阅列表
+      // Add this user to the subscription list
       const existingSubscriptionIndex = activeSubscriptions.findIndex(
         (sub) => sub.userId === user.id.toString()
       );
 
       if (existingSubscriptionIndex >= 0) {
-        // 更新现有订阅
+        // Update existing subscription
         activeSubscriptions[existingSubscriptionIndex].assets = assets;
         activeSubscriptions[existingSubscriptionIndex].socketId = socket.id;
       } else {
-        // 添加新的订阅
+        // Add new subscription
         activeSubscriptions.push({
           userId: user.id.toString(),
           socketId: socket.id,
@@ -53,11 +53,11 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
         });
       }
 
-      logger.info(`用户 ${user.name} 订阅了资产: ${assets.join(', ')}`);
+      logger.info(`User ${user.name} subscribed to assets: ${assets.join(', ')}`);
       socket.emit('subscribed', { assets });
     });
 
-    // 处理取消订阅
+    // Handle unsubscribing
     socket.on('unsubscribe', () => {
       const index = activeSubscriptions.findIndex(
         (sub) => sub.socketId === socket.id
@@ -65,11 +65,11 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
 
       if (index >= 0) {
         activeSubscriptions.splice(index, 1);
-        logger.info(`用户 ${user.name} 取消订阅了所有资产`);
+        logger.info(`User ${user.name} unsubscribed from all assets`);
       }
     });
 
-    // 处理断开连接
+    // Handle disconnection
     socket.on('disconnect', () => {
       const index = activeSubscriptions.findIndex(
         (sub) => sub.socketId === socket.id
@@ -79,16 +79,16 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
         activeSubscriptions.splice(index, 1);
       }
 
-      logger.info(`Socket已断开连接: ${socket.id} (用户: ${user.name})`);
+      logger.info(`Socket disconnected: ${socket.id} (User: ${user.name})`);
     });
   });
 };
 
 /**
- * 向订阅特定资产的用户发送信号
- * @param io Socket.IO服务器实例
- * @param assetSymbol 资产符号
- * @param signal 信号数据
+ * Send signal to subscribers of specific assets
+ * @param io Socket.IO server instance
+ * @param assetSymbol Asset symbol
+ * @param signal Signal data
  */
 export const sendSignalToSubscribers = (io: SocketIOServer, assetSymbol: string, signal: any) => {
   const subscribers = activeSubscriptions.filter((sub) =>
@@ -99,13 +99,13 @@ export const sendSignalToSubscribers = (io: SocketIOServer, assetSymbol: string,
     return;
   }
 
-  logger.info(`向 ${subscribers.length} 个订阅者发送 ${assetSymbol} 的信号`);
+  logger.info(`Sending signal to ${subscribers.length} subscribers of ${assetSymbol}`);
   
-  // 向每个订阅者发送信号
+  // Send signal to each subscriber
   subscribers.forEach((sub) => {
     io.to(sub.socketId).emit('newSignal', signal);
   });
 };
 
-// 导出活跃订阅列表（用于内部服务）
+// Export active subscription list (for internal service)
 export const getActiveSubscriptions = () => [...activeSubscriptions]; 

@@ -1,163 +1,163 @@
-# 加密货币情报引擎
+# Crypto Intelligence Engine
 
-实时加密货币情报引擎是一个全栈应用程序，用于从社交媒体平台提取加密货币相关的实时信号。
+The Real-time Crypto Intelligence Engine is a full-stack application designed to extract real-time cryptocurrency-related signals from social media platforms.
 
-## 项目结构
+## Project Structure
 
-- **client**: React前端应用，使用TypeScript和Tailwind CSS
-- **server**: Node.js后端API，使用Express和SQLite
+- **client**: React frontend application using TypeScript and Tailwind CSS
+- **server**: Node.js backend API using Express and SQLite
 
-## 功能特点
+## Features
 
-- 用户认证系统(登录/注册)
-- 加密货币资产选择(用户可选择3-5个资产进行跟踪)
-- 实时信号显示(从Twitter/Reddit提取的情绪和叙事信号)
-- 信号筛选系统(按时间、类型、强度、来源筛选)
-- 信号详情视图(包含图表和来源分析)
-- 通知偏好设置
-- 暗色/亮色模式切换
-- 用户反馈系统
+- User Authentication System (Login/Register)
+- Cryptocurrency Asset Selection (Users can track 3-5 assets)
+- Real-time Signal Display (Sentiment and narrative signals from Twitter/Reddit)
+- Signal Filtering System (Filter by time, type, strength, source)
+- Signal Detail View (Including charts and source analysis)
+- Notification Preferences
+- Dark/Light Mode Toggle
+- User Feedback System
 
-## 技术栈
+## Tech Stack
 
-### 前端
+### Frontend
 - React 18
 - TypeScript
 - Tailwind CSS
 - Vite
 - React Router v6
-- Chart.js (数据可视化)
-- Socket.IO客户端 (实时更新)
+- Chart.js (Data Visualization)
+- Socket.IO Client (Real-time Updates)
 
-### 后端
+### Backend
 - Node.js
 - Express
 - TypeScript
-- SQLite (通过Sequelize ORM)
+- SQLite (via Sequelize ORM)
 - Socket.IO (WebSocket)
-- JWT身份验证
+- JWT Authentication
 
-## 安装和运行
+## Installation and Running
 
-### 前提条件
+### Prerequisites
 - Node.js >= 18.0.0
 
-### 简易启动方式
+### Quick Start
 
 ```bash
-# 添加执行权限
+# Add execution permissions
 chmod +x start-service.sh
 
-# 运行启动脚本
+# Run startup script
 ./start-service.sh
 ```
 
-启动脚本会自动执行以下操作：
-1. 检查并杀死占用端口的旧进程
-2. 创建必要的目录
-3. 生成环境变量文件(如果不存在)
-4. 安装依赖(如果需要)
-5. 启动前端和后端服务
+The startup script will automatically:
+1. Check and kill old processes occupying ports
+2. Create necessary directories
+3. Generate environment variable files (if not exist)
+4. Install dependencies (if needed)
+5. Start frontend and backend services
 
-### 手动安装依赖
+### Manual Dependency Installation
 
 ```bash
-# 安装所有依赖(客户端和服务器)
+# Install all dependencies (client and server)
 npm install
 ```
 
-### 环境变量设置
+### Environment Variables Setup
 
-1. 在 `server` 目录中创建 `.env` 文件
-2. 添加以下环境变量:
+1. Create `.env` file in the `server` directory
+2. Add the following environment variables:
 
 ```
-# 服务器配置
+# Server Configuration
 PORT=5000
 NODE_ENV=development
 
-# 数据库配置
+# Database Configuration
 SQLITE_DB_PATH=data/crypto-intel.sqlite
 
-# JWT配置
+# JWT Configuration
 JWT_SECRET=crypto-intel-secret-key-for-development
 JWT_EXPIRES_IN=30d
 
-# CORS配置
+# CORS Configuration
 CORS_ORIGIN=http://localhost:3000
 
-# 模拟信号配置
+# Mock Signal Configuration
 ENABLE_MOCK_SIGNALS=true
 ```
 
-### 手动运行开发服务器
+### Manual Development Server Launch
 
 ```bash
-# 同时运行前端和后端
+# Run both frontend and backend
 npm run dev
 
-# 仅运行前端
+# Run frontend only
 npm run dev:client
 
-# 仅运行后端
+# Run backend only
 npm run dev:server
 ```
 
-### 构建生产版本
+### Build Production Version
 
 ```bash
 npm run build
 ```
 
-## 初始化数据
+## Data Initialization
 
-首次运行项目时，您需要初始化默认资产数据。使用以下API端点:
+When running the project for the first time, you need to initialize default asset data. Use the following API endpoint:
 
 ```
 POST /api/assets/initialize
 ```
 
-您可以使用Postman或curl发送此请求。
+You can send this request using Postman or curl.
 
-## 演示账户
+## Demo Account
 
-可以使用以下演示账户登录系统:
+You can log in to the system using the following demo account:
 
-- 邮箱: demo@example.com
-- 密码: demo123
+- Email: demo@example.com
+- Password: demo123
 
-## API文档
+## API Documentation
 
-API端点:
+API Endpoints:
 
-- 认证:
-  - `POST /api/auth/register` - 注册新用户
-  - `POST /api/auth/login` - 用户登录
+- Authentication:
+  - `POST /api/auth/register` - Register new user
+  - `POST /api/auth/login` - User login
 
-- 用户:
-  - `GET /api/users/me` - 获取当前用户信息
-  - `GET /api/users/assets` - 获取用户选择的资产
-  - `POST /api/users/assets` - 更新用户选择的资产
-  - `PUT /api/users/profile` - 更新用户资料
+- Users:
+  - `GET /api/users/me` - Get current user information
+  - `GET /api/users/assets` - Get user selected assets
+  - `POST /api/users/assets` - Update user selected assets
+  - `PUT /api/users/profile` - Update user profile
 
-- 资产:
-  - `GET /api/assets` - 获取所有资产
-  - `GET /api/assets/:id` - 获取单个资产详情
-  - `POST /api/assets/initialize` - 初始化默认资产(仅开发环境)
+- Assets:
+  - `GET /api/assets` - Get all assets
+  - `GET /api/assets/:id` - Get single asset details
+  - `POST /api/assets/initialize` - Initialize default assets (development only)
 
-- 信号:
-  - `GET /api/signals` - 获取信号列表
-  - `GET /api/signals/:id` - 获取单个信号详情
+- Signals:
+  - `GET /api/signals` - Get signal list
+  - `GET /api/signals/:id` - Get single signal details
 
 ## WebSocket
 
-WebSocket连接用于实时信号更新，连接地址为:
+WebSocket connection is used for real-time signal updates, connection address:
 
 ```
 ws://localhost:5000
 ```
 
-需要在连接时提供认证令牌:
+Authentication token needs to be provided when connecting:
 
 ```javascript
 const socket = io('http://localhost:5000', {
@@ -167,11 +167,11 @@ const socket = io('http://localhost:5000', {
 });
 ```
 
-WebSocket事件:
-- `subscribe` - 订阅资产信号
-- `unsubscribe` - 取消订阅资产信号
-- `newSignal` - 接收新信号
+WebSocket events:
+- `subscribe` - Subscribe to asset signals
+- `unsubscribe` - Unsubscribe from asset signals
+- `newSignal` - Receive new signals
 
-## 许可证
+## License
 
 MIT 

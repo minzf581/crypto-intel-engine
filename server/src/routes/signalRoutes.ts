@@ -4,16 +4,16 @@ import { protect } from '../middlewares/auth';
 
 const router = express.Router();
 
-// 获取信号列表 (无需认证)
+// Get signal list (no authentication required)
 router.get('/', signalController.getSignals);
 
-// 获取单个信号详情 (无需认证)
+// Get single signal details (no authentication required)
 router.get('/:id', signalController.getSignalById);
 
-// 以下路由需要认证
+// Routes below require authentication
 router.use(protect);
 
-// 创建新信号 (仅供内部或测试使用)
+// Create new signal (internal or testing use only)
 router.post('/', signalController.createSignal);
 
 export default router; 

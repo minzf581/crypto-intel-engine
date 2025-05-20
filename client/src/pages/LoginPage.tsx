@@ -14,7 +14,7 @@ const LoginPage = () => {
     e.preventDefault();
     
     if (!email || !password) {
-      setError('Please enter both email and password');
+      setError('Please enter email and password');
       return;
     }
     
@@ -22,15 +22,35 @@ const LoginPage = () => {
     setError(null);
     
     try {
+      console.log('Attempting to login...');
       await login(email, password);
+      console.log('Login successful, redirecting...');
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
       
-      if (err.response && err.response.data && err.response.data.message) {
-        setError(err.response.data.message);
+      if (err.response) {
+        console.error('Server response:', {
+          status: err.response.status,
+          data: err.response.data,
+          headers: err.response.headers
+        });
+        
+        if (err.response.data && err.response.data.message) {
+          setError(err.response.data.message);
+        } else if (err.response.status === 401) {
+          setError('Invalid email or password');
+        } else if (err.response.status === 500) {
+          setError('Server error, please try again later');
+        } else {
+          setError('Login failed, please check your credentials and try again');
+        }
+      } else if (err.request) {
+        console.error('No response received:', err.request);
+        setError('Unable to connect to server, please check your network connection');
       } else {
-        setError('Failed to login. Please check your credentials and try again.');
+        console.error('Request configuration error:', err.message);
+        setError('An error occurred, please try again later');
       }
     } finally {
       setIsLoading(false);

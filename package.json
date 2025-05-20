@@ -1,7 +1,7 @@
 {
   "name": "crypto-intel-engine",
-  "version": "0.1.0",
-  "description": "实时加密货币情报引擎 - 提取加密货币数据中的实时信号",
+  "version": "1.0.0",
+  "description": "Real-time Cryptocurrency Intelligence Engine - Extract real-time signals from cryptocurrency data",
   "private": true,
   "workspaces": [
     "client",

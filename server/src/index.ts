@@ -26,7 +26,9 @@ const io = new SocketIOServer(server, {
 // 中间件
 app.use(cors({
   origin: env.nodeEnv === 'production' ? env.corsOrigin : 'http://localhost:3000',
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(cookieParser());

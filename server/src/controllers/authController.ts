@@ -48,10 +48,21 @@ export const login = async (req: Request, res: Response) => {
       return errorResponse(res, '邮箱或密码无效', 401);
     }
 
-    // 生成包含用户信息和令牌的响应
-    const userResponse = createUserResponse(user);
+    // 生成JWT令牌
+    const token = generateToken(user.id);
 
-    return successResponse(res, userResponse, '登录成功');
+    // 生成响应数据
+    const responseData = {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        hasCompletedOnboarding: user.hasCompletedOnboarding
+      }
+    };
+
+    return successResponse(res, responseData, '登录成功');
   } catch (error) {
     return errorResponse(res, '登录时出错', 500, error);
   }
