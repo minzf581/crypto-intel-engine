@@ -23,13 +23,33 @@ const io = new SocketIOServer(server, {
   }
 });
 
+// 将日志器添加到应用程序中，以便在其他地方访问
+app.set('logger', logger);
+
 // 中间件
 app.use(cors({
-  origin: env.nodeEnv === 'production' ? env.corsOrigin : 'http://localhost:3000',
+  origin: env.nodeEnv === 'production' ? env.corsOrigin : ['http://localhost:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// 记录所有请求
+app.use((req, res, next) => {
+  logger.debug(`${req.method} ${req.url}`, {
+    headers: {
+      authorization: req.headers.authorization ? 
+        (req.headers.authorization.startsWith('Bearer') ? 
+          'Bearer ' + req.headers.authorization.split(' ')[1].substring(0, 10) + '...' : 
+          '[其他格式]') : 
+        '无'
+    },
+    query: req.query,
+    body: req.method !== 'GET' ? req.body : undefined
+  });
+  next();
+});
+
 app.use(express.json());
 app.use(cookieParser());
 

@@ -79,57 +79,53 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const newSocket = io(import.meta.env.VITE_API_URL || '', {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    console.log('Initializing WebSocket connection...');
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5001', {
       withCredentials: true,
-      auth: {
-        token: localStorage.getItem('token')
-      }
+      auth: { token },
+      transports: ['websocket'],
+      path: '/socket.io'
     });
 
     newSocket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('WebSocket connected successfully');
+      if (selectedAssets && selectedAssets.length > 0) {
+        const assetSymbols = selectedAssets.map(asset => asset.symbol);
+        console.log('Subscribing to assets:', assetSymbols);
+        newSocket.emit('subscribe', { assets: assetSymbols });
+      } else {
+        console.log('No assets selected for subscription');
+      }
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Socket disconnected');
+      console.log('WebSocket disconnected');
     });
 
     newSocket.on('error', (error) => {
-      console.error('Socket error:', error);
+      console.error('WebSocket error:', error);
+      setError(error.message);
+    });
+
+    newSocket.on('newSignal', (signal) => {
+      console.log('Received new signal:', signal);
+      setSignals(prev => [signal, ...prev]);
     });
 
     setSocket(newSocket);
 
     return () => {
+      console.log('Cleaning up WebSocket connection...');
       newSocket.disconnect();
     };
-  }, [isAuthenticated]);
-
-  // Subscribe to signals for selected assets
-  useEffect(() => {
-    if (!socket || !selectedAssets.length) return;
-
-    // Get the asset symbols
-    const symbols = selectedAssets.map(asset => asset.symbol);
-    
-    // Subscribe to signals for these assets
-    socket.emit('subscribe', { assets: symbols });
-
-    // Listen for new signals
-    socket.on('newSignal', (signal: Signal) => {
-      setSignals(prevSignals => [signal, ...prevSignals]);
-    });
-
-    return () => {
-      // Unsubscribe and remove listeners when dependencies change
-      socket.emit('unsubscribe');
-      socket.off('newSignal');
-    };
-  }, [socket, selectedAssets]);
+  }, [isAuthenticated, selectedAssets]);
 
   // Fetch initial signals
   useEffect(() => {
-    if (!isAuthenticated || !selectedAssets.length) return;
+    if (!isAuthenticated || !selectedAssets || !selectedAssets.length) return;
     
     const fetchSignals = async () => {
       setIsLoading(true);
@@ -156,7 +152,7 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Load more signals
   const loadMoreSignals = async () => {
-    if (isLoading || !hasMore || !selectedAssets.length) return Promise.resolve();
+    if (isLoading || !hasMore || !selectedAssets || !selectedAssets.length) return Promise.resolve();
     
     setIsLoading(true);
     const nextPage = page + 1;
