@@ -9,7 +9,7 @@ dotenv.config({
 // 环境变量配置
 export default {
   // 服务器配置
-  port: process.env.PORT || 5000,
+  port: process.env.PORT || 5001,
   nodeEnv: process.env.NODE_ENV || 'development',
 
   // 数据库配置

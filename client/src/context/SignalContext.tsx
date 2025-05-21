@@ -80,47 +80,68 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!isAuthenticated) return;
 
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      console.error('无法初始化WebSocket连接：未找到认证令牌');
+      return;
+    }
 
-    console.log('Initializing WebSocket connection...');
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5001', {
-      withCredentials: true,
-      auth: { token },
-      transports: ['websocket'],
-      path: '/socket.io'
-    });
+    try {
+      console.log('初始化WebSocket连接...');
+      const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      console.log('WebSocket连接地址:', socketUrl);
+      
+      const newSocket = io(socketUrl, {
+        withCredentials: true,
+        auth: { token },
+        transports: ['websocket'],
+        path: '/socket.io',
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000
+      });
 
-    newSocket.on('connect', () => {
-      console.log('WebSocket connected successfully');
-      if (selectedAssets && selectedAssets.length > 0) {
-        const assetSymbols = selectedAssets.map(asset => asset.symbol);
-        console.log('Subscribing to assets:', assetSymbols);
-        newSocket.emit('subscribe', { assets: assetSymbols });
-      } else {
-        console.log('No assets selected for subscription');
-      }
-    });
+      newSocket.on('connect', () => {
+        console.log('WebSocket连接成功');
+        
+        // 确保selectedAssets存在并且是数组
+        if (selectedAssets && Array.isArray(selectedAssets) && selectedAssets.length > 0) {
+          const assetSymbols = selectedAssets.map(asset => asset.symbol);
+          console.log('订阅资产:', assetSymbols);
+          newSocket.emit('subscribe', { assets: assetSymbols });
+        } else {
+          console.log('没有选择资产进行订阅');
+        }
+      });
 
-    newSocket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-    });
+      newSocket.on('connect_error', (error) => {
+        console.error('WebSocket连接错误:', error);
+        setError(`WebSocket连接错误: ${error.message}`);
+      });
 
-    newSocket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-      setError(error.message);
-    });
+      newSocket.on('disconnect', () => {
+        console.log('WebSocket disconnected');
+      });
 
-    newSocket.on('newSignal', (signal) => {
-      console.log('Received new signal:', signal);
-      setSignals(prev => [signal, ...prev]);
-    });
+      newSocket.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        setError(error.message);
+      });
 
-    setSocket(newSocket);
+      newSocket.on('newSignal', (signal) => {
+        console.log('Received new signal:', signal);
+        setSignals(prev => [signal, ...prev]);
+      });
 
-    return () => {
-      console.log('Cleaning up WebSocket connection...');
-      newSocket.disconnect();
-    };
+      setSocket(newSocket);
+
+      return () => {
+        console.log('Cleaning up WebSocket connection...');
+        newSocket.disconnect();
+      };
+    } catch (error) {
+      console.error('WebSocket初始化错误:', error);
+      setError('WebSocket初始化错误');
+    }
   }, [isAuthenticated, selectedAssets]);
 
   // Fetch initial signals
@@ -185,7 +206,7 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   // Apply filters to signals
-  const filteredSignals = signals.filter(signal => {
+  const filteredSignals = signals && Array.isArray(signals) ? signals.filter(signal => {
     // Filter by signal type
     if (filters.types.length && !filters.types.includes(signal.type)) {
       return false;
@@ -248,7 +269,7 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else { // sort by strength
       return b.strength - a.strength;
     }
-  });
+  }) : [];
 
   const value = {
     signals,

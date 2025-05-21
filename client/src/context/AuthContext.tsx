@@ -1,8 +1,10 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-// Configure axios defaults
+// Configure axios defaults - 确保使用正确的后端端口
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+console.log('使用API地址:', API_URL);
 axios.defaults.baseURL = API_URL;
 axios.defaults.withCredentials = true;
 
@@ -25,6 +27,7 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
+      console.error('收到401未授权响应，清除令牌');
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
     }
@@ -44,10 +47,11 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
+  navigateAfterAuth: (path: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -63,58 +67,39 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   // Check for existing auth token on mount
   useEffect(() => {
     const checkAuthStatus = async () => {
+      console.log('检查认证状态...');
+      setIsLoading(true);
       const token = localStorage.getItem('token');
       
       if (token) {
         try {
-          console.log('localStorage中发现token，长度:', token.length);
-          console.log('token前缀:', token.substring(0, 10) + '...');
-          
-          // 验证token格式是否正确
-          if (token.trim() === '') {
-            console.error('token为空字符串');
-            localStorage.removeItem('token');
-            setIsLoading(false);
-            return;
-          }
+          console.log('在localStorage中发现token，长度:', token.length);
           
           // 设置认证头
-          const authHeader = `Bearer ${token}`;
-          console.log('设置认证头用于验证:', authHeader.substring(0, 20) + '...');
-          axios.defaults.headers.common['Authorization'] = authHeader;
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           
           // 获取当前用户信息
           console.log('正在获取当前用户信息...');
           const response = await axios.get('/api/users/me');
-          console.log('用户信息响应:', response.data);
           
-          if (!response.data || !response.data.data) {
-            console.error('用户数据响应格式无效');
-            throw new Error('无效的用户数据响应格式');
+          if (response.data && response.data.data) {
+            const userData = response.data.data;
+            setUser(userData);
+            console.log('认证成功，用户信息:', userData);
+          } else {
+            throw new Error('无效的用户数据响应');
           }
-          
-          const userData = response.data.data;
-          setUser(userData);
-          console.log('认证成功，用户信息:', userData);
         } catch (error: any) {
           console.error('认证token验证错误:', error);
-          if (error.response) {
-            console.error('错误响应:', {
-              状态码: error.response.status,
-              数据: error.response.data
-            });
-          }
-          console.log('从localStorage中移除无效token');
           localStorage.removeItem('token');
           delete axios.defaults.headers.common['Authorization'];
           setUser(null);
         }
-      } else {
-        console.log('localStorage中未找到认证token');
       }
       
       setIsLoading(false);
@@ -124,53 +109,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Login function
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     try {
       console.log('尝试登录:', { email });
+      
+      // 清除旧认证状态
+      localStorage.removeItem('token');
+      delete axios.defaults.headers.common['Authorization'];
+      
+      // 发送登录请求
       const response = await axios.post('/api/auth/login', { email, password });
-      console.log('登录响应完整数据:', JSON.stringify(response.data, null, 2));
+      console.log('登录响应:', response.data);
       
       if (!response.data || !response.data.data) {
-        console.error('服务器响应格式不正确，期望 response.data.data');
         throw new Error('服务器响应格式错误');
       }
       
       const { token, user: userData } = response.data.data;
       
-      console.log('提取的token和用户数据:', { 
-        token存在: !!token, 
-        token长度: token ? token.length : 0,
-        token前缀: token ? token.substring(0, 10) + '...' : 'N/A',
-        userData存在: !!userData 
-      });
-      
-      if (!token || !userData) {
-        throw new Error('服务器响应格式错误，缺少token或用户数据');
+      // 验证token和用户数据
+      if (!token || typeof token !== 'string' || token.trim() === '') {
+        console.error('服务器返回的token无效:', token);
+        throw new Error('服务器返回的token无效');
       }
       
-      // 保存token并设置认证头
-      console.log('保存token到localStorage');
+      if (!userData || !userData.id) {
+        console.error('服务器返回的用户数据无效:', userData);
+        throw new Error('服务器返回的用户数据无效');
+      }
+      
+      console.log('收到有效令牌:', { 
+        tokenLength: token.length, 
+        tokenPrefix: token.substring(0, 10) + '...' 
+      });
+      
+      // 保存token到localStorage
       localStorage.setItem('token', token);
       
-      // 设置axios默认认证头
-      const authHeader = `Bearer ${token}`;
-      console.log('设置认证头:', authHeader.substring(0, 20) + '...');
-      axios.defaults.headers.common['Authorization'] = authHeader;
+      // 设置认证头
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
-      // 设置用户状态
+      // 确认认证头设置成功
+      const authHeader = axios.defaults.headers.common['Authorization'];
+      console.log('设置认证头:', { authHeader: authHeader ? authHeader.substring(0, 20) + '...' : 'undefined' });
+      
+      // 更新用户状态
       setUser(userData);
-      console.log('登录成功，用户状态已更新:', userData);
+      console.log('登录成功，用户状态已更新');
 
-      // 返回用户数据供调用组件使用
       return userData;
     } catch (error: any) {
       console.error('登录错误:', error);
-      if (error.response) {
-        console.error('服务器错误响应:', {
-          状态码: error.response.status,
-          数据: error.response.data
-        });
-      }
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       throw error;
@@ -183,13 +172,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await axios.post('/api/auth/register', { email, password, name });
       const { token, user: userData } = response.data.data;
       
-      // Save token and set auth header
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
       setUser(userData);
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('注册错误:', error);
       throw error;
     }
   };
@@ -209,6 +197,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // 修复navigateAfterAuth函数，确保正确检查认证状态
+  const navigateAfterAuth = (path: string) => {
+    console.log(`准备导航到路径: ${path}`);
+    
+    const token = localStorage.getItem('token');
+    
+    // 详细检查token
+    if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
+      console.error('导航失败: 没有有效的认证令牌');
+      return;
+    }
+    
+    // 使用短延迟确保状态已更新
+    setTimeout(() => {
+      // 重新验证token存在
+      const currentToken = localStorage.getItem('token');
+      const headerAuth = axios.defaults.headers.common['Authorization'];
+      
+      console.log('导航检查:', { 
+        path, 
+        hasToken: !!currentToken, 
+        isAuthenticated: !!user,
+        hasAuthHeader: !!headerAuth
+      });
+      
+      if (currentToken && user) {
+        navigate(path, { replace: true });
+      } else {
+        console.error('导航失败: 认证状态不完整');
+      }
+    }, 300);
+  };
+
   const value = {
     user,
     isAuthenticated: !!user,
@@ -216,7 +237,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     register,
     logout,
-    updateUser
+    updateUser,
+    navigateAfterAuth
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

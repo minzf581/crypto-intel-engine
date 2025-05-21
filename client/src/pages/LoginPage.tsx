@@ -8,19 +8,20 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, navigateAfterAuth } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
+  // 已认证则重定向到仪表板
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // 验证表单
     if (!email || !password) {
       setError('请输入邮箱和密码');
       return;
@@ -30,45 +31,56 @@ const LoginPage = () => {
     setError(null);
     
     try {
-      console.log('尝试登录...');
-      // 清除可能存在的旧token
-      localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
+      console.log('开始登录流程...');
       
-      // 执行登录
+      // 执行登录请求
       const userData = await login(email, password);
       console.log('登录成功，用户数据:', userData);
       
-      // 短暂延迟确保数据已保存后再跳转
-      setTimeout(() => {
-        console.log('即将导航到仪表盘...');
-        window.location.href = '/dashboard';
-      }, 100);
-    } catch (err: any) {
-      console.error('登录错误:', err);
+      // 验证令牌
+      const token = localStorage.getItem('token');
       
-      if (err.response) {
-        console.error('服务器响应:', {
-          状态码: err.response.status,
-          数据: err.response.data,
-          头信息: err.response.headers
-        });
+      if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
+        console.error('令牌无效:', token);
+        throw new Error('登录成功但获取到的令牌无效');
+      }
+      
+      console.log('令牌验证成功，令牌长度:', token.length);
+      
+      // 等待一小段时间确保状态更新完成
+      setTimeout(() => {
+        // 先将认证状态保持在登录页，然后再导航
+        console.log('登录成功，准备导航到仪表板，确认认证头...', 
+            axios.defaults.headers.common['Authorization'] ? '已设置' : '未设置');
         
-        if (err.response.data && err.response.data.message) {
-          setError(err.response.data.message);
-        } else if (err.response.status === 401) {
+        // 强制刷新认证头
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        // 使用导航
+        navigate('/dashboard', { replace: true });
+      }, 300);
+      
+    } catch (err: any) {
+      console.error('登录失败:', err);
+      
+      // 处理不同类型的错误
+      if (err.response) {
+        const statusCode = err.response.status;
+        const errorData = err.response.data;
+        
+        if (errorData && errorData.message) {
+          setError(errorData.message);
+        } else if (statusCode === 401) {
           setError('邮箱或密码无效');
-        } else if (err.response.status === 500) {
+        } else if (statusCode === 500) {
           setError('服务器错误，请稍后再试');
         } else {
-          setError('登录失败，请检查您的凭据并重试');
+          setError('登录失败，请重试');
         }
       } else if (err.request) {
-        console.error('未收到响应:', err.request);
-        setError('无法连接到服务器，请检查您的网络连接');
+        setError('无法连接到服务器，请检查网络连接');
       } else {
-        console.error('请求配置错误:', err.message);
-        setError('发生错误，请稍后再试');
+        setError('登录过程中发生错误: ' + err.message);
       }
     } finally {
       setIsLoading(false);
@@ -80,12 +92,12 @@ const LoginPage = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
+            登录您的账户
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
+            或{' '}
             <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-              create a new account
+              创建新账户
             </Link>
           </p>
         </div>
@@ -100,7 +112,7 @@ const LoginPage = () => {
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
-                Email address
+                邮箱地址
               </label>
               <input
                 id="email"
@@ -111,12 +123,12 @@ const LoginPage = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
+                placeholder="邮箱地址"
               />
             </div>
             <div>
               <label htmlFor="password" className="sr-only">
-                Password
+                密码
               </label>
               <input
                 id="password"
@@ -127,7 +139,7 @@ const LoginPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                placeholder="密码"
               />
             </div>
           </div>
@@ -164,7 +176,7 @@ const LoginPage = () => {
                   </svg>
                 </span>
               ) : null}
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? '登录中...' : '登录'}
             </button>
           </div>
         </form>

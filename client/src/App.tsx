@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import AuthLayout from './components/layouts/AuthLayout';
 import DashboardLayout from './components/layouts/DashboardLayout';
@@ -12,18 +12,25 @@ import { useEffect } from 'react';
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
-
+  const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
+  
   useEffect(() => {
-    console.log('ProtectedRoute check:', { 
-      isAuthenticated, 
-      isLoading,
-      user: user ? `User ${user.email} (${user.id})` : 'No user'
-    });
-  }, [isAuthenticated, isLoading, user]);
+    // 简单记录当前认证状态
+    console.log('ProtectedRoute状态:', { isAuthenticated, isLoading });
+    
+    // 检查本地存储中的令牌
+    const token = localStorage.getItem('token');
+    
+    // 如果加载完成且未认证或没有令牌，则重定向到登录页面
+    if (!isLoading && (!isAuthenticated || !token)) {
+      console.log('未认证，重定向到登录页面');
+      navigate('/login', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
+  // 显示加载状态
   if (isLoading) {
-    console.log('ProtectedRoute: Loading state, showing spinner');
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
@@ -31,29 +38,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  if (!isAuthenticated) {
-    console.log('ProtectedRoute: Not authenticated, redirecting to login');
-    return <Navigate to="/login" replace />;
+  // 如果认证成功且有令牌，显示子组件
+  if (isAuthenticated && localStorage.getItem('token')) {
+    return <>{children}</>;
   }
 
-  console.log('ProtectedRoute: Authenticated, rendering children');
-  return <>{children}</>;
+  // 默认返回null，导航会在useEffect中处理
+  return null;
 };
 
 // Redirect authenticated users away from auth pages
 const AuthRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
-
-  useEffect(() => {
-    console.log('AuthRoute check:', { 
-      isAuthenticated, 
-      isLoading,
-      user: user ? `User ${user.email} (${user.id})` : 'No user'
-    });
-  }, [isAuthenticated, isLoading, user]);
+  const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    console.log('AuthRoute: Loading state, showing spinner');
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
@@ -62,11 +60,9 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (isAuthenticated) {
-    console.log('AuthRoute: Already authenticated, redirecting to dashboard');
     return <Navigate to="/dashboard" replace />;
   }
 
-  console.log('AuthRoute: Not authenticated, rendering children');
   return <>{children}</>;
 };
 

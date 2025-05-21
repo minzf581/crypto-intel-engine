@@ -94,21 +94,12 @@ print_yellow "确保数据库文件不被锁定..."
 fuser -k server/data/crypto-intel.sqlite 2>/dev/null || true
 sleep 1
 
-# 检查数据库文件是否存在，询问是否重置
+# 检查数据库文件是否存在，默认不重置
 DB_FILE="server/data/crypto-intel.sqlite"
 RESET_DB="false"
 
 if [ -f "$DB_FILE" ]; then
-  print_yellow "数据库文件已存在，是否重置数据库? (y/n)"
-  read -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    print_yellow "将重置数据库..."
-    rm -f "$DB_FILE"
-    RESET_DB="true"
-  else
-    print_green "将使用现有数据库"
-  fi
+  print_green "数据库文件已存在，将使用现有数据库"
 else
   print_yellow "数据库文件不存在，将创建新数据库"
   RESET_DB="true"
