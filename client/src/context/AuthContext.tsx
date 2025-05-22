@@ -19,7 +19,8 @@ if (!API_URL) {
 
 console.log('Using API address:', API_URL);
 axios.defaults.baseURL = API_URL;
-axios.defaults.withCredentials = true;
+// Disable withCredentials to fix CORS issues
+axios.defaults.withCredentials = false;
 axios.defaults.timeout = 10000; // 10 seconds timeout
 
 // Add request interceptor
@@ -142,19 +143,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       
-      // Login URL
-      const loginUrl = `${API_URL}/api/auth/login`;
-      console.log('Sending login request to:', loginUrl);
+      // Try multiple login approaches to avoid CORS issues
+      let userData;
+      let token;
+      let response;
       
-      // Use axios instead of fetch to avoid CORS issues with credentials
-      const response = await axios.post('/api/auth/login', { email, password });
-      console.log('Login response:', response.data);
-      
-      if (!response.data || !response.data.data) {
-        throw new Error('Server response format error');
+      try {
+        // First try: Regular axios POST
+        console.log('Login attempt 1: Using axios');
+        response = await axios.post('/api/auth/login', { email, password });
+        
+        if (response.data && response.data.data) {
+          userData = response.data.data.user;
+          token = response.data.data.token;
+        }
+      } catch (axiosError) {
+        console.log('Axios login failed, trying alternative method');
+        
+        // Second try: Direct fetch without credentials
+        const loginUrl = `${API_URL}/api/auth/login`;
+        console.log('Login attempt 2: Using fetch to', loginUrl);
+        
+        const fetchResponse = await fetch(loginUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+          // Don't include credentials to avoid CORS issues
+          credentials: 'omit'
+        });
+        
+        if (!fetchResponse.ok) {
+          throw new Error(`Login request failed: ${fetchResponse.status} ${fetchResponse.statusText}`);
+        }
+        
+        const data = await fetchResponse.json();
+        console.log('Login fetch response:', data);
+        
+        if (data && data.data) {
+          userData = data.data.user;
+          token = data.data.token;
+        } else {
+          throw new Error('Server response format error');
+        }
       }
-      
-      const { token, user: userData } = response.data.data;
       
       // Validate token and user data
       if (!token || typeof token !== 'string' || token.trim() === '') {
