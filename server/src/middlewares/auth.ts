@@ -67,49 +67,38 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
           });
         }
 
-        logger.debug('令牌验证成功', { userId: decoded.id });
-
-        // 获取用户信息
+        // 查找用户
         const user = await User.findByPk(decoded.id);
-        
         if (!user) {
-          logger.warn(`未找到用户: ${decoded.id}`);
+          logger.warn('找不到令牌对应的用户');
           return res.status(401).json({
             success: false,
-            message: '找不到用户'
+            message: '无效用户'
           });
         }
 
-        // 添加用户信息到请求对象
-        req.user = user;
+        // 在请求对象上设置用户
         req.userId = user.id;
+        req.user = user;
         
-        logger.debug(`用户认证成功: ${user.id}`);
+        logger.debug('用户已认证', { userId: user.id });
         next();
       } catch (error) {
-        logger.error('令牌验证错误', { error, token });
-        
-        if ((error as Error).name === 'TokenExpiredError') {
-          return res.status(401).json({
-            success: false,
-            message: '令牌已过期，请重新登录'
-          });
-        }
-        
+        logger.error('令牌验证失败', { error });
         return res.status(401).json({
           success: false,
-          message: '认证失败，请重新登录'
+          message: '无效令牌'
         });
       }
     } else {
-      logger.warn('请求没有提供认证头');
+      logger.warn('请求中未找到Bearer令牌');
       return res.status(401).json({
         success: false,
         message: '未认证，请登录'
       });
     }
   } catch (error) {
-    logger.error('认证中间件错误', error);
+    logger.error('认证中间件错误', { error });
     return res.status(500).json({
       success: false,
       message: '服务器错误'
@@ -118,30 +107,17 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 };
 
 /**
- * Optional Authentication Middleware
+ * Optional Auth Middleware - 检查令牌但不要求认证
  */
 export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
-  let token: string | undefined;
+  let token;
 
-  // 从请求头或cookie获取令牌
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
-    
-    // 检查token是否有效
-    if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-      return next();
-    }
-  } else if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
-    
-    // 检查cookie中的token是否有效
-    if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-      return next();
-    }
   }
 
-  // 如果没有令牌，继续但不设置用户信息
-  if (!token) {
+  // 如果没有令牌，继续但不设置用户
+  if (!token || token === 'undefined' || token === 'null') {
     return next();
   }
 
@@ -155,10 +131,10 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     if (user) {
       req.userId = user.id;
     }
-    
+
     next();
   } catch (error) {
-    // 令牌无效，但继续请求
+    // 忽略错误，继续处理请求
     next();
   }
 }; 

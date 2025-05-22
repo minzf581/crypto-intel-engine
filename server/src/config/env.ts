@@ -14,13 +14,14 @@ export default {
 
   // 数据库配置
   sqliteDbPath: process.env.SQLITE_DB_PATH || 'data/crypto-intel.sqlite',
+  databaseUrl: process.env.DATABASE_URL, // PostgreSQL连接URL
 
   // JWT配置
   jwtSecret: process.env.JWT_SECRET || 'your-default-secret-key-change-in-production',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '30d',
 
   // CORS配置
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  corsOrigin: process.env.CORS_ORIGIN || '*', // 在生产环境中允许所有来源
 
   // 模拟信号配置
   enableMockSignals: process.env.ENABLE_MOCK_SIGNALS === 'true'

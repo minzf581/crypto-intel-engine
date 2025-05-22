@@ -16,15 +16,15 @@ export const generateToken = (userId: string): string => {
       id: userId
     };
     
-    // 获取密钥
-    const secret = env.jwtSecret || 'fallback-secret-key-for-development';
-    
     // 签名选项
     const options: jwt.SignOptions = {
       expiresIn: '30d'
     };
     
-    // 使用正确的参数顺序和类型生成JWT
+    // 获取密钥
+    const secret = env.jwtSecret || 'fallback-secret-key-for-development';
+    
+    // 使用正确的参数调用jwt.sign
     const token = jwt.sign(payload, secret, options);
     
     if (!token) {
@@ -40,7 +40,7 @@ export const generateToken = (userId: string): string => {
     return token;
   } catch (error) {
     console.error('生成JWT令牌时出错:', error);
-    throw new Error('无法生成认证令牌');
+    throw error;
   }
 };
 
@@ -62,4 +62,14 @@ export const createUserResponse = (user: any) => {
       selectedAssets: user.selectedAssets
     }
   };
+};
+
+/**
+ * 格式化用户响应，排除敏感字段
+ * @param user 用户对象
+ * @returns 格式化后的用户对象
+ */
+export const formatUserResponse = (user: any) => {
+  const { password, ...userWithoutPassword } = user.toJSON();
+  return userWithoutPassword;
 }; 

@@ -34,20 +34,27 @@ export const authenticateSocketConnection = async (socket: Socket, next: (err?: 
     const secret = env.jwtSecret || 'fallback-secret-key-for-development';
     const decoded = jwt.verify(token, secret) as { id: string };
 
-    // 获取用户信息
+    if (!decoded || !decoded.id) {
+      logger.warn('Socket连接令牌解码失败');
+      return next(new Error('无效令牌'));
+    }
+
+    // 获取用户
     const user = await User.findByPk(decoded.id);
     if (!user) {
-      logger.warn(`Socket连接认证失败：未找到用户 ${decoded.id}`);
+      logger.warn(`Socket连接找不到令牌对应的用户: ${decoded.id}`);
       return next(new Error('用户不存在'));
     }
 
-    // 在socket实例上存储用户信息
-    (socket as any).user = user;
     logger.debug(`Socket连接已认证: ${user.id}`);
+    
+    // 将用户信息添加到socket对象
+    socket.data.user = user;
+    socket.data.userId = user.id;
     
     next();
   } catch (error) {
-    logger.error('Socket连接认证错误', error);
-    next(new Error('认证失败'));
+    logger.error('Socket连接认证失败:', error);
+    return next(new Error('认证失败'));
   }
 }; 
