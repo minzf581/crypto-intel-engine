@@ -11,7 +11,7 @@ const LoginPage = () => {
   const { login, isAuthenticated, navigateAfterAuth } = useAuth();
   const navigate = useNavigate();
 
-  // 已认证则重定向到仪表板
+  // Redirect to dashboard if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
@@ -21,9 +21,9 @@ const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 验证表单
+    // Validate form
     if (!email || !password) {
-      setError('请输入邮箱和密码');
+      setError('Please enter email and password');
       return;
     }
     
@@ -31,41 +31,41 @@ const LoginPage = () => {
     setError(null);
     
     try {
-      console.log('开始登录流程...');
+      console.log('Starting login process...');
       
-      // 执行登录请求
+      // Execute login request
       const userData = await login(email, password);
-      console.log('登录成功，用户数据:', userData);
+      console.log('Login successful, user data:', userData);
       
-      // 验证令牌
+      // Verify token
       const token = localStorage.getItem('token');
       
       if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-        console.error('令牌无效:', token);
-        throw new Error('登录成功但获取到的令牌无效');
+        console.error('Invalid token:', token);
+        throw new Error('Login successful but retrieved token is invalid');
       }
       
-      console.log('令牌验证成功，令牌长度:', token.length);
+      console.log('Token verification successful, token length:', token.length);
       
-      // 确保axios全局认证头设置正确
+      // Ensure axios global auth header is set correctly
       if (!axios.defaults.headers.common['Authorization'] || 
           axios.defaults.headers.common['Authorization'] !== `Bearer ${token}`) {
-        console.log('认证头需要更新，重新设置...');
+        console.log('Auth header needs update, resetting...');
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       }
       
-      console.log('完成登录处理，准备导航到仪表板...');
+      console.log('Login processing complete, preparing to navigate to dashboard...');
       
-      // 确保用户在导航前已更新到状态
+      // Ensure user is updated in state before navigation
       setTimeout(() => {
         navigate('/dashboard', { replace: true });
-        console.log('已导航到仪表板');
+        console.log('Navigated to dashboard');
       }, 300);
       
     } catch (err: any) {
-      console.error('登录失败:', err);
+      console.error('Login failed:', err);
       
-      // 处理不同类型的错误
+      // Handle different types of errors
       if (err.response) {
         const statusCode = err.response.status;
         const errorData = err.response.data;
@@ -73,16 +73,16 @@ const LoginPage = () => {
         if (errorData && errorData.message) {
           setError(errorData.message);
         } else if (statusCode === 401) {
-          setError('邮箱或密码无效');
+          setError('Invalid email or password');
         } else if (statusCode === 500) {
-          setError('服务器错误，请稍后再试');
+          setError('Server error, please try again later');
         } else {
-          setError('登录失败，请重试');
+          setError('Login failed, please try again');
         }
       } else if (err.request) {
-        setError('无法连接到服务器，请检查网络连接');
+        setError('Unable to connect to server, please check your network connection');
       } else {
-        setError('登录过程中发生错误: ' + err.message);
+        setError('Error during login process: ' + err.message);
       }
     } finally {
       setIsLoading(false);
@@ -94,12 +94,12 @@ const LoginPage = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            登录您的账户
+            Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            或{' '}
+            Or{' '}
             <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-              创建新账户
+              create a new account
             </Link>
           </p>
         </div>
@@ -114,7 +114,7 @@ const LoginPage = () => {
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
-                邮箱地址
+                Email address
               </label>
               <input
                 id="email"
@@ -125,12 +125,12 @@ const LoginPage = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="邮箱地址"
+                placeholder="Email address"
               />
             </div>
             <div>
               <label htmlFor="password" className="sr-only">
-                密码
+                Password
               </label>
               <input
                 id="password"
@@ -141,7 +141,7 @@ const LoginPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="密码"
+                placeholder="Password"
               />
             </div>
           </div>
@@ -178,7 +178,7 @@ const LoginPage = () => {
                   </svg>
                 </span>
               ) : null}
-              {isLoading ? '登录中...' : '登录'}
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
         </form>

@@ -21,7 +21,7 @@ export default {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '30d',
 
   // CORS配置
-  corsOrigin: process.env.CORS_ORIGIN || '*', // 在生产环境中允许所有来源
+  corsOrigin: process.env.CORS_ORIGIN || 'https://crypto-front-demo.up.railway.app', // Updated to use specific frontend origin
 
   // 模拟信号配置
   enableMockSignals: process.env.ENABLE_MOCK_SIGNALS === 'true'

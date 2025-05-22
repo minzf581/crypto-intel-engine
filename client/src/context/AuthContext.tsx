@@ -2,43 +2,43 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-// Configure axios defaults - 确保使用正确的后端端点
+// Configure axios defaults - ensure correct backend endpoint
 let API_URL = import.meta.env.VITE_API_URL || '';
 
-// 如果没有定义环境变量，尝试推断API URL
+// If environment variable is not defined, try to infer API URL
 if (!API_URL) {
-  // 在生产环境中，根据当前域名推断API URL
+  // In production environment, infer API URL from current domain
   if (window.location.hostname.includes('railway.app')) {
-    // 假设后端也部署在Railway，但使用不同的子域名
+    // Assume backend is also deployed on Railway, but with different subdomain
     API_URL = 'https://crypto-demo.up.railway.app';
   } else {
-    // 本地开发环境
+    // Local development environment
     API_URL = 'http://localhost:5001';
   }
 }
 
-console.log('使用API地址:', API_URL);
+console.log('Using API address:', API_URL);
 axios.defaults.baseURL = API_URL;
 axios.defaults.withCredentials = true;
-axios.defaults.timeout = 10000; // 10秒超时
+axios.defaults.timeout = 10000; // 10 seconds timeout
 
 // Add request interceptor
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    // 确保token是有效的
+    // Ensure token is valid
     if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
       config.headers.Authorization = `Bearer ${token}`;
-      // 调试信息
-      console.log('请求添加认证头:', { 
+      // Debug information
+      console.log('Request added auth header:', { 
         url: config.url,
         authHeaderLength: `Bearer ${token}`.length,
         tokenPrefix: token.substring(0, 10) + '...'
       });
     } else {
-      // 如果令牌无效，移除认证头
+      // If token is invalid, remove auth header
       delete config.headers.Authorization;
-      console.log('请求未添加认证头 - 令牌无效', { url: config.url });
+      console.log('Request without auth header - token invalid', { url: config.url });
     }
     return config;
   },
@@ -52,7 +52,7 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      console.error('收到401未授权响应，清除令牌');
+      console.error('Received 401 unauthorized response, clearing token');
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
     }
@@ -97,30 +97,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check for existing auth token on mount
   useEffect(() => {
     const checkAuthStatus = async () => {
-      console.log('检查认证状态...');
+      console.log('Checking authentication status...');
       setIsLoading(true);
       const token = localStorage.getItem('token');
       
       if (token) {
         try {
-          console.log('在localStorage中发现token，长度:', token.length);
+          console.log('Found token in localStorage, length:', token.length);
           
-          // 设置认证头
+          // Set auth header
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           
-          // 获取当前用户信息
-          console.log('正在获取当前用户信息...');
+          // Get current user info
+          console.log('Getting current user info...');
           const response = await axios.get('/api/users/me');
           
           if (response.data && response.data.data) {
             const userData = response.data.data;
             setUser(userData);
-            console.log('认证成功，用户信息:', userData);
+            console.log('Authentication successful, user info:', userData);
           } else {
-            throw new Error('无效的用户数据响应');
+            throw new Error('Invalid user data response');
           }
         } catch (error: any) {
-          console.error('认证token验证错误:', error);
+          console.error('Authentication token verification error:', error);
           localStorage.removeItem('token');
           delete axios.defaults.headers.common['Authorization'];
           setUser(null);
@@ -136,89 +136,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Login function
   const login = async (email: string, password: string): Promise<User> => {
     try {
-      console.log('尝试登录:', { email });
+      console.log('Attempting login:', { email });
       
-      // 清除旧认证状态
+      // Clear old auth state
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       
-      // 登录URL
+      // Login URL
       const loginUrl = `${API_URL}/api/auth/login`;
-      console.log('正在发送登录请求到:', loginUrl);
+      console.log('Sending login request to:', loginUrl);
       
-      // 直接使用fetch API作为备选方案，避免axios配置问题
-      const response = await fetch(loginUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: 'include'
-      });
+      // Use axios instead of fetch to avoid CORS issues with credentials
+      const response = await axios.post('/api/auth/login', { email, password });
+      console.log('Login response:', response.data);
       
-      if (!response.ok) {
-        throw new Error(`登录请求失败: ${response.status} ${response.statusText}`);
+      if (!response.data || !response.data.data) {
+        throw new Error('Server response format error');
       }
       
-      const data = await response.json();
-      console.log('登录响应:', data);
+      const { token, user: userData } = response.data.data;
       
-      if (!data || !data.data) {
-        throw new Error('服务器响应格式错误');
-      }
-      
-      const { token, user: userData } = data.data;
-      
-      // 验证token和用户数据
+      // Validate token and user data
       if (!token || typeof token !== 'string' || token.trim() === '') {
-        console.error('服务器返回的token无效:', token);
-        throw new Error('服务器返回的token无效');
+        console.error('Server returned invalid token:', token);
+        throw new Error('Server returned invalid token');
       }
       
       if (!userData || !userData.id) {
-        console.error('服务器返回的用户数据无效:', userData);
-        throw new Error('服务器返回的用户数据无效');
+        console.error('Server returned invalid user data:', userData);
+        throw new Error('Server returned invalid user data');
       }
       
-      console.log('收到有效令牌:', { 
+      console.log('Received valid token:', { 
         tokenLength: token.length, 
         tokenPrefix: token.substring(0, 10) + '...' 
       });
       
-      // 保存token到localStorage
+      // Save token to localStorage
       try {
         localStorage.setItem('token', token);
-        console.log('令牌已保存到localStorage');
+        console.log('Token saved to localStorage');
         
-        // 验证保存是否成功
+        // Verify save was successful
         const savedToken = localStorage.getItem('token');
         if (!savedToken) {
-          throw new Error('localStorage保存令牌失败');
+          throw new Error('localStorage token save failed');
         }
         
         if (savedToken !== token) {
-          console.error('保存的令牌与原始令牌不匹配:', {
+          console.error('Saved token does not match original token:', {
             original: token.substring(0, 10) + '...',
             saved: savedToken.substring(0, 10) + '...'
           });
-          throw new Error('令牌保存不一致');
+          throw new Error('Token save inconsistency');
         }
       } catch (storageError) {
-        console.error('保存令牌到localStorage时出错:', storageError);
-        throw new Error('无法保存令牌: ' + (storageError as Error).message);
+        console.error('Error saving token to localStorage:', storageError);
+        throw new Error('Cannot save token: ' + (storageError as Error).message);
       }
       
-      // 设置axios默认认证头
+      // Set axios default auth header
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      console.log('已设置axios全局认证头');
+      console.log('Set axios global auth header');
       
-      // 更新用户状态
+      // Update user state
       setUser(userData);
-      console.log('登录成功，用户状态已更新');
+      console.log('Login successful, user state updated');
 
       return userData;
     } catch (error: any) {
-      console.error('登录错误:', error);
+      console.error('Login error:', error);
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       throw error;
@@ -236,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUser(userData);
     } catch (error) {
-      console.error('注册错误:', error);
+      console.error('Registration error:', error);
       throw error;
     }
   };
@@ -256,25 +243,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 修复navigateAfterAuth函数，确保正确检查认证状态
+  // Fix navigateAfterAuth function to ensure proper auth status check
   const navigateAfterAuth = (path: string) => {
-    console.log(`准备导航到路径: ${path}`);
+    console.log(`Preparing to navigate to path: ${path}`);
     
     const token = localStorage.getItem('token');
     
-    // 详细检查token
+    // Detailed token check
     if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-      console.error('导航失败: 没有有效的认证令牌');
+      console.error('Navigation failed: No valid authentication token');
       return;
     }
     
-    // 使用短延迟确保状态已更新
+    // Use short delay to ensure state is updated
     setTimeout(() => {
-      // 重新验证token存在
+      // Re-verify token exists
       const currentToken = localStorage.getItem('token');
       const headerAuth = axios.defaults.headers.common['Authorization'];
       
-      console.log('导航检查:', { 
+      console.log('Navigation check:', { 
         path, 
         hasToken: !!currentToken, 
         isAuthenticated: !!user,
@@ -284,7 +271,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentToken && user) {
         navigate(path, { replace: true });
       } else {
-        console.error('导航失败: 认证状态不完整');
+        console.error('Navigation failed: Authentication state incomplete');
       }
     }, 300);
   };
