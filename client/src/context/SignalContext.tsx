@@ -105,9 +105,15 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         // 确保selectedAssets存在并且是数组
         if (selectedAssets && Array.isArray(selectedAssets) && selectedAssets.length > 0) {
-          const assetSymbols = selectedAssets.map(asset => asset.symbol);
-          console.log('订阅资产:', assetSymbols);
-          newSocket.emit('subscribe', { assets: assetSymbols });
+          // 确保每个资产都有symbol属性
+          const validAssets = selectedAssets.filter(asset => asset && typeof asset === 'object' && 'symbol' in asset);
+          if (validAssets.length > 0) {
+            const assetSymbols = validAssets.map(asset => asset.symbol);
+            console.log('订阅资产:', assetSymbols);
+            newSocket.emit('subscribe', { assets: assetSymbols });
+          } else {
+            console.warn('已选择的资产没有symbol属性:', selectedAssets);
+          }
         } else {
           console.log('没有选择资产进行订阅');
         }
@@ -129,7 +135,14 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       newSocket.on('newSignal', (signal) => {
         console.log('Received new signal:', signal);
-        setSignals(prev => [signal, ...prev]);
+        setSignals(prev => {
+          // 确保prev是一个数组，如果不是，则使用空数组
+          if (!Array.isArray(prev)) {
+            console.warn('信号状态不是数组，重置为：', [signal]);
+            return [signal];
+          }
+          return [signal, ...prev];
+        });
       });
 
       setSocket(newSocket);
@@ -158,8 +171,27 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const assetIds = selectedAssets.map(asset => asset.id).join(',');
         const response = await axios.get(`/api/signals?assets=${assetIds}&page=1`);
         
-        setSignals(response.data.signals);
-        setHasMore(response.data.hasMore);
+        // 修复数据结构问题 - 确保处理正确的数据结构
+        console.log('信号API响应:', response.data);
+        
+        if (response.data && response.data.success && response.data.data) {
+          // 提取正确的数据结构
+          const signalData = response.data.data;
+          
+          if (signalData.signals && Array.isArray(signalData.signals)) {
+            console.log('收到信号数据:', signalData.signals.length);
+            setSignals(signalData.signals);
+            setHasMore(signalData.hasMore || false);
+          } else {
+            console.warn('服务器返回的信号数据中没有signals数组', signalData);
+            setSignals([]);
+            setHasMore(false);
+          }
+        } else {
+          console.warn('服务器返回的信号数据格式不符合预期', response.data);
+          setSignals([]);
+          setHasMore(false);
+        }
       } catch (error) {
         console.error('Error fetching signals:', error);
         setError('Failed to load signals. Please try again.');
@@ -182,9 +214,30 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const assetIds = selectedAssets.map(asset => asset.id).join(',');
       const response = await axios.get(`/api/signals?assets=${assetIds}&page=${nextPage}`);
       
-      setSignals(prev => [...prev, ...response.data.signals]);
-      setHasMore(response.data.hasMore);
-      setPage(nextPage);
+      // 使用相同的数据处理方式
+      if (response.data && response.data.success && response.data.data) {
+        const signalData = response.data.data;
+        
+        if (signalData.signals && Array.isArray(signalData.signals)) {
+          setSignals(prev => {
+            // 确保prev是一个数组
+            if (!Array.isArray(prev)) {
+              console.warn('加载更多信号时，现有信号状态不是数组，使用新加载的信号');
+              return signalData.signals;
+            }
+            return [...prev, ...signalData.signals];
+          });
+          setHasMore(signalData.hasMore || false);
+          setPage(nextPage);
+        } else {
+          console.warn('加载更多信号时，服务器返回的数据中没有signals数组', signalData);
+          setHasMore(false);
+        }
+      } else {
+        console.warn('加载更多信号时，服务器返回的数据格式不符合预期', response.data);
+        setHasMore(false);
+      }
+      
       return Promise.resolve();
     } catch (error) {
       console.error('Error loading more signals:', error);

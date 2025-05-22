@@ -12,8 +12,19 @@ axios.defaults.withCredentials = true;
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    if (token) {
+    // 确保token是有效的
+    if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
       config.headers.Authorization = `Bearer ${token}`;
+      // 调试信息
+      console.log('请求添加认证头:', { 
+        url: config.url,
+        authHeaderLength: `Bearer ${token}`.length,
+        tokenPrefix: token.substring(0, 10) + '...'
+      });
+    } else {
+      // 如果令牌无效，移除认证头
+      delete config.headers.Authorization;
+      console.log('请求未添加认证头 - 令牌无效', { url: config.url });
     }
     return config;
   },
@@ -144,14 +155,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       // 保存token到localStorage
-      localStorage.setItem('token', token);
+      try {
+        localStorage.setItem('token', token);
+        console.log('令牌已保存到localStorage');
+        
+        // 验证保存是否成功
+        const savedToken = localStorage.getItem('token');
+        if (!savedToken) {
+          throw new Error('localStorage保存令牌失败');
+        }
+        
+        if (savedToken !== token) {
+          console.error('保存的令牌与原始令牌不匹配:', {
+            original: token.substring(0, 10) + '...',
+            saved: savedToken.substring(0, 10) + '...'
+          });
+          throw new Error('令牌保存不一致');
+        }
+      } catch (storageError) {
+        console.error('保存令牌到localStorage时出错:', storageError);
+        throw new Error('无法保存令牌: ' + (storageError as Error).message);
+      }
       
-      // 设置认证头
+      // 设置axios默认认证头
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // 确认认证头设置成功
-      const authHeader = axios.defaults.headers.common['Authorization'];
-      console.log('设置认证头:', { authHeader: authHeader ? authHeader.substring(0, 20) + '...' : 'undefined' });
+      console.log('已设置axios全局认证头');
       
       // 更新用户状态
       setUser(userData);

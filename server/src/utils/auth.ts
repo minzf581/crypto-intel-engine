@@ -4,11 +4,6 @@
 import jwt from 'jsonwebtoken';
 import env from '../config/env';
 
-// 确保为JWT签名定义所需的类型
-interface JwtPayload {
-  id: string;
-}
-
 /**
  * 生成JWT令牌
  * @param userId 用户ID
@@ -16,25 +11,26 @@ interface JwtPayload {
  */
 export const generateToken = (userId: string): string => {
   try {
-    // 确保密钥为Buffer类型，提高兼容性
-    const secretKey = env.jwtSecret || 'fallback-secret-key-for-development';
-    const secretBuffer = Buffer.from(secretKey, 'utf8');
+    // 创建payload对象
+    const payload = {
+      id: userId
+    };
     
-    // 简化的payload
-    const payload: JwtPayload = { id: userId };
+    // 获取密钥
+    const secret = env.jwtSecret || 'fallback-secret-key-for-development';
     
-    // 使用Buffer密钥签发JWT
-    const token = jwt.sign(
-      payload,
-      secretBuffer,
-      { expiresIn: '30d' }
-    );
+    // 签名选项
+    const options: jwt.SignOptions = {
+      expiresIn: '30d'
+    };
     
-    if (!token || typeof token !== 'string' || token.trim() === '') {
-      throw new Error(`生成的JWT令牌无效: ${token}`);
+    // 使用正确的参数顺序和类型生成JWT
+    const token = jwt.sign(payload, secret, options);
+    
+    if (!token) {
+      throw new Error('JWT令牌生成失败: 返回空值');
     }
     
-    // 打印成功日志
     console.log('JWT令牌生成成功:', {
       userId,
       tokenLength: token.length,

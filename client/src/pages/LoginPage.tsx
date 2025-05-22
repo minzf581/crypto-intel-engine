@@ -47,17 +47,19 @@ const LoginPage = () => {
       
       console.log('令牌验证成功，令牌长度:', token.length);
       
-      // 等待一小段时间确保状态更新完成
-      setTimeout(() => {
-        // 先将认证状态保持在登录页，然后再导航
-        console.log('登录成功，准备导航到仪表板，确认认证头...', 
-            axios.defaults.headers.common['Authorization'] ? '已设置' : '未设置');
-        
-        // 强制刷新认证头
+      // 确保axios全局认证头设置正确
+      if (!axios.defaults.headers.common['Authorization'] || 
+          axios.defaults.headers.common['Authorization'] !== `Bearer ${token}`) {
+        console.log('认证头需要更新，重新设置...');
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
-        // 使用导航
+      }
+      
+      console.log('完成登录处理，准备导航到仪表板...');
+      
+      // 确保用户在导航前已更新到状态
+      setTimeout(() => {
         navigate('/dashboard', { replace: true });
+        console.log('已导航到仪表板');
       }, 300);
       
     } catch (err: any) {

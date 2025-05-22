@@ -28,107 +28,91 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     // 从请求头获取令牌
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       const authHeader = req.headers.authorization;
-      logger.debug('认证头', { authHeader: authHeader.substring(0, 20) + '...' });
+      logger.debug('认证头', { 
+        authHeader: authHeader.substring(0, 20) + '...',
+        length: authHeader.length
+      });
       
       const parts = authHeader.split(' ');
-      if (parts.length !== 2) {
-        logger.warn('无效的授权头格式，应为 "Bearer token"');
-        return res.status(401).json({
-          success: false,
-          message: '无效的授权头格式'
-        });
+      if (parts.length === 2) {
+        token = parts[1];
       }
-      
-      token = parts[1];
-      
-      // 明确检查token是否有效（不是undefined或null或空字符串）
-      if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-        logger.warn('提供的令牌无效:', { token });
-        return res.status(401).json({
-          success: false,
-          message: '提供的令牌无效'
-        });
-      }
-      
-      logger.debug('从授权头提取令牌成功', { tokenLength: token.length });
-    } 
-    // 从cookies获取令牌（备用方式）
-    else if (req.cookies && req.cookies.token) {
-      token = req.cookies.token;
-      
-      // 检查cookie中的token是否有效
-      if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-        logger.warn('Cookie中的令牌无效');
-        return res.status(401).json({
-          success: false,
-          message: 'Cookie中的令牌无效'
-        });
-      }
-      
-      logger.debug('从cookies获取令牌', { tokenLength: token.length });
-    }
 
-    // 验证令牌是否存在
-    if (!token) {
-      logger.warn('请求中未提供认证令牌');
+      // 验证token值不是字符串"undefined"或"null"
+      if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
+        logger.warn('请求中的令牌为无效值', { token });
+        return res.status(401).json({
+          success: false,
+          message: '未认证，请登录'
+        });
+      }
+
+      try {
+        // 获取密钥
+        const secret = env.jwtSecret || 'fallback-secret-key-for-development';
+        
+        logger.debug('正在验证令牌...', {
+          tokenLength: token.length,
+          tokenPrefix: token.substring(0, 10) + '...'
+        });
+        
+        // 解码令牌
+        const decoded = jwt.verify(token, secret) as { id: string };
+        
+        if (!decoded || !decoded.id) {
+          logger.warn('令牌解码失败或缺少id字段');
+          return res.status(401).json({
+            success: false,
+            message: '无效令牌'
+          });
+        }
+
+        logger.debug('令牌验证成功', { userId: decoded.id });
+
+        // 获取用户信息
+        const user = await User.findByPk(decoded.id);
+        
+        if (!user) {
+          logger.warn(`未找到用户: ${decoded.id}`);
+          return res.status(401).json({
+            success: false,
+            message: '找不到用户'
+          });
+        }
+
+        // 添加用户信息到请求对象
+        req.user = user;
+        req.userId = user.id;
+        
+        logger.debug(`用户认证成功: ${user.id}`);
+        next();
+      } catch (error) {
+        logger.error('令牌验证错误', { error, token });
+        
+        if ((error as Error).name === 'TokenExpiredError') {
+          return res.status(401).json({
+            success: false,
+            message: '令牌已过期，请重新登录'
+          });
+        }
+        
+        return res.status(401).json({
+          success: false,
+          message: '认证失败，请重新登录'
+        });
+      }
+    } else {
+      logger.warn('请求没有提供认证头');
       return res.status(401).json({
         success: false,
-        message: '未授权，请登录'
+        message: '未认证，请登录'
       });
     }
-
-    try {
-      // 验证令牌
-      const secretKey = env.jwtSecret || 'fallback-secret-key-for-development';
-      const secretBuffer = Buffer.from(secretKey, 'utf8');
-      logger.debug('验证令牌', { secretLength: secretKey.length });
-      
-      // 解码令牌
-      const decoded = jwt.verify(token, secretBuffer) as { id: string };
-      logger.debug('令牌验证成功', { userId: decoded.id });
-
-      // 获取用户
-      const user = await User.findByPk(decoded.id);
-      if (!user) {
-        logger.warn('找不到令牌对应的用户', { userId: decoded.id });
-        return res.status(401).json({
-          success: false,
-          message: '无效的用户令牌'
-        });
-      }
-
-      // 将用户ID添加到请求对象
-      req.userId = user.id;
-      logger.debug('用户认证成功', { userId: user.id });
-      next();
-    } catch (error) {
-      if (error instanceof jwt.JsonWebTokenError) {
-        logger.error('JWT验证错误:', error.message, { token: token.substring(0, 15) + '...' });
-        return res.status(401).json({
-          success: false,
-          message: '令牌格式错误或无效',
-          error: error.message
-        });
-      } else if (error instanceof jwt.TokenExpiredError) {
-        logger.error('令牌已过期:', error.message);
-        return res.status(401).json({
-          success: false,
-          message: '令牌已过期',
-          error: error.message
-        });
-      }
-      
-      logger.error('认证中间件错误:', error);
-      return res.status(401).json({
-        success: false, 
-        message: '未授权，令牌无效'
-      });
-    }
-  } catch (outerError) {
-    logger.error('认证中间件未处理的错误:', outerError);
+  } catch (error) {
+    logger.error('认证中间件错误', error);
     return res.status(500).json({
       success: false,
-      message: '服务器认证处理错误'
+      message: '服务器错误'
     });
   }
 };
@@ -163,9 +147,8 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
 
   try {
     // 验证令牌
-    const secretKey = env.jwtSecret || 'fallback-secret-key-for-development';
-    const secretBuffer = Buffer.from(secretKey, 'utf8');
-    const decoded = jwt.verify(token, secretBuffer) as { id: string };
+    const secret = env.jwtSecret || 'fallback-secret-key-for-development';
+    const decoded = jwt.verify(token, secret) as { id: string };
 
     // 获取用户
     const user = await User.findByPk(decoded.id);

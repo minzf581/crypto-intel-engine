@@ -31,16 +31,16 @@ export const useAssets = () => {
 
 // For the prototype, we'll use a limited set of hardcoded assets
 const AVAILABLE_ASSETS: Asset[] = [
-  { id: '1', symbol: 'BTC', name: 'Bitcoin', logo: '/assets/logos/btc.svg', isSelected: false },
-  { id: '2', symbol: 'ETH', name: 'Ethereum', logo: '/assets/logos/eth.svg', isSelected: false },
-  { id: '3', symbol: 'SOL', name: 'Solana', logo: '/assets/logos/sol.svg', isSelected: false },
-  { id: '4', symbol: 'ADA', name: 'Cardano', logo: '/assets/logos/ada.svg', isSelected: false },
-  { id: '5', symbol: 'DOGE', name: 'Dogecoin', logo: '/assets/logos/doge.svg', isSelected: false },
-  { id: '6', symbol: 'DOT', name: 'Polkadot', logo: '/assets/logos/dot.svg', isSelected: false },
-  { id: '7', symbol: 'AVAX', name: 'Avalanche', logo: '/assets/logos/avax.svg', isSelected: false },
-  { id: '8', symbol: 'MATIC', name: 'Polygon', logo: '/assets/logos/matic.svg', isSelected: false },
-  { id: '9', symbol: 'LINK', name: 'Chainlink', logo: '/assets/logos/link.svg', isSelected: false },
-  { id: '10', symbol: 'UNI', name: 'Uniswap', logo: '/assets/logos/uni.svg', isSelected: false },
+  { id: '1', symbol: 'BTC', name: 'Bitcoin', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png', isSelected: false },
+  { id: '2', symbol: 'ETH', name: 'Ethereum', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png', isSelected: false },
+  { id: '3', symbol: 'SOL', name: 'Solana', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png', isSelected: false },
+  { id: '4', symbol: 'ADA', name: 'Cardano', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/2010.png', isSelected: false },
+  { id: '5', symbol: 'DOGE', name: 'Dogecoin', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/74.png', isSelected: false },
+  { id: '6', symbol: 'DOT', name: 'Polkadot', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/6636.png', isSelected: false },
+  { id: '7', symbol: 'AVAX', name: 'Avalanche', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5805.png', isSelected: false },
+  { id: '8', symbol: 'MATIC', name: 'Polygon', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/3890.png', isSelected: false },
+  { id: '9', symbol: 'LINK', name: 'Chainlink', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1975.png', isSelected: false },
+  { id: '10', symbol: 'UNI', name: 'Uniswap', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/7083.png', isSelected: false },
 ];
 
 export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
