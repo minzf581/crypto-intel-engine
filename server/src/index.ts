@@ -9,6 +9,8 @@ import { setupSocketHandlers, initializeSignalGenerator } from './services';
 import logger from './utils/logger';
 import { seedData } from './config/seedData';
 import { AddressInfo } from 'net';
+import path from 'path';
+import fs from 'fs';
 
 // 创建Express应用
 const app = express();
@@ -51,7 +53,47 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// 在生产环境中，添加一个根路径API信息响应
+app.get('/', (req, res) => {
+  // 尝试加载静态页面
+  const staticHtmlPath = path.resolve(__dirname, '../../../static-index.html');
+  if (fs.existsSync(staticHtmlPath)) {
+    res.sendFile(staticHtmlPath);
+  } else {
+    res.status(200).json({
+      name: '加密货币情报引擎API',
+      status: 'running',
+      version: '1.0.0',
+      env: env.nodeEnv,
+      uptime: process.uptime()
+    });
+  }
+});
+
+// 静态文件服务 - 在生产环境中提供前端构建文件
+if (env.nodeEnv === 'production') {
+  // 尝试加载前端构建目录
+  const clientBuildPath = path.resolve(__dirname, '../../../client/dist');
+  
+  // 检查是否存在前端构建目录
+  if (fs.existsSync(clientBuildPath)) {
+    logger.info(`提供前端静态文件，路径: ${clientBuildPath}`);
+    
+    // 设置静态文件中间件
+    app.use(express.static(clientBuildPath));
+    
+    // 捕获所有其他前端路由并返回index.html（支持SPA路由）
+    // 注意：这个路由放在API路由之后，确保不会覆盖API路由
+    app.get('/app/*', (req, res) => {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+  } else {
+    logger.warn('前端构建目录不存在，只提供API服务');
+  }
+}
 
 // 路由
 app.use('/api', routes);
@@ -96,7 +138,8 @@ connectDB()
       }
     });
     
-    server.listen(PORT, () => {
+    // 确保监听所有网络接口，而不仅仅是localhost
+    server.listen(PORT, '0.0.0.0', () => {
       const addr = server.address();
       if (addr && typeof addr !== 'string') {
         logger.info(`服务器运行在端口 ${addr.port} (${env.nodeEnv} 模式)`);

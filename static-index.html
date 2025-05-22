@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加密货币情报引擎</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: #f7f9fc;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 30px;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e6f7f0;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        .api-status {
+            display: block;
+            margin-top: 30px;
+            color: #666;
+        }
+        .api-link {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .api-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>加密货币情报引擎</h1>
+        <p>实时监控和分析加密货币市场信号的强大工具</p>
+        
+        <div class="status">
+            <strong>状态:</strong> 服务正在运行
+        </div>
+        
+        <a href="/api/assets" class="btn">访问应用</a>
+        
+        <p class="api-status">
+            API服务: <a href="/api/health" class="api-link">检查API状态</a>
+        </p>
+    </div>
+</body>
+</html> 
