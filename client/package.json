@@ -12,6 +12,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.15.0",
+    "serve": "^14.2.1",
     "socket.io-client": "^4.7.2"
   },
   "devDependencies": {
@@ -28,7 +29,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "serve -s dist"
   },
   "eslintConfig": {
     "extends": [
