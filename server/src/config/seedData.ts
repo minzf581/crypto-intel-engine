@@ -2,7 +2,7 @@ import { Asset, User, Signal } from '../models';
 import { format, subDays, subHours } from 'date-fns';
 import logger from '../utils/logger';
 
-// 默认资产数据
+// Default asset data
 const assets = [
   {
     symbol: 'BTC',
@@ -41,10 +41,10 @@ const assets = [
   },
 ];
 
-// 演示用户数据
+// Demo user data
 const users = [
   {
-    name: '演示用户',
+    name: 'Demo User',
     email: 'demo@example.com',
     password: 'demo123',
     hasCompletedOnboarding: true,
@@ -52,54 +52,54 @@ const users = [
   },
 ];
 
-// 信号示例生成函数
+// Demo signal generation function
 const generateDemoSignals = async () => {
   const signalTypes = ['sentiment', 'narrative'];
   const descriptions = {
     sentiment: [
-      '社交媒体上对%s的讨论情绪明显转为积极',
-      '交易者普遍看好%s的短期走势',
-      '%s持有者的情绪指数创近期新高',
-      '关于%s的负面评论数量显著减少',
-      '投资者对%s的长期前景保持乐观'
+      'Social media discussions about %s have turned notably positive',
+      'Traders are generally bullish on %s short-term trend',
+      'Sentiment index for %s holders has reached a recent high',
+      'Significant decrease in negative comments about %s',
+      'Investors remain optimistic about %s long-term prospects'
     ],
     narrative: [
-      '%s新技术更新吸引了广泛关注',
-      '主流媒体报道增加提升了%s的曝光度',
-      '%s在企业采用方面取得重大进展',
-      '关于%s未来发展的新叙事正在形成',
-      '%s相关生态系统扩张引发讨论热潮'
+      'New technical updates for %s have attracted widespread attention',
+      'Increased mainstream media coverage has boosted %s exposure',
+      '%s has made significant progress in enterprise adoption',
+      'New narratives about %s future development are forming',
+      'Expansion of %s ecosystem is generating discussion'
     ]
   };
 
   try {
-    // 获取所有资产
+    // Get all assets
     const allAssets = await Asset.findAll();
     
     const demoSignals = [];
     
-    // 为每个资产生成多个信号
+    // Generate multiple signals for each asset
     for (const asset of allAssets) {
-      // 每个资产生成3-5个信号
+      // Generate 3-5 signals per asset
       const signalCount = Math.floor(Math.random() * 3) + 3;
       
       for (let i = 0; i < signalCount; i++) {
-        // 随机选择信号类型
+        // Randomly select signal type
         const type = signalTypes[Math.floor(Math.random() * signalTypes.length)] as 'sentiment' | 'narrative';
         
-        // 随机选择描述
+        // Randomly select description
         const descriptionTemplate = descriptions[type][Math.floor(Math.random() * descriptions[type].length)];
         const description = descriptionTemplate.replace('%s', asset.name);
         
-        // 生成随机强度(1-100)
+        // Generate random strength (1-100)
         const strength = Math.floor(Math.random() * 80) + 20;
         
-        // 生成随机时间(过去7天内)
+        // Generate random time (within past 7 days)
         const daysAgo = Math.floor(Math.random() * 7);
         const hoursAgo = Math.floor(Math.random() * 24);
         const timestamp = subHours(subDays(new Date(), daysAgo), hoursAgo);
         
-        // 生成随机来源数据
+        // Generate random source data
         const twitterCount = Math.floor(Math.random() * 500) + 50;
         const redditCount = Math.floor(Math.random() * 300) + 30;
         
@@ -120,48 +120,48 @@ const generateDemoSignals = async () => {
       }
     }
     
-    // 批量创建信号
-    // @ts-ignore - 忽略类型检查问题
+    // Bulk create signals
+    // @ts-ignore - ignore type check issues
     await Signal.bulkCreate(demoSignals);
-    logger.info(`已创建 ${demoSignals.length} 个演示信号`);
+    logger.info(`Created ${demoSignals.length} demo signals`);
     
   } catch (error) {
-    logger.error('生成演示信号失败:', error);
+    logger.error('Failed to generate demo signals:', error);
   }
 };
 
-// 初始化数据
+// Initialize data
 export const seedData = async () => {
   try {
-    // 检查是否已有资产数据
+    // Check if assets already exist
     const assetCount = await Asset.count();
     
     if (assetCount === 0) {
-      // 创建默认资产
+      // Create default assets
       await Asset.bulkCreate(assets);
-      logger.info(`已创建 ${assets.length} 个默认资产`);
+      logger.info(`Created ${assets.length} default assets`);
     }
     
-    // 检查是否已有用户数据
+    // Check if users already exist
     const userCount = await User.count();
     
     if (userCount === 0) {
-      // 创建演示用户
+      // Create demo users
       await Promise.all(users.map(user => User.create(user)));
-      logger.info(`已创建 ${users.length} 个演示用户`);
+      logger.info(`Created ${users.length} demo users`);
     }
     
-    // 检查是否已有信号数据
+    // Check if signals already exist
     const signalCount = await Signal.count();
     
     if (signalCount === 0) {
-      // 生成演示信号
+      // Generate demo signals
       await generateDemoSignals();
     }
     
-    logger.info('数据初始化完成');
+    logger.info('Data initialization complete');
   } catch (error) {
-    logger.error('数据初始化失败:', error);
+    logger.error('Data initialization failed:', error);
   }
 };
 

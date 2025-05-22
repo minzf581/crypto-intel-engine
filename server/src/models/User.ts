@@ -2,7 +2,7 @@ import { Model, DataTypes } from 'sequelize';
 import bcrypt from 'bcryptjs';
 import sequelize from '../config/database';
 
-// 用户接口
+// User interface
 export interface UserAttributes {
   id?: string;
   name: string;
@@ -12,10 +12,10 @@ export interface UserAttributes {
   selectedAssets: string[];
 }
 
-// 用户接口(创建时)
+// User interface (for creation)
 export interface UserCreationAttributes extends Omit<UserAttributes, 'id'> {}
 
-// 用户模型类
+// User model class
 export class User extends Model<UserAttributes, UserCreationAttributes> {
   declare id: string;
   declare name: string;
@@ -26,13 +26,13 @@ export class User extends Model<UserAttributes, UserCreationAttributes> {
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 
-  // 密码比较方法
+  // Password comparison method
   async comparePassword(candidatePassword: string): Promise<boolean> {
     return bcrypt.compare(candidatePassword, this.password);
   }
 }
 
-// 初始化用户模型
+// Initialize user model
 User.init(
   {
     id: {
@@ -76,7 +76,7 @@ User.init(
   }
 );
 
-// 密码哈希钩子
+// Password hash hooks
 User.beforeCreate(async (user) => {
   const salt = await bcrypt.genSalt(10);
   user.password = await bcrypt.hash(user.password, salt);
