@@ -17,8 +17,12 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// 使用Railway提供的PORT环境变量，这是关键
+const PORT = process.env.PORT || 5001;
+console.log(`应用将在端口 ${PORT} 上启动`);
+
 // 启动服务
 console.log('启动加密货币情报引擎...');
 console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
-console.log(`PORT: ${process.env.PORT || 5001}`);
+console.log(`PORT: ${PORT}`);
 require('./server/dist/index.js'); 
