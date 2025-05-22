@@ -5,3 +5,4 @@ data/
 *.log
 dist/
 .DS_Store
+server/data/crypto-intel.sqlite
