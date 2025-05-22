@@ -1,19 +1,84 @@
 import { useState, useEffect } from 'react';
 import { useSignals } from '@/context/SignalContext';
 import { useAssets } from '@/context/AssetContext';
+import { useAuth } from '@/context/AuthContext';
 import SignalCard from '@/components/dashboard/SignalCard';
 import SignalDetailModal from '@/components/dashboard/SignalDetailModal';
 import SignalFilters from '@/components/dashboard/SignalFilters';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
+// Demo signals for when backend is unavailable
+const DEMO_SIGNALS = [
+  {
+    id: 'demo-signal-1',
+    assetId: 'btc-id',
+    assetSymbol: 'BTC',
+    assetName: 'Bitcoin',
+    assetLogo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png',
+    type: 'sentiment',
+    strength: 85,
+    description: 'Social media discussions about Bitcoin have turned notably positive',
+    sources: [
+      { platform: 'twitter', count: 324 },
+      { platform: 'reddit', count: 156 }
+    ],
+    timestamp: new Date(Date.now() - 3600000).toISOString()
+  },
+  {
+    id: 'demo-signal-2',
+    assetId: 'eth-id',
+    assetSymbol: 'ETH',
+    assetName: 'Ethereum',
+    assetLogo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+    type: 'narrative',
+    strength: 72,
+    description: 'New technical updates for Ethereum have attracted widespread attention',
+    sources: [
+      { platform: 'twitter', count: 267 },
+      { platform: 'reddit', count: 189 }
+    ],
+    timestamp: new Date(Date.now() - 7200000).toISOString()
+  },
+  {
+    id: 'demo-signal-3',
+    assetId: 'sol-id',
+    assetSymbol: 'SOL',
+    assetName: 'Solana',
+    assetLogo: 'https://cryptologos.cc/logos/solana-sol-logo.png',
+    type: 'sentiment',
+    strength: 68,
+    description: 'Traders are generally bullish on Solana short-term trend',
+    sources: [
+      { platform: 'twitter', count: 213 },
+      { platform: 'reddit', count: 134 }
+    ],
+    timestamp: new Date(Date.now() - 10800000).toISOString()
+  }
+];
+
 const DashboardPage = () => {
+  const { user } = useAuth();
   const { filteredSignals, setSelectedSignal, selectedSignal, loadMoreSignals, isLoading } = useSignals();
   const { selectedAssets } = useAssets();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [demoSignals, setDemoSignals] = useState(DEMO_SIGNALS);
+
+  // Determine if using demo mode
+  const isDemoMode = user?.email === 'demo@example.com';
+  
+  // Use demo signals or actual signals based on mode
+  const displaySignals = isDemoMode ? demoSignals : filteredSignals;
 
   // Open signal detail modal
   const handleOpenSignalDetail = (signalId: string) => {
-    const signal = filteredSignals.find(s => s.id === signalId);
+    let signal;
+    
+    if (isDemoMode) {
+      signal = demoSignals.find(s => s.id === signalId);
+    } else {
+      signal = filteredSignals.find(s => s.id === signalId);
+    }
+    
     if (signal) {
       setSelectedSignal(signal);
       setIsDetailModalOpen(true);
@@ -32,7 +97,7 @@ const DashboardPage = () => {
       window.innerHeight + document.documentElement.scrollTop >=
       document.documentElement.scrollHeight - 100
     ) {
-      if (!isLoading) {
+      if (!isLoading && !isDemoMode) {
         loadMoreSignals();
       }
     }
@@ -50,9 +115,14 @@ const DashboardPage = () => {
         <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           Monitor real-time cryptocurrency signals extracted from social media platforms.
         </p>
+        {isDemoMode && (
+          <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-md mt-2 text-sm">
+            Demo Mode: Using sample data. No connection to backend required.
+          </div>
+        )}
       </div>
 
-      {selectedAssets.length === 0 ? (
+      {selectedAssets.length === 0 && !isDemoMode ? (
         <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 shadow-sm border border-neutral-200 dark:border-neutral-700">
           <div className="flex justify-center items-center h-48 flex-col text-center">
             <InformationCircleIcon className="h-12 w-12 text-neutral-400 mb-4" />
@@ -64,9 +134,9 @@ const DashboardPage = () => {
         </div>
       ) : (
         <>
-          <SignalFilters />
+          {!isDemoMode && <SignalFilters />}
 
-          {filteredSignals.length === 0 ? (
+          {displaySignals.length === 0 ? (
             <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 shadow-sm border border-neutral-200 dark:border-neutral-700">
               <div className="flex justify-center items-center h-48 flex-col text-center">
                 <InformationCircleIcon className="h-12 w-12 text-neutral-400 mb-4" />
@@ -78,7 +148,7 @@ const DashboardPage = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredSignals.map(signal => (
+              {displaySignals.map(signal => (
                 <SignalCard
                   key={signal.id}
                   signal={signal}
@@ -86,7 +156,7 @@ const DashboardPage = () => {
                 />
               ))}
 
-              {isLoading && (
+              {isLoading && !isDemoMode && (
                 <div className="text-center py-4">
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-600"></div>
                   <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">Loading more signals...</p>
