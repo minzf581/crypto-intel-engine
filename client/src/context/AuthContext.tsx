@@ -2,11 +2,25 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-// Configure axios defaults - 确保使用正确的后端端口
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+// Configure axios defaults - 确保使用正确的后端端点
+let API_URL = import.meta.env.VITE_API_URL || '';
+
+// 如果没有定义环境变量，尝试推断API URL
+if (!API_URL) {
+  // 在生产环境中，根据当前域名推断API URL
+  if (window.location.hostname.includes('railway.app')) {
+    // 假设后端也部署在Railway，但使用不同的子域名
+    API_URL = 'https://crypto-demo.up.railway.app';
+  } else {
+    // 本地开发环境
+    API_URL = 'http://localhost:5001';
+  }
+}
+
 console.log('使用API地址:', API_URL);
 axios.defaults.baseURL = API_URL;
 axios.defaults.withCredentials = true;
+axios.defaults.timeout = 10000; // 10秒超时
 
 // Add request interceptor
 axios.interceptors.request.use(
@@ -128,15 +142,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       
-      // 发送登录请求
-      const response = await axios.post('/api/auth/login', { email, password });
-      console.log('登录响应:', response.data);
+      // 登录URL
+      const loginUrl = `${API_URL}/api/auth/login`;
+      console.log('正在发送登录请求到:', loginUrl);
       
-      if (!response.data || !response.data.data) {
+      // 直接使用fetch API作为备选方案，避免axios配置问题
+      const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`登录请求失败: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('登录响应:', data);
+      
+      if (!data || !data.data) {
         throw new Error('服务器响应格式错误');
       }
       
-      const { token, user: userData } = response.data.data;
+      const { token, user: userData } = data.data;
       
       // 验证token和用户数据
       if (!token || typeof token !== 'string' || token.trim() === '') {

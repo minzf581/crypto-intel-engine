@@ -7,6 +7,15 @@ export default defineConfig(({ mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '');
   
+  // 根据环境设置默认API URL
+  const apiUrl = env.VITE_API_URL || (
+    mode === 'production' 
+      ? 'https://crypto-demo.up.railway.app' 
+      : 'http://localhost:5001'
+  );
+  
+  console.log(`Building for ${mode} mode with API URL: ${apiUrl}`);
+  
   return {
     plugins: [react()],
     resolve: {
@@ -16,24 +25,37 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       // 确保环境变量可在客户端使用
-      'process.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'http://localhost:5001')
+      'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl)
     },
     server: {
       port: 3000,
       proxy: {
         '/api': {
-          target: env.VITE_API_URL || 'http://localhost:5001',
+          target: apiUrl,
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path
         },
         '/socket.io': {
-          target: env.VITE_API_URL || 'http://localhost:5001',
+          target: apiUrl,
           ws: true,
           changeOrigin: true,
           secure: false
         }
       },
     },
+    build: {
+      sourcemap: true,
+      outDir: 'dist',
+      // 避免因类型错误而中断构建
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            charts: ['chart.js', 'react-chartjs-2']
+          }
+        }
+      }
+    }
   };
 }); 

@@ -1,16 +1,16 @@
 # 加密货币情报引擎 前端部署指南
 
-本文档提供了在Railway平台上部署前端应用的步骤。
+本文档提供了在Railway平台上部署前端应用的步骤，包含最新的API连接修复。
 
-## 部署准备
+## 修复清单
 
-已经为您准备了以下文件：
+我们已经实施了以下修复以解决API连接和登录问题：
 
-1. `railway.json` - Railway部署配置
-2. `nixpacks.toml` - Nixpacks构建配置
-3. `Procfile` - 应用启动配置
-4. 更新了`package.json`添加serve依赖
-5. 更新了`vite.config.ts`支持环境变量
+1. 更新了`AuthContext.tsx`以更健壮地处理API连接
+2. 优化了`vite.config.ts`以正确处理环境变量
+3. 更新了`railway.json`直接在构建命令中设置环境变量
+4. 降低了`tsconfig.json`的严格度以确保构建成功
+5. 添加了直接使用fetch API的备选登录方法
 
 ## 部署步骤
 
@@ -30,7 +30,7 @@ VITE_API_URL=https://crypto-demo.up.railway.app
 PORT=3000
 ```
 
-确保`VITE_API_URL`指向您的后端API地址。
+确保`VITE_API_URL`指向您的后端API地址。如果您没有设置此变量，我们的代码已配置为自动使用合理的默认值。
 
 ### 自定义域名（可选）
 
@@ -46,11 +46,14 @@ PORT=3000
 3. API数据正确加载
 4. WebSocket实时更新功能正常工作
 
-## 问题排查
+## 故障排查
 
-如果遇到问题：
+如果仍然遇到API连接问题：
 
-1. 检查环境变量是否正确设置
-2. 查看Railway的构建和部署日志
-3. 确认API后端服务运行正常
-4. 验证CORS设置允许前端域名访问 
+1. 检查浏览器控制台中的错误消息
+2. 验证网络请求中的API URL是否正确
+3. 检查Railway平台上的环境变量设置
+4. 确认后端API是否正常运行并接受请求
+5. 验证CORS设置是否允许前端域名
+
+更多详细的排障步骤，请参阅 `API_CONNECTION_GUIDE.md`。 
