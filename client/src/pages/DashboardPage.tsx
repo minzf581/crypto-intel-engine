@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSignals } from '@/context/SignalContext';
+import { useSignals, Signal } from '@/context/SignalContext';
 import { useAssets } from '@/context/AssetContext';
 import { useAuth } from '@/context/AuthContext';
 import SignalCard from '@/components/dashboard/SignalCard';
@@ -8,7 +8,7 @@ import SignalFilters from '@/components/dashboard/SignalFilters';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 // Demo signals for when backend is unavailable
-const DEMO_SIGNALS = [
+const DEMO_SIGNALS: Signal[] = [
   {
     id: 'demo-signal-1',
     assetId: 'btc-id',
@@ -19,8 +19,8 @@ const DEMO_SIGNALS = [
     strength: 85,
     description: 'Social media discussions about Bitcoin have turned notably positive',
     sources: [
-      { platform: 'twitter', count: 324 },
-      { platform: 'reddit', count: 156 }
+      { platform: 'twitter' as 'twitter', count: 324 },
+      { platform: 'reddit' as 'reddit', count: 156 }
     ],
     timestamp: new Date(Date.now() - 3600000).toISOString()
   },
@@ -34,8 +34,8 @@ const DEMO_SIGNALS = [
     strength: 72,
     description: 'New technical updates for Ethereum have attracted widespread attention',
     sources: [
-      { platform: 'twitter', count: 267 },
-      { platform: 'reddit', count: 189 }
+      { platform: 'twitter' as 'twitter', count: 267 },
+      { platform: 'reddit' as 'reddit', count: 189 }
     ],
     timestamp: new Date(Date.now() - 7200000).toISOString()
   },
@@ -49,8 +49,8 @@ const DEMO_SIGNALS = [
     strength: 68,
     description: 'Traders are generally bullish on Solana short-term trend',
     sources: [
-      { platform: 'twitter', count: 213 },
-      { platform: 'reddit', count: 134 }
+      { platform: 'twitter' as 'twitter', count: 213 },
+      { platform: 'reddit' as 'reddit', count: 134 }
     ],
     timestamp: new Date(Date.now() - 10800000).toISOString()
   }

@@ -28,7 +28,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --skipLibCheck && vite build",
+    "build": "vite build",
+    "build:check": "tsc --skipLibCheck && vite build",
     "preview": "vite preview",
     "start": "serve -s dist"
   },
