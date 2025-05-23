@@ -1,0 +1,190 @@
+# Crypto Intelligence Engine - Cursor Rules
+
+## Project Overview
+This is a **Crypto Intelligence Engine** project built with React (frontend) and Node.js/Express (backend). It provides real-time cryptocurrency price monitoring, signal detection, and market sentiment analysis.
+
+## Language Requirements
+**CRITICAL: ALL content in this project MUST be in ENGLISH ONLY**
+
+### Code & Documentation
+- All code comments MUST be in English
+- All documentation MUST be in English  
+- All README files MUST be in English
+- All inline documentation MUST be in English
+- All TypeScript interfaces and type definitions MUST use English names
+- All function and variable names MUST be in English
+
+### User Interface
+- All UI text, labels, and buttons MUST be in English
+- All form placeholders and validation messages MUST be in English
+- All modal dialogs and notifications MUST be in English
+- All navigation menus and breadcrumbs MUST be in English
+- All tooltips and help text MUST be in English
+- All loading states and empty states MUST be in English
+
+### Backend & API
+- All API response messages MUST be in English
+- All error messages and status codes MUST be in English
+- All database seed data MUST be in English
+- All log messages MUST be in English
+- All email templates MUST be in English
+- All validation error messages MUST be in English
+
+### Data & Content
+- All cryptocurrency asset names should use official English names
+- All signal descriptions MUST be in English
+- All notification messages MUST be in English
+- All chart labels and legends MUST be in English
+- All analytics descriptions MUST be in English
+
+## Technology Stack
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Vite
+- **Backend**: Node.js, Express, TypeScript, Socket.IO
+- **Database**: SQLite with Sequelize ORM
+- **Real-time**: WebSocket connections for live updates
+- **Icons**: Heroicons React
+- **HTTP Client**: Axios
+
+## Architecture Guidelines
+
+### Frontend Structure
+```
+client/src/
+├── components/     # Reusable React components
+├── pages/         # Page-level components
+├── context/       # React Context providers
+├── hooks/         # Custom React hooks
+├── utils/         # Utility functions
+└── types/         # TypeScript type definitions
+```
+
+### Backend Structure
+```
+server/src/
+├── controllers/   # Route handlers
+├── models/        # Database models
+├── routes/        # API route definitions
+├── services/      # Business logic
+├── utils/         # Utility functions
+└── config/        # Configuration files
+```
+
+## Coding Standards
+
+### React Components
+- Use functional components with hooks
+- Use TypeScript for all components
+- Follow React best practices for state management
+- Use proper component composition
+- Implement proper error boundaries
+- Use React.memo() for performance optimization when needed
+
+### State Management
+- Use React Context for global state
+- Use useState and useEffect for local state
+- Implement proper loading and error states
+- Use custom hooks for complex logic
+
+### Styling
+- Use Tailwind CSS for all styling
+- Follow responsive design principles
+- Implement dark mode support
+- Use consistent spacing and typography
+- Follow accessibility guidelines
+
+### API Design
+- Use RESTful API conventions
+- Implement proper HTTP status codes
+- Use consistent response formats
+- Include proper error handling
+- Implement rate limiting where appropriate
+
+### Database
+- Use Sequelize ORM for database operations
+- Follow proper database naming conventions
+- Implement proper indexes for performance
+- Use transactions for data integrity
+- Follow database migration best practices
+
+## Security Guidelines
+- Implement JWT authentication
+- Use proper input validation and sanitization
+- Implement CORS properly
+- Use environment variables for sensitive data
+- Follow security best practices for WebSocket connections
+
+## Performance Guidelines
+- Implement proper caching strategies
+- Use lazy loading for components
+- Optimize database queries
+- Implement proper pagination
+- Use WebSocket connections efficiently
+
+## Testing Guidelines
+- Write unit tests for utility functions
+- Write integration tests for API endpoints
+- Write component tests for React components
+- Use meaningful test descriptions in English
+- Maintain good test coverage
+
+## Error Handling
+- Use consistent error response formats
+- Implement proper error logging
+- Provide meaningful error messages in English
+- Handle edge cases gracefully
+- Implement proper fallback UI states
+
+## Real-time Features
+- Use Socket.IO for real-time updates
+- Implement proper connection handling
+- Handle disconnections gracefully
+- Use event-driven architecture
+- Implement proper authentication for WebSocket connections
+
+## Cryptocurrency Integration
+- Use CoinGecko API for price data
+- Implement proper rate limiting for external APIs
+- Handle API failures gracefully
+- Cache data appropriately
+- Support multiple cryptocurrency exchanges
+
+## File Naming Conventions
+- Use PascalCase for React components: `PriceCard.tsx`
+- Use camelCase for utility functions: `formatPrice.ts`
+- Use kebab-case for CSS classes: `price-card-container`
+- Use SCREAMING_SNAKE_CASE for constants: `API_ENDPOINTS`
+
+## Git Commit Guidelines
+- Use conventional commits format
+- Write commit messages in English
+- Use present tense: "Add feature" not "Added feature"
+- Keep commit messages concise but descriptive
+
+## Import/Export Guidelines
+- Use named exports for utilities and hooks
+- Use default exports for React components
+- Group imports: external libraries, internal modules, relative imports
+- Use absolute imports with path aliases
+
+## Environment Variables
+- Use clear, descriptive names in English
+- Document all environment variables
+- Use appropriate defaults for development
+- Keep sensitive data in environment variables only
+
+## Documentation Requirements
+- Maintain up-to-date README files
+- Document all API endpoints
+- Include setup and deployment instructions
+- Document all environment variables
+- Use English for all documentation
+
+## Code Review Guidelines
+- Check for English-only content
+- Verify proper TypeScript usage
+- Ensure proper error handling
+- Check for security vulnerabilities
+- Verify responsive design implementation
+- Ensure accessibility compliance
+
+Remember: ANY Chinese text found in code, UI, logs, or documentation should be immediately converted to English. 

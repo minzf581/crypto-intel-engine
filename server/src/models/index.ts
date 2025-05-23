@@ -6,9 +6,9 @@ import { AlertSetting, initializeAssociations as initAlertSettingAssociations } 
 
 // 初始化所有模型关联
 const initializeAssociations = () => {
-  // 用户-资产 多对多关系
-  User.belongsToMany(Asset, { through: 'user_assets', as: 'selectedAssets' });
-  Asset.belongsToMany(User, { through: 'user_assets', as: 'subscribers' });
+  // 用户-资产 多对多关系 - 使用不同的关联名避免与selectedAssets属性冲突
+  User.belongsToMany(Asset, { through: 'user_assets', as: 'watchedAssets' });
+  Asset.belongsToMany(User, { through: 'user_assets', as: 'watchers' });
   
   // 初始化信号模型的关联
   initSignalAssociations();

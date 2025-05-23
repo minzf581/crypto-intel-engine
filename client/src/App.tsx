@@ -86,9 +86,7 @@ const App = () => {
                     path="login" 
                     element={
                       <AuthRoute>
-                        <AuthLayout>
-                          <LoginPage />
-                        </AuthLayout>
+                        <LoginPage />
                       </AuthRoute>
                     } 
                   />
@@ -96,9 +94,7 @@ const App = () => {
                     path="register" 
                     element={
                       <AuthRoute>
-                        <AuthLayout>
-                          <RegisterPage />
-                        </AuthLayout>
+                        <RegisterPage />
                       </AuthRoute>
                     } 
                   />

@@ -1,207 +1,254 @@
 import axios from 'axios';
 import { Asset, Signal } from '../models';
 import logger from '../utils/logger';
-import { sendSignalToSubscribers } from './socket';
-import { Server as SocketIOServer } from 'socket.io';
-import { calculateSignalStrength } from '../utils/signalUtils';
+import notificationService from './notificationService';
+import { calculateStrength } from '../utils/signalUtils';
 
-// 存储每个资产的最近价格历史，用于计算价格变化
-const priceHistory: Record<string, { price: number, timestamp: number }[]> = {};
+// CoinGecko API配置
+const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
+const PRICE_UPDATE_INTERVAL = 60000; // 1分钟更新一次
+const PRICE_CHANGE_THRESHOLD = 5; // 5%变化阈值
 
-// 价格数据的最大历史长度
-const MAX_PRICE_HISTORY = 24; // 保存最近24个价格点
-
-/**
- * 从CoinGecko API获取价格数据
- * @param assetSymbols 要获取价格的资产符号数组
- * @returns 价格数据对象
- */
-async function fetchPriceData(assetSymbols: string[]) {
-  try {
-    // 将资产符号转换为小写(CoinGecko API要求)
-    const symbols = assetSymbols.map(symbol => symbol.toLowerCase());
-    
-    // 构建API请求URL
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbols.join(',')}&vs_currencies=usd&include_24hr_change=true`;
-    
-    const response = await axios.get(url);
-    return response.data;
-  } catch (error) {
-    logger.error('获取价格数据失败:', error);
-    return {};
-  }
-}
-
-/**
- * 更新资产的价格历史
- * @param assetSymbol 资产符号
- * @param price 当前价格
- */
-function updatePriceHistory(assetSymbol: string, price: number) {
-  const now = Date.now();
-  
-  // 如果这个资产还没有历史记录，创建一个
-  if (!priceHistory[assetSymbol]) {
-    priceHistory[assetSymbol] = [];
-  }
-  
-  // 添加新的价格点
-  priceHistory[assetSymbol].push({ price, timestamp: now });
-  
-  // 保持历史记录在最大长度以内
-  if (priceHistory[assetSymbol].length > MAX_PRICE_HISTORY) {
-    priceHistory[assetSymbol].shift();
-  }
-}
-
-/**
- * 计算价格变化百分比
- * @param assetSymbol 资产符号
- * @param currentPrice 当前价格
- * @returns 价格变化百分比
- */
-function calculatePriceChange(assetSymbol: string, currentPrice: number): { change: number, prevPrice: number } {
-  const history = priceHistory[assetSymbol];
-  
-  // 如果没有足够的历史数据，返回0
-  if (!history || history.length < 2) {
-    return { change: 0, prevPrice: currentPrice };
-  }
-  
-  // 获取最旧的价格点进行比较
-  const oldestPrice = history[0].price;
-  
-  // 计算变化百分比
-  const change = ((currentPrice - oldestPrice) / oldestPrice) * 100;
-  
-  return { change, prevPrice: oldestPrice };
-}
-
-/**
- * 根据价格变化生成信号
- * @param asset 资产对象
- * @param currentPrice 当前价格
- * @param priceChange 价格变化百分比
- * @param previousPrice 之前的价格
- * @returns 生成的信号
- */
-async function generatePriceSignal(asset: any, currentPrice: number, priceChange: number, previousPrice: number) {
-  // 决定信号强度 (价格变化的绝对值)
-  const absPriceChange = Math.abs(priceChange);
-  
-  // 计算信号强度 (将价格变化映射到0-100的范围)
-  // 价格变化10%以上认为是强烈信号(强度85+)
-  // 价格变化5-10%是中等信号(强度70-85)
-  // 价格变化1-5%是轻微信号(强度50-70)
-  // 价格变化<1%不生成信号
-  let strength = 0;
-  if (absPriceChange >= 10) {
-    strength = Math.min(100, 85 + (absPriceChange - 10) / 2);
-  } else if (absPriceChange >= 5) {
-    strength = 70 + (absPriceChange - 5) * 3;
-  } else if (absPriceChange >= 1) {
-    strength = 50 + (absPriceChange - 1) * 5;
-  } else {
-    // 价格变化太小，不生成信号
-    return null;
-  }
-  
-  // 四舍五入强度值
-  strength = Math.round(strength);
-  
-  // 根据价格变化方向生成描述
-  let description = '';
-  if (priceChange > 0) {
-    description = `${asset.symbol}价格显著上涨${absPriceChange.toFixed(2)}%，从$${previousPrice.toFixed(2)}涨至$${currentPrice.toFixed(2)}`;
-  } else {
-    description = `${asset.symbol}价格显著下跌${absPriceChange.toFixed(2)}%，从$${previousPrice.toFixed(2)}跌至$${currentPrice.toFixed(2)}`;
-  }
-  
-  // 创建新的信号
-  const signal = await Signal.create({
-    assetId: asset.id,
-    assetSymbol: asset.symbol,
-    assetName: asset.name,
-    assetLogo: asset.logo,
-    type: 'price',
-    strength,
-    description,
-    sources: [
-      {
-        platform: 'price',
-        priceChange: priceChange,
-        currentPrice: currentPrice,
-        previousPrice: previousPrice,
-        timeframe: `${Math.floor(MAX_PRICE_HISTORY / 6)}h`, // 时间范围约等于历史记录长度/6小时
-      }
-    ],
-    timestamp: new Date()
-  });
-  
-  return signal;
-}
-
-/**
- * 启动价格数据监控服务
- * @param io Socket.IO服务器实例
- */
-export const initializePriceMonitor = async (io: SocketIOServer) => {
-  logger.info('初始化价格监控服务');
-  
-  // 每5分钟运行一次
-  setInterval(async () => {
-    try {
-      // 获取所有资产
-      const assets = await Asset.findAll();
-      
-      if (assets.length === 0) {
-        return;
-      }
-      
-      // 获取所有资产的符号
-      const assetSymbols = assets.map(asset => asset.symbol);
-      
-      // 获取价格数据
-      const priceData = await fetchPriceData(assetSymbols);
-      
-      // 处理每个资产的价格数据
-      for (const asset of assets) {
-        try {
-          // 获取资产在CoinGecko中的ID (假设是小写的符号)
-          const coinId = asset.symbol.toLowerCase();
-          
-          // 检查是否有该资产的价格数据
-          if (priceData[coinId]) {
-            const currentPrice = priceData[coinId].usd;
-            
-            // 更新价格历史
-            updatePriceHistory(asset.symbol, currentPrice);
-            
-            // 计算价格变化
-            const { change, prevPrice } = calculatePriceChange(asset.symbol, currentPrice);
-            
-            // 如果价格变化显著，生成信号
-            if (Math.abs(change) >= 1) {
-              const signal = await generatePriceSignal(asset, currentPrice, change, prevPrice);
-              
-              // 如果生成了信号，发送给订阅者
-              if (signal) {
-                logger.info(`为${asset.symbol}生成价格信号: 变化${change.toFixed(2)}%, 强度${signal.strength}`);
-                sendSignalToSubscribers(io, asset.symbol, signal.toJSON());
-              }
-            }
-          }
-        } catch (assetError) {
-          logger.error(`处理资产${asset.symbol}的价格数据时出错:`, assetError);
-        }
-      }
-    } catch (error) {
-      logger.error('价格监控服务错误:', error);
-    }
-  }, 5 * 60 * 1000); // 5分钟
+// 加密货币ID映射(CoinGecko API使用的ID)
+const COIN_ID_MAP: Record<string, string> = {
+  'BTC': 'bitcoin',
+  'ETH': 'ethereum', 
+  'BNB': 'binancecoin',
+  'SOL': 'solana',
+  'ADA': 'cardano',
+  'DOT': 'polkadot',
+  'DOGE': 'dogecoin'
 };
 
-export default {
-  initializePriceMonitor,
-  fetchPriceData
-}; 
+// 价格数据接口
+interface PriceData {
+  symbol: string;
+  currentPrice: number;
+  priceChange24h: number;
+  priceChangePercentage24h: number;
+  lastUpdated: Date;
+}
+
+// 存储上次价格数据
+const priceHistory: Record<string, PriceData> = {};
+
+class PriceService {
+  private intervalId: NodeJS.Timeout | null = null;
+
+  /**
+   * 获取加密货币实时价格
+   */
+  async fetchRealPrices(): Promise<PriceData[]> {
+    try {
+      const assets = await Asset.findAll();
+      const coinIds = assets
+        .map(asset => COIN_ID_MAP[asset.symbol])
+        .filter(Boolean)
+        .join(',');
+
+      if (!coinIds) {
+        logger.warn('没有找到支持的加密货币ID');
+        return [];
+      }
+
+      logger.info(`获取价格数据: ${coinIds}`);
+
+      const response = await axios.get(`${COINGECKO_API_BASE}/simple/price`, {
+        params: {
+          ids: coinIds,
+          vs_currencies: 'usd',
+          include_24hr_change: true,
+          include_last_updated_at: true
+        },
+        timeout: 10000
+      });
+
+      const priceData: PriceData[] = [];
+
+      for (const asset of assets) {
+        const coinId = COIN_ID_MAP[asset.symbol];
+        if (!coinId || !response.data[coinId]) {
+          logger.warn(`未找到 ${asset.symbol} 的价格数据`);
+          continue;
+        }
+
+        const data = response.data[coinId];
+        priceData.push({
+          symbol: asset.symbol,
+          currentPrice: data.usd || 0,
+          priceChange24h: data.usd_24h_change || 0,
+          priceChangePercentage24h: data.usd_24h_change || 0,
+          lastUpdated: new Date(data.last_updated_at * 1000 || Date.now())
+        });
+      }
+
+      logger.info(`成功获取 ${priceData.length} 个币种的价格数据`);
+      return priceData;
+
+    } catch (error: any) {
+      if (error.response?.status === 429) {
+        logger.error('CoinGecko API 请求频率限制');
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        logger.error('网络连接失败，无法获取价格数据');
+      } else {
+        logger.error('获取价格数据失败:', error.message);
+      }
+      throw new Error(`价格数据获取失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 分析价格变化并生成信号
+   */
+  async analyzePriceChanges(priceData: PriceData[]): Promise<void> {
+    for (const data of priceData) {
+      const previousData = priceHistory[data.symbol];
+      
+      // 如果没有历史数据，保存当前数据并跳过
+      if (!previousData) {
+        priceHistory[data.symbol] = data;
+        continue;
+      }
+
+      // 计算价格变化百分比
+      const priceChangePercent = Math.abs(data.priceChangePercentage24h);
+      
+      // 只有当价格变化超过阈值时才生成信号
+      if (priceChangePercent >= PRICE_CHANGE_THRESHOLD) {
+        await this.createPriceSignal(data, previousData);
+      }
+
+      // 更新历史数据
+      priceHistory[data.symbol] = data;
+    }
+  }
+
+  /**
+   * 创建价格信号
+   */
+  private async createPriceSignal(currentData: PriceData, previousData: PriceData): Promise<void> {
+    try {
+      // 获取资产信息
+      const asset = await Asset.findOne({ where: { symbol: currentData.symbol } });
+      if (!asset) {
+        logger.warn(`未找到资产: ${currentData.symbol}`);
+        return;
+      }
+
+      const changePercent = currentData.priceChangePercentage24h;
+      const isPositive = changePercent > 0;
+      
+      // 生成信号描述
+      const description = isPositive 
+        ? `${asset.name} 价格在24小时内上涨 ${changePercent.toFixed(2)}%，当前价格 $${currentData.currentPrice.toLocaleString()}`
+        : `${asset.name} 价格在24小时内下跌 ${Math.abs(changePercent).toFixed(2)}%，当前价格 $${currentData.currentPrice.toLocaleString()}`;
+
+      // 计算信号强度（基于价格变化幅度）
+      const strength = calculateStrength(Math.abs(changePercent), 'price');
+
+      // 创建信号
+      const signal = await Signal.create({
+        assetId: asset.id,
+        assetSymbol: asset.symbol,
+        assetName: asset.name,
+        assetLogo: asset.logo,
+        type: 'price',
+        strength,
+        description,
+        sources: [{
+          platform: 'price',
+          priceChange: changePercent,
+          currentPrice: currentData.currentPrice,
+          previousPrice: previousData.currentPrice,
+          timeframe: '24h'
+        }],
+        timestamp: new Date()
+      });
+
+      logger.info(`生成价格信号: ${asset.symbol} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%, 强度: ${strength})`);
+
+      // 发送通知
+      await notificationService.processSignal(signal);
+
+    } catch (error) {
+      logger.error(`创建价格信号失败:`, error);
+    }
+  }
+
+  /**
+   * 启动价格监控
+   */
+  startPriceMonitoring(): void {
+    if (this.intervalId) {
+      logger.warn('价格监控已在运行');
+      return;
+    }
+
+    logger.info('启动实时价格监控服务');
+
+    // 立即执行一次
+    this.monitorPrices();
+
+    // 设置定时监控
+    this.intervalId = setInterval(() => {
+      this.monitorPrices();
+    }, PRICE_UPDATE_INTERVAL);
+  }
+
+  /**
+   * 停止价格监控
+   */
+  stopPriceMonitoring(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      logger.info('价格监控已停止');
+    }
+  }
+
+  /**
+   * 执行价格监控
+   */
+  private async monitorPrices(): Promise<void> {
+    try {
+      logger.info('开始价格监控检查...');
+      const priceData = await this.fetchRealPrices();
+      
+      if (priceData.length > 0) {
+        await this.analyzePriceChanges(priceData);
+        logger.info(`价格监控完成，处理了 ${priceData.length} 个币种`);
+      } else {
+        logger.warn('未获取到任何价格数据');
+      }
+    } catch (error) {
+      logger.error('价格监控过程中发生错误:', error);
+    }
+  }
+
+  /**
+   * 获取当前价格历史数据
+   */
+  getPriceHistory(): Record<string, PriceData> {
+    return { ...priceHistory };
+  }
+
+  /**
+   * 手动触发价格检查（用于测试）
+   */
+  async triggerPriceCheck(): Promise<void> {
+    await this.monitorPrices();
+  }
+}
+
+// 导出单例
+const priceService = new PriceService();
+
+/**
+ * 初始化价格监控服务
+ */
+export const initializePriceMonitor = () => {
+  logger.info('初始化实时价格监控服务');
+  priceService.startPriceMonitoring();
+};
+
+export default priceService; 

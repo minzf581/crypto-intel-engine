@@ -155,21 +155,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       
-      // Special case for demo@example.com to bypass API issues
-      if (email === 'demo@example.com') {
-        console.log('Demo account detected - using client-side authentication');
-        
-        // Store demo token
-        localStorage.setItem('token', DEMO_TOKEN);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${DEMO_TOKEN}`;
-        
-        // Update user state with demo user
-        setUser(DEMO_USER);
-        console.log('Demo login successful');
-        
-        return DEMO_USER;
-      }
-      
       // Try multiple login approaches to avoid CORS issues
       let userData;
       let token;
@@ -275,15 +260,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Register function
   const register = async (email: string, password: string, name: string) => {
     try {
-      // Check for demo account
-      if (email === 'demo@example.com') {
-        console.log('Demo registration - using client-side authentication');
-        localStorage.setItem('token', DEMO_TOKEN);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${DEMO_TOKEN}`;
-        setUser(DEMO_USER);
-        return;
-      }
-      
       const response = await axios.post('/api/auth/register', { email, password, name });
       const { token, user: userData } = response.data.data;
       

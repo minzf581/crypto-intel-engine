@@ -1,110 +1,165 @@
-import { Server as SocketIOServer } from 'socket.io';
 import { Asset, Signal } from '../models';
-import { sendSignalToSubscribers } from './socket';
 import logger from '../utils/logger';
-import env from '../config/env';
-
-// Signal types
-const SIGNAL_TYPES = ['sentiment', 'narrative'];
-
-// Social media platforms
-const PLATFORMS = ['twitter', 'reddit'];
-
-// Signal description templates
-const signalTemplates = [
-  'Bullish sentiment significantly increased, potentially indicating market uptrend',
-  'Community sentiment turned negative, exercise caution with positions',
-  'Market sentiment neutral but trending towards optimistic',
-  'Suddenly appeared a large number of negative comments, possibly indicating selling pressure',
-  'Bullish discussions on social media reached a new high',
-];
-
-const NARRATIVE_DESCRIPTIONS = [
-  'New technology upgrade sparked community enthusiastic discussions',
-  'Rumors about potential cooperation are widely spreading',
-  'Regulatory concerns caused community uneasiness',
-  'Well-known investors expressed support for promoting positive narrative',
-  'Core development team announced new roadmap, community reaction positive',
-];
+import notificationService from './notificationService';
+import { calculateStrength } from '../utils/signalUtils';
 
 /**
- * Randomly generate signal data
- * @param asset Asset data
- * @returns Generated signal object
+ * 真实信号生成器
+ * 注意：这里移除模拟信号生成器
+ * 实际信号应该来自：
+ * 1. 价格监控服务 (priceService)
+ * 2. 社交媒体情感分析API 
+ * 3. 新闻情感分析API
+ * 4. 其他真实数据源
  */
-const generateRandomSignal = async (asset: any) => {
-  // Randomly select signal type
-  const type = SIGNAL_TYPES[Math.floor(Math.random() * SIGNAL_TYPES.length)] as 'sentiment' | 'narrative';
-  
-  // Randomly generate signal strength (20-95)
-  const strength = Math.floor(Math.random() * 76) + 20;
-  
-  // Select description based on type
-  const descriptions = type === 'sentiment' ? signalTemplates : NARRATIVE_DESCRIPTIONS;
-  const description = descriptions[Math.floor(Math.random() * descriptions.length)];
-  
-  // Generate random source data
-  const sourcesCount = Math.floor(Math.random() * 2) + 1; // 1-2 sources
-  const sources = [];
-  
-  for (let i = 0; i < sourcesCount; i++) {
-    const platform = PLATFORMS[Math.floor(Math.random() * PLATFORMS.length)] as 'twitter' | 'reddit';
-    const count = Math.floor(Math.random() * 500) + 50; // 50-549 mentions
+
+class RealSignalGenerator {
+  private intervalId: NodeJS.Timeout | null = null;
+
+  /**
+   * 启动信号生成器
+   * 注意：现在不再生成模拟信号
+   */
+  start(): void {
+    logger.info('⚠️  模拟信号生成器已禁用');
+    logger.info('📊 信号现在来自真实数据源：');
+    logger.info('   - 价格监控服务 (实时价格变化)');
+    logger.info('   - 待添加：社交媒体情感分析');
+    logger.info('   - 待添加：新闻情感分析');
+    logger.info('   - 待添加：技术指标分析');
     
-    sources.push({ platform, count });
+    // 不再启动定时器生成模拟信号
+    // 真实信号由各个数据源服务主动生成
   }
-  
-  // Create new signal
-  const signal = await Signal.create({
-    assetId: asset.id,
-    assetSymbol: asset.symbol,
-    assetName: asset.name,
-    assetLogo: asset.logo,
-    type,
-    strength,
-    description,
-    sources,
-    timestamp: new Date()
-  });
-  
-  return signal;
-};
 
-/**
- * Initialize signal generator service
- * @param io Socket.IO server instance
- */
-export const initializeSignalGenerator = (io: SocketIOServer) => {
-  // Only generate mock signals in development environment or when mock signals are enabled
-  if (env.nodeEnv === 'production' && !env.enableMockSignals) {
-    logger.info('Mock signal generator disabled in production environment');
-    return;
+  /**
+   * 停止信号生成器
+   */
+  stop(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      logger.info('信号生成器已停止');
+    }
   }
-  
-  logger.info('Initializing mock signal generator');
-  
-  // Generate random signal every few seconds
-  setInterval(async () => {
+
+  /**
+   * 手动添加情感信号（API集成时使用）
+   */
+  async createSentimentSignal(
+    assetSymbol: string, 
+    sentimentScore: number, 
+    sources: Array<{platform: 'twitter' | 'reddit', count: number}>
+  ): Promise<void> {
     try {
-      // Get all assets
-      const assets = await Asset.findAll();
-      
-      if (assets.length === 0) {
+      const asset = await Asset.findOne({ where: { symbol: assetSymbol } });
+      if (!asset) {
+        logger.error(`资产不存在: ${assetSymbol}`);
         return;
       }
-      
-      // Randomly select an asset
-      const asset = assets[Math.floor(Math.random() * assets.length)];
-      
-      // Generate random signal
-      const signal = await generateRandomSignal(asset);
-      
-      logger.info(`Generated signal for ${asset.symbol}: ${signal.type} (Strength: ${signal.strength})`);
-      
-      // Send signal to subscribers via WebSocket
-      sendSignalToSubscribers(io, asset.symbol, signal.toJSON());
+
+      // 根据情感分数生成描述
+      let description = '';
+      if (sentimentScore > 0.6) {
+        description = `${asset.name} 在社交媒体上的情感明显积极，投资者情绪乐观`;
+      } else if (sentimentScore < -0.6) {
+        description = `${asset.name} 在社交媒体上的情感明显消极，投资者情绪谨慎`;
+      } else {
+        description = `${asset.name} 在社交媒体上的情感保持中性`;
+      }
+
+      // 计算信号强度
+      const strength = calculateStrength(Math.abs(sentimentScore * 100), 'sentiment');
+
+      const signal = await Signal.create({
+        assetId: asset.id,
+        assetSymbol: asset.symbol,
+        assetName: asset.name,
+        assetLogo: asset.logo,
+        type: 'sentiment',
+        strength,
+        description,
+        sources,
+        timestamp: new Date()
+      });
+
+      logger.info(`生成情感信号: ${assetSymbol} (分数: ${sentimentScore}, 强度: ${strength})`);
+      await notificationService.processSignal(signal);
+
     } catch (error) {
-      logger.error('Error generating mock signal:', error);
+      logger.error('创建情感信号失败:', error);
     }
-  }, 30000); // Generate a signal every 30 seconds
-}; 
+  }
+
+  /**
+   * 手动添加叙事信号（API集成时使用）
+   */
+  async createNarrativeSignal(
+    assetSymbol: string, 
+    narrativeType: string, 
+    description: string, 
+    sources: Array<{platform: 'twitter' | 'reddit', count: number}>
+  ): Promise<void> {
+    try {
+      const asset = await Asset.findOne({ where: { symbol: assetSymbol } });
+      if (!asset) {
+        logger.error(`资产不存在: ${assetSymbol}`);
+        return;
+      }
+
+      // 基于叙事类型计算强度
+      const narrativeStrengthMap: Record<string, number> = {
+        'upgrade': 80,
+        'partnership': 70,
+        'adoption': 75,
+        'regulation': 60,
+        'technical': 65
+      };
+
+      const strength = narrativeStrengthMap[narrativeType] || 50;
+
+      const signal = await Signal.create({
+        assetId: asset.id,
+        assetSymbol: asset.symbol,
+        assetName: asset.name,
+        assetLogo: asset.logo,
+        type: 'narrative',
+        strength,
+        description,
+        sources,
+        timestamp: new Date()
+      });
+
+      logger.info(`生成叙事信号: ${assetSymbol} (类型: ${narrativeType}, 强度: ${strength})`);
+      await notificationService.processSignal(signal);
+
+    } catch (error) {
+      logger.error('创建叙事信号失败:', error);
+    }
+  }
+
+  /**
+   * 获取待实现的数据源状态
+   */
+  getDataSourceStatus(): Record<string, boolean> {
+    return {
+      'priceMonitoring': true,    // 已实现
+      'twitterSentiment': false,  // 待实现
+      'redditSentiment': false,   // 待实现
+      'newsAnalysis': false,      // 待实现
+      'technicalAnalysis': false // 待实现
+    };
+  }
+}
+
+// 导出单例
+const realSignalGenerator = new RealSignalGenerator();
+
+/**
+ * 初始化信号生成器
+ */
+export const initializeSignalGenerator = () => {
+  realSignalGenerator.start();
+};
+
+export default realSignalGenerator; 

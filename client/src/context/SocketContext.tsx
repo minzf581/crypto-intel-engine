@@ -36,11 +36,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const newSocket = io(socketUrl, {
         withCredentials: true,
         auth: { token },
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'],
         path: '/socket.io',
         reconnection: true,
         reconnectionAttempts: 5,
-        reconnectionDelay: 2000
+        reconnectionDelay: 2000,
+        timeout: 20000
       });
       
       newSocket.on('connect', () => {

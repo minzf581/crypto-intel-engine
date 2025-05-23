@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket连接测试</h1>
+    
+    <div id="status" class="status info">准备测试...</div>
+    
+    <button onclick="testAPI()">测试API</button>
+    <button onclick="testLogin()">测试登录</button>
+    <button onclick="testWebSocket()">测试WebSocket</button>
+    
+    <div id="logs"></div>
+    
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        let token = null;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `${new Date().toLocaleTimeString()}: ${message}`;
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+        
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:5001/health');
+                const data = await response.json();
+                log(`API健康检查成功: ${JSON.stringify(data)}`, 'success');
+                updateStatus('API连接正常', 'success');
+            } catch (error) {
+                log(`API测试失败: ${error.message}`, 'error');
+                updateStatus('API连接失败', 'error');
+            }
+        }
+        
+        async function testLogin() {
+            try {
+                const response = await fetch('http://localhost:5001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'demo@example.com',
+                        password: 'demo123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    token = data.data.token;
+                    log(`登录成功，获得token: ${token.substring(0, 20)}...`, 'success');
+                    updateStatus('登录成功', 'success');
+                } else {
+                    log(`登录失败: ${data.message}`, 'error');
+                    updateStatus('登录失败', 'error');
+                }
+            } catch (error) {
+                log(`登录请求失败: ${error.message}`, 'error');
+                updateStatus('登录请求失败', 'error');
+            }
+        }
+        
+        function testWebSocket() {
+            if (!token) {
+                log('请先登录获取token', 'error');
+                updateStatus('需要先登录', 'error');
+                return;
+            }
+            
+            log('正在连接WebSocket...', 'info');
+            updateStatus('连接WebSocket中...', 'info');
+            
+            const socket = io('http://localhost:5001', {
+                auth: {
+                    token: token
+                },
+                transports: ['websocket', 'polling']
+            });
+            
+            socket.on('connect', () => {
+                log('WebSocket连接成功!', 'success');
+                updateStatus('WebSocket已连接', 'success');
+                
+                // 订阅一些资产
+                socket.emit('subscribe', { assets: ['BTC', 'ETH'] });
+            });
+            
+            socket.on('disconnect', () => {
+                log('WebSocket连接断开', 'info');
+                updateStatus('WebSocket已断开', 'info');
+            });
+            
+            socket.on('connect_error', (error) => {
+                log(`WebSocket连接错误: ${error.message}`, 'error');
+                updateStatus('WebSocket连接失败', 'error');
+            });
+            
+            socket.on('subscribed', (data) => {
+                log(`订阅成功: ${data.assets.join(', ')}`, 'success');
+            });
+            
+            socket.on('newSignal', (signal) => {
+                log(`收到新信号: ${signal.assetSymbol} - ${signal.description}`, 'success');
+            });
+            
+            socket.on('notification', (notification) => {
+                log(`收到通知: ${notification.title}`, 'success');
+            });
+            
+            socket.on('error', (error) => {
+                log(`Socket错误: ${error.message}`, 'error');
+            });
+        }
+        
+        // 自动测试
+        window.onload = function() {
+            setTimeout(testAPI, 1000);
+        };
+    </script>
+</body>
+</html> 

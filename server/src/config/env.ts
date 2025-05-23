@@ -22,6 +22,7 @@ export default {
 
   // CORS配置
   corsOrigin: process.env.CORS_ORIGIN || 'https://crypto-front-demo.up.railway.app', // Updated to use specific frontend origin
+  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
 
   // 模拟信号配置
   enableMockSignals: process.env.ENABLE_MOCK_SIGNALS === 'true'

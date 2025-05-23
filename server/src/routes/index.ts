@@ -4,6 +4,7 @@ import userRoutes from './userRoutes';
 import assetRoutes from './assetRoutes';
 import signalRoutes from './signalRoutes';
 import notificationRoutes from './notificationRoutes';
+import dashboardRoutes from './dashboard';
 
 const router = express.Router();
 
@@ -21,5 +22,8 @@ router.use('/signals', signalRoutes);
 
 // 通知路由
 router.use('/notifications', notificationRoutes);
+
+// 仪表板路由
+router.use('/dashboard', dashboardRoutes);
 
 export default router; 

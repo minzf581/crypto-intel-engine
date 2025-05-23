@@ -15,6 +15,7 @@ class NotificationService {
    */
   setSocketIO(socketIo: SocketIOServer) {
     this.io = socketIo;
+    logger.info('通知服务已连接Socket.IO');
   }
   
   /**
@@ -141,7 +142,7 @@ class NotificationService {
       const users = await User.findAll({
         include: {
           model: Asset,
-          as: 'selectedAssets',
+          as: 'watchedAssets',
           where: { symbol: signal.assetSymbol },
           required: true,
         }
@@ -198,22 +199,23 @@ class NotificationService {
             
             if (notification) {
               // 2.4.3. 发送实时通知
-              if (alertSetting.pushNotifications) {
-                this.sendNotificationToUserSocket(user.id, notification.toJSON());
-              }
+              this.sendNotificationToUserSocket(user.id, notification);
               
-              // 2.4.4. 发送邮件通知 (如果配置了)
-              if (alertSetting.emailNotifications) {
-                // 这里将集成邮件服务
-                logger.info(`应该向用户${user.id}发送邮件通知，但邮件服务尚未实现`);
-              }
+              logger.info(`为用户${user.id}创建了新通知: ${notification.title}`);
             }
           }
         }
       }
     } catch (error) {
-      logger.error('处理信号通知时出错:', error);
+      logger.error('处理信号通知失败:', error);
     }
+  }
+  
+  /**
+   * processSignal方法的别名，与新的价格服务兼容
+   */
+  async processSignal(signal: any) {
+    return this.processNewSignal(signal);
   }
   
   /**
