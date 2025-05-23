@@ -5,6 +5,7 @@ import assetRoutes from './assetRoutes';
 import signalRoutes from './signalRoutes';
 import notificationRoutes from './notificationRoutes';
 import dashboardRoutes from './dashboard';
+import analysisRoutes from './analysis';
 
 const router = express.Router();
 
@@ -25,5 +26,8 @@ router.use('/notifications', notificationRoutes);
 
 // 仪表板路由
 router.use('/dashboard', dashboardRoutes);
+
+// Analysis routes - New comprehensive analysis endpoints
+router.use('/analysis', analysisRoutes);
 
 export default router; 
