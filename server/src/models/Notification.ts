@@ -3,10 +3,10 @@ import sequelize from '../config/database';
 import { User } from './User';
 import { Asset } from './Asset';
 
-// 通知类型
-export type NotificationType = 'signal' | 'price' | 'system';
+// Notification types
+export type NotificationType = 'signal' | 'alert' | 'system';
 
-// 通知接口
+// Notification interface
 export interface NotificationAttributes {
   id?: string;
   userId: string;
@@ -16,14 +16,14 @@ export interface NotificationAttributes {
   title: string;
   message: string;
   read: boolean;
-  data?: any; // 附加数据
+  data?: any; // Additional data
   timestamp: Date;
 }
 
-// 通知接口(创建时)
+// Notification interface (for creation)
 export interface NotificationCreationAttributes extends Omit<NotificationAttributes, 'id'> {}
 
-// 通知模型类
+// Notification model class
 export class Notification extends Model<NotificationAttributes, NotificationCreationAttributes> {
   declare id: string;
   declare userId: string;
@@ -39,7 +39,7 @@ export class Notification extends Model<NotificationAttributes, NotificationCrea
   declare readonly updatedAt: Date;
 }
 
-// 初始化通知模型
+// Initialize notification model
 Notification.init(
   {
     id: {
@@ -72,7 +72,7 @@ Notification.init(
       allowNull: true,
     },
     type: {
-      type: DataTypes.ENUM('signal', 'price', 'system'),
+      type: DataTypes.ENUM('signal', 'alert', 'system'),
       allowNull: false,
     },
     title: {
@@ -112,7 +112,7 @@ Notification.init(
   }
 );
 
-// 建立关联
+// Establish associations
 export const initializeAssociations = () => {
   Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   Notification.belongsTo(Asset, { foreignKey: 'assetId', as: 'asset' });

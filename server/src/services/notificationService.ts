@@ -4,28 +4,28 @@ import { isSignificantStrengthShift, getSignalStrengthLevel } from '../utils/sig
 import logger from '../utils/logger';
 
 /**
- * 通知服务
+ * Notification Service
  */
 class NotificationService {
   private io: SocketIOServer | null = null;
   
   /**
-   * 设置Socket.IO实例
-   * @param socketIo Socket.IO服务器实例
+   * Set Socket.IO instance
+   * @param socketIo Socket.IO server instance
    */
   setSocketIO(socketIo: SocketIOServer) {
     this.io = socketIo;
-    logger.info('通知服务已连接Socket.IO');
+    logger.info('Notification service connected to Socket.IO');
   }
   
   /**
-   * 检查信号是否应该触发警报
-   * @param signal 信号
-   * @param alertSetting 警报设置
-   * @returns 是否应该触发警报
+   * Check if signal should trigger alert
+   * @param signal Signal
+   * @param alertSetting Alert setting
+   * @returns Whether alert should be triggered
    */
   private shouldTriggerAlert(signal: any, alertSetting: AlertSetting): boolean {
-    // 根据信号类型检查是否应该触发警报
+    // Check if alert should be triggered based on signal type
     switch (signal.type) {
       case 'sentiment':
         return alertSetting.enableSentimentAlerts && 
@@ -38,7 +38,7 @@ class NotificationService {
       case 'price':
         if (!alertSetting.enablePriceAlerts) return false;
         
-        // 价格信号需要检查价格变化百分比
+        // Price signals need to check price change percentage
         const priceSource = signal.sources.find((s: any) => s.platform === 'price');
         if (!priceSource) return false;
         
@@ -51,45 +51,45 @@ class NotificationService {
   }
   
   /**
-   * 为用户创建新的通知
-   * @param userId 用户ID
-   * @param signal 信号
-   * @param alertSetting 触发通知的警报设置
-   * @returns 创建的通知
+   * Create new notification for user
+   * @param userId User ID
+   * @param signal Signal
+   * @param alertSetting Alert setting that triggered notification
+   * @returns Created notification
    */
   private async createNotification(userId: string, signal: any, alertSetting: AlertSetting) {
     try {
-      // 构建通知标题和消息
+      // Build notification title and message
       let title = '';
       let message = '';
       
       switch (signal.type) {
         case 'sentiment':
-          title = `${signal.assetSymbol}的${getSignalStrengthLevel(signal.strength)}情绪变化`;
+          title = `${signal.assetSymbol} ${getSignalStrengthLevel(signal.strength)} sentiment change`;
           message = `${signal.description}`;
           break;
         
         case 'narrative':
-          title = `${signal.assetSymbol}的${getSignalStrengthLevel(signal.strength)}叙事变化`;
+          title = `${signal.assetSymbol} ${getSignalStrengthLevel(signal.strength)} narrative change`;
           message = `${signal.description}`;
           break;
         
         case 'price':
           const priceSource = signal.sources.find((s: any) => s.platform === 'price');
           const priceChange = priceSource?.priceChange || 0;
-          const direction = priceChange >= 0 ? '上涨' : '下跌';
+          const direction = priceChange >= 0 ? 'increase' : 'decrease';
           
-          title = `${signal.assetSymbol}价格${direction}警报`;
+          title = `${signal.assetSymbol} price ${direction} alert`;
           message = `${signal.description}`;
           break;
       }
       
-      // 创建通知
+      // Create notification
       const notification = await Notification.create({
         userId,
         assetId: signal.assetId,
         assetSymbol: signal.assetSymbol,
-        type: signal.type === 'price' ? 'price' : 'signal',
+        type: signal.type === 'price' ? 'alert' : 'signal',
         title,
         message,
         read: false,
@@ -99,46 +99,46 @@ class NotificationService {
       
       return notification;
     } catch (error) {
-      logger.error('创建通知失败:', error);
+      logger.error('Failed to create notification:', error);
       return null;
     }
   }
   
   /**
-   * 发送通知到用户的WebSocket连接
-   * @param userId 用户ID
-   * @param notification 通知对象
+   * Send notification to user's WebSocket connection
+   * @param userId User ID
+   * @param notification Notification object
    */
   private sendNotificationToUserSocket(userId: string, notification: any) {
-    // 如果没有初始化Socket.IO，则跳过
+    // Skip if Socket.IO is not initialized
     if (!this.io) {
-      logger.warn('无法发送实时通知: Socket.IO未初始化');
+      logger.warn('Cannot send real-time notification: Socket.IO not initialized');
       return;
     }
     
-    // 查找用户的WebSocket连接
+    // Find user's WebSocket connections
     const sockets = Array.from(this.io.sockets.sockets.values())
       .filter(socket => socket.data && socket.data.userId === userId);
     
     if (sockets.length === 0) {
-      logger.debug(`用户${userId}没有活动的WebSocket连接，无法发送实时通知`);
+      logger.debug(`User ${userId} has no active WebSocket connections, cannot send real-time notification`);
       return;
     }
     
-    // 向用户的所有连接发送通知
-    logger.info(`向用户${userId}发送实时通知`);
+    // Send notification to all user connections
+    logger.info(`Sending real-time notification to user ${userId}`);
     sockets.forEach(socket => {
       socket.emit('notification', notification);
     });
   }
   
   /**
-   * 处理新信号，并检查是否需要发送通知
-   * @param signal 新的信号
+   * Process new signal and check if notifications need to be sent
+   * @param signal New signal
    */
   async processNewSignal(signal: any) {
     try {
-      // 1. 查找订阅了该资产的用户
+      // 1. Find users subscribed to this asset
       const users = await User.findAll({
         include: {
           model: Asset,
@@ -149,13 +149,13 @@ class NotificationService {
       });
       
       if (users.length === 0) {
-        logger.debug(`没有用户订阅${signal.assetSymbol}，跳过通知处理`);
+        logger.debug(`No users subscribed to ${signal.assetSymbol}, skipping notification processing`);
         return;
       }
       
-      // 2. 对每个用户处理通知
+      // 2. Process notifications for each user
       for (const user of users) {
-        // 2.1. 查找用户对此资产的警报设置
+        // 2.1. Find user's alert settings for this asset
         let alertSettings = await AlertSetting.findAll({
           where: {
             userId: user.id,
@@ -163,7 +163,7 @@ class NotificationService {
           }
         });
         
-        // 2.2. 如果没有特定资产的设置，查找全局设置
+        // 2.2. If no asset-specific settings, find global settings
         if (alertSettings.length === 0) {
           alertSettings = await AlertSetting.findAll({
             where: {
@@ -173,7 +173,7 @@ class NotificationService {
           });
         }
         
-        // 2.3. 如果仍然没有设置，使用默认设置
+        // 2.3. If still no settings, use default settings
         if (alertSettings.length === 0) {
           alertSettings = [{
             id: 'default',
@@ -190,40 +190,40 @@ class NotificationService {
           } as any];
         }
         
-        // 2.4. 检查每个警报设置
+        // 2.4. Check each alert setting
         for (const alertSetting of alertSettings) {
-          // 2.4.1. 检查是否应该触发警报
+          // 2.4.1. Check if alert should be triggered
           if (this.shouldTriggerAlert(signal, alertSetting)) {
-            // 2.4.2. 创建新的通知
+            // 2.4.2. Create new notification
             const notification = await this.createNotification(user.id, signal, alertSetting);
             
             if (notification) {
-              // 2.4.3. 发送实时通知
+              // 2.4.3. Send real-time notification
               this.sendNotificationToUserSocket(user.id, notification);
               
-              logger.info(`为用户${user.id}创建了新通知: ${notification.title}`);
+              logger.info(`Created new notification for user ${user.id}: ${notification.title}`);
             }
           }
         }
       }
     } catch (error) {
-      logger.error('处理信号通知失败:', error);
+      logger.error('Failed to process signal notification:', error);
     }
   }
   
   /**
-   * processSignal方法的别名，与新的价格服务兼容
+   * processSignal method alias, compatible with new price service
    */
   async processSignal(signal: any) {
     return this.processNewSignal(signal);
   }
   
   /**
-   * 获取用户的未读通知
-   * @param userId 用户ID
-   * @param limit 数量限制
-   * @param offset 偏移量
-   * @returns 通知列表
+   * Get user's unread notifications
+   * @param userId User ID
+   * @param limit Number limit
+   * @param offset Offset
+   * @returns Notification list
    */
   async getUserNotifications(userId: string, limit = 20, offset = 0) {
     try {
@@ -236,15 +236,15 @@ class NotificationService {
       
       return notifications;
     } catch (error) {
-      logger.error(`获取用户${userId}的通知失败:`, error);
+      logger.error(`Failed to get notifications for user ${userId}:`, error);
       return [];
     }
   }
   
   /**
-   * 获取用户的未读通知数量
-   * @param userId 用户ID
-   * @returns 未读通知数量
+   * Get user's unread notifications count
+   * @param userId User ID
+   * @returns Unread notifications count
    */
   async getUnreadNotificationsCount(userId: string) {
     try {
@@ -257,16 +257,16 @@ class NotificationService {
       
       return count;
     } catch (error) {
-      logger.error(`获取用户${userId}的未读通知数量失败:`, error);
+      logger.error(`Failed to get unread notifications count for user ${userId}:`, error);
       return 0;
     }
   }
   
   /**
-   * 标记通知为已读
-   * @param notificationId 通知ID
-   * @param userId 用户ID (用于验证所有权)
-   * @returns 是否成功
+   * Mark notification as read
+   * @param notificationId Notification ID
+   * @param userId User ID (for ownership verification)
+   * @returns Whether successful
    */
   async markNotificationAsRead(notificationId: string, userId: string) {
     try {
@@ -286,15 +286,15 @@ class NotificationService {
       
       return true;
     } catch (error) {
-      logger.error(`标记通知${notificationId}为已读失败:`, error);
+      logger.error(`Failed to mark notification ${notificationId} as read:`, error);
       return false;
     }
   }
   
   /**
-   * 标记用户的所有通知为已读
-   * @param userId 用户ID
-   * @returns 更新的通知数量
+   * Mark all user's notifications as read
+   * @param userId User ID
+   * @returns Updated notification count
    */
   async markAllNotificationsAsRead(userId: string) {
     try {
@@ -308,13 +308,13 @@ class NotificationService {
         }
       );
       
-      return result[0]; // 返回影响的行数
+      return result[0]; // Return affected row count
     } catch (error) {
-      logger.error(`标记用户${userId}的所有通知为已读失败:`, error);
+      logger.error(`Failed to mark all notifications for user ${userId} as read:`, error);
       return 0;
     }
   }
 }
 
-// 导出单例实例
+// Export singleton instance
 export default new NotificationService(); 

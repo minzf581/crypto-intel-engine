@@ -26,16 +26,16 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
     const user = socket.data.user as User;
     
     if (!user) {
-      logger.error('Socket连接用户数据不存在');
+      logger.error('Socket connection user data does not exist');
       socket.disconnect();
       return;
     }
 
-    // 添加更详细的用户信息日志
+    // Add more detailed user information logs with null checks
     logger.info(`Socket connected: ${socket.id}`, {
-      userId: user.id,
-      userName: user.name || '未知用户',
-      userEmail: user.email
+      userId: user.id || 'unknown',
+      userName: user.name || 'Unknown User',
+      userEmail: user.email || 'unknown@example.com'
     });
 
     // Handle user subscribing to assets
@@ -65,7 +65,7 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
         });
       }
 
-      logger.info(`User ${user.name || user.email} subscribed to assets: ${assets.join(', ')}`);
+      logger.info(`User ${user.name || user.email || 'Unknown'} subscribed to assets: ${assets.join(', ')}`);
       socket.emit('subscribed', { assets });
     });
 
@@ -77,7 +77,7 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
 
       if (index >= 0) {
         activeSubscriptions.splice(index, 1);
-        logger.info(`User ${user.name || user.email} unsubscribed from all assets`);
+        logger.info(`User ${user.name || user.email || 'Unknown'} unsubscribed from all assets`);
       }
     });
 
@@ -92,8 +92,8 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
       }
 
       logger.info(`Socket disconnected: ${socket.id}`, {
-        userId: user.id,
-        userName: user.name || user.email
+        userId: user.id || 'unknown',
+        userName: user.name || user.email || 'Unknown'
       });
     });
   });

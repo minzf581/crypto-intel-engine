@@ -50,12 +50,12 @@ const RegisterPage = () => {
     <div className="p-6">
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-          注册
+          Sign Up
         </h2>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-          或{' '}
+          or{' '}
           <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
-            登录已有账户
+            sign in to existing account
           </Link>
         </p>
       </div>
@@ -70,7 +70,7 @@ const RegisterPage = () => {
         <div className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              姓名
+              Full Name
             </label>
             <input
               id="name"
@@ -81,12 +81,12 @@ const RegisterPage = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="mt-1 appearance-none relative block w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 placeholder-neutral-500 dark:placeholder-neutral-400 text-neutral-900 dark:text-neutral-100 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-neutral-700 sm:text-sm"
-              placeholder="输入姓名"
+              placeholder="Enter your full name"
             />
           </div>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              邮箱地址
+              Email Address
             </label>
             <input
               id="email"
@@ -97,12 +97,12 @@ const RegisterPage = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 appearance-none relative block w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 placeholder-neutral-500 dark:placeholder-neutral-400 text-neutral-900 dark:text-neutral-100 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-neutral-700 sm:text-sm"
-              placeholder="输入邮箱地址"
+              placeholder="Enter your email address"
             />
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              密码
+              Password
             </label>
             <input
               id="password"
@@ -113,7 +113,7 @@ const RegisterPage = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 appearance-none relative block w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 placeholder-neutral-500 dark:placeholder-neutral-400 text-neutral-900 dark:text-neutral-100 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-neutral-700 sm:text-sm"
-              placeholder="输入密码"
+              placeholder="Enter your password"
             />
           </div>
         </div>
@@ -150,7 +150,7 @@ const RegisterPage = () => {
                 </svg>
               </span>
             ) : null}
-            {isLoading ? '创建账户中...' : '创建账户'}
+            {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
         </div>
       </form>

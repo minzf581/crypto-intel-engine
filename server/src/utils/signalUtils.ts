@@ -1,11 +1,68 @@
 /**
- * 计算信号强度
- * @param value 需要映射到强度值的数值
- * @param min 最小阈值
- * @param max 最大阈值
- * @param minStrength 最小强度
- * @param maxStrength 最大强度
- * @returns 强度值
+ * Signal utility functions
+ * 
+ * This module provides utility functions for:
+ * 1. Calculating signal strength
+ * 2. Formatting signal data
+ * 3. Validating signal types
+ */
+
+/**
+ * Calculate signal strength based on value and type
+ * @param value Signal value (percentage, sentiment score, etc.)
+ * @param type Signal type
+ * @returns Strength value (0-100)
+ */
+export const calculateStrength = (value: number, type: 'price' | 'sentiment' | 'narrative' | 'technical' | 'onchain'): number => {
+  let strength = 0;
+  
+  switch (type) {
+    case 'price':
+      // Map price change percentage to strength
+      if (value >= 20) strength = 100;
+      else if (value >= 15) strength = 90;
+      else if (value >= 10) strength = 80;
+      else if (value >= 7) strength = 70;
+      else if (value >= 5) strength = 60;
+      else if (value >= 3) strength = 50;
+      else if (value >= 2) strength = 40;
+      else if (value >= 1) strength = 30;
+      else if (value >= 0.5) strength = 20;
+      else strength = 10;
+      break;
+      
+    case 'sentiment':
+      // Map sentiment score (-1 to 1) to strength (0-100)
+      strength = Math.round(Math.abs(value) * 100);
+      break;
+      
+    case 'narrative':
+      // Narrative strength usually preset
+      strength = Math.min(100, Math.max(0, value));
+      break;
+      
+    case 'technical':
+      // Technical analysis strength
+      strength = Math.min(100, Math.max(0, value));
+      break;
+      
+    case 'onchain':
+      // On-chain analysis strength
+      strength = Math.min(100, Math.max(0, value));
+      break;
+  }
+  
+  return Math.round(strength);
+};
+
+/**
+ * Calculate signal strength using linear mapping
+ * @param value Value to map to strength
+ * @param min Minimum threshold
+ * @param max Maximum threshold
+ * @param minStrength Minimum strength value
+ * @param maxStrength Maximum strength value
+ * @returns Strength value
  */
 export const calculateSignalStrength = (
   value: number,
@@ -14,68 +71,36 @@ export const calculateSignalStrength = (
   minStrength: number = 0,
   maxStrength: number = 100
 ): number => {
-  // 确保值在范围内
+  // Ensure value is within bounds
   const boundedValue = Math.max(min, Math.min(max, value));
   
-  // 映射到强度值
+  // Map to strength value
   const normalizedValue = (boundedValue - min) / (max - min);
   const strength = minStrength + normalizedValue * (maxStrength - minStrength);
   
-  // 四舍五入到整数
+  // Round to integer
   return Math.round(strength);
 };
 
 /**
- * 根据信号类型和数值计算信号强度
- * @param value 数值
- * @param type 信号类型
- * @returns 强度值(0-100)
- */
-export const calculateStrength = (value: number, type: 'price' | 'sentiment' | 'narrative'): number => {
-  switch (type) {
-    case 'price':
-      // 价格变化百分比映射到强度
-      // 0-5% -> 20-50, 5-15% -> 50-80, >15% -> 80-100
-      if (value <= 5) {
-        return calculateSignalStrength(value, 0, 5, 20, 50);
-      } else if (value <= 15) {
-        return calculateSignalStrength(value, 5, 15, 50, 80);
-      } else {
-        return Math.min(100, 80 + (value - 15) / 2);
-      }
-    
-    case 'sentiment':
-      // 情感分数映射到强度 (0-100)
-      return Math.max(10, Math.min(100, value));
-    
-    case 'narrative':
-      // 叙事强度映射
-      return Math.max(20, Math.min(100, value));
-    
-    default:
-      return 50; // 默认中等强度
-  }
-};
-
-/**
- * 确定信号强度级别描述
- * @param strength 信号强度值(0-100)
- * @returns 信号级别描述
+ * Get signal strength level description
+ * @param strength Signal strength value (0-100)
+ * @returns Signal level description
  */
 export const getSignalStrengthLevel = (strength: number): string => {
-  if (strength >= 85) return '非常强';
-  if (strength >= 70) return '强';
-  if (strength >= 50) return '中等';
-  if (strength >= 30) return '弱';
-  return '非常弱';
+  if (strength >= 85) return 'Very Strong';
+  if (strength >= 70) return 'Strong';
+  if (strength >= 50) return 'Medium';
+  if (strength >= 30) return 'Weak';
+  return 'Very Weak';
 };
 
 /**
- * 检查信号是否为显著的情绪变化
- * @param oldStrength 之前的强度值
- * @param newStrength 新的强度值
- * @param threshold 变化阈值(默认20)
- * @returns 是否为显著变化
+ * Check if signal represents a significant strength change
+ * @param oldStrength Previous strength value
+ * @param newStrength New strength value
+ * @param threshold Change threshold (default 20)
+ * @returns Whether this is a significant change
  */
 export const isSignificantStrengthShift = (
   oldStrength: number,

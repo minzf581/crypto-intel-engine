@@ -4,16 +4,19 @@ import { protect } from '../middlewares/auth';
 
 const router = express.Router();
 
-// 获取所有资产 (无需认证)
+// Get all assets (no authentication required)
 router.get('/', assetController.getAllAssets);
 
-// 获取单个资产 (无需认证)
+// Get single asset (no authentication required)
 router.get('/:id', assetController.getAssetById);
 
-// 以下路由需要认证
+// Following routes require authentication
 router.use(protect);
 
-// 初始化默认资产 (仅在开发/测试环境使用)
+// Add new cryptocurrency asset
+router.post('/', assetController.addAsset);
+
+// Initialize default assets (only for development/testing environment)
 router.post('/initialize', assetController.initializeDefaultAssets);
 
 export default router; 

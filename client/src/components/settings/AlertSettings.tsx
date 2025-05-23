@@ -32,7 +32,7 @@ const AlertSettings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   
-  // 获取警报设置
+  // Fetch alert settings
   const fetchSettings = async () => {
     try {
       setIsLoading(true);
@@ -44,14 +44,14 @@ const AlertSettings: React.FC = () => {
         setSettings(response.data.data.settings || []);
       }
     } catch (error) {
-      console.error('获取警报设置失败:', error);
-      setError('无法加载警报设置，请稍后再试');
+      console.error('Failed to fetch alert settings:', error);
+      setError('Unable to load alert settings, please try again later');
     } finally {
       setIsLoading(false);
     }
   };
   
-  // 更新设置
+  // Update settings
   const updateSetting = async (setting: AlertSetting) => {
     try {
       setError(null);
@@ -59,18 +59,18 @@ const AlertSettings: React.FC = () => {
       const response = await axios.post('/api/notifications/settings', setting);
       
       if (response.data && response.data.success) {
-        // 成功更新设置后刷新列表
+        // Refresh list after successfully updating settings
         await fetchSettings();
       }
     } catch (error) {
-      console.error('更新设置失败:', error);
-      setError('保存设置失败，请稍后再试');
+      console.error('Failed to update settings:', error);
+      setError('Failed to save settings, please try again later');
     }
   };
   
-  // 删除设置
+  // Delete settings
   const deleteSetting = async (id: string) => {
-    if (!id) return; // 忽略没有ID的设置(可能是默认设置)
+    if (!id) return; // Ignore settings without ID (may be default settings)
     
     try {
       setError(null);
@@ -78,30 +78,30 @@ const AlertSettings: React.FC = () => {
       const response = await axios.delete(`/api/notifications/settings/${id}`);
       
       if (response.data && response.data.success) {
-        // 成功删除后刷新列表
+        // Refresh list after successful deletion
         await fetchSettings();
       }
     } catch (error) {
-      console.error('删除设置失败:', error);
-      setError('删除设置失败，请稍后再试');
+      console.error('Failed to delete settings:', error);
+      setError('Failed to delete settings, please try again later');
     }
   };
   
-  // 处理设置变更
+  // Handle settings change
   const handleSettingChange = (setting: AlertSetting, field: keyof AlertSetting, value: any) => {
-    // 创建设置的副本并更新
+    // Create a copy of settings and update
     const updatedSetting = { ...setting, [field]: value };
     
-    // 发送更新请求
+    // Send update request
     updateSetting(updatedSetting);
   };
   
-  // 初始加载
+  // Initial load
   useEffect(() => {
     fetchSettings();
   }, []);
   
-  // 切换资产的展开/折叠状态
+  // Toggle expand/collapse state of assets
   const toggleExpandAsset = (symbol: string) => {
     if (expandedAsset === symbol) {
       setExpandedAsset(null);
@@ -110,12 +110,12 @@ const AlertSettings: React.FC = () => {
     }
   };
   
-  // 获取资产的设置
+  // Get asset settings
   const getAssetSetting = (assetSymbol: string): AlertSetting | null => {
     return settings.find(s => s.assetSymbol === assetSymbol) || null;
   };
   
-  // 获取全局设置
+  // Get global settings
   const getGlobalSetting = (): AlertSetting => {
     return settings.find(s => s.isGlobal) || {
       isGlobal: true,
@@ -133,7 +133,7 @@ const AlertSettings: React.FC = () => {
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm p-6 border border-neutral-200 dark:border-neutral-700">
       <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
-        通知与警报设置
+        Notification and Alert Settings
       </h2>
       
       {error && (
@@ -145,22 +145,22 @@ const AlertSettings: React.FC = () => {
       {isLoading ? (
         <div className="text-center py-8">
           <div className="animate-spin inline-block w-8 h-8 border-2 border-t-primary-500 border-neutral-200 rounded-full"></div>
-          <p className="mt-2 text-neutral-500 dark:text-neutral-400">加载设置...</p>
+          <p className="mt-2 text-neutral-500 dark:text-neutral-400">Loading settings...</p>
         </div>
       ) : (
         <>
-          {/* 全局设置 */}
+          {/* Global settings */}
           <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-750 rounded-lg border border-neutral-200 dark:border-neutral-700">
             <h3 className="text-md font-medium text-neutral-900 dark:text-neutral-100 mb-4 flex items-center">
               <BellAlertIcon className="h-5 w-5 mr-2" />
-              全局警报设置
+              Global Alert Settings
             </h3>
             
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                    情绪信号阈值
+                    Sentiment Signal Threshold
                   </label>
                   <div className="flex items-center">
                     <input
@@ -181,13 +181,13 @@ const AlertSettings: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    触发情绪变化通知的最小强度
+                    Minimum strength to trigger sentiment change notifications
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                    价格变化阈值 (%)
+                    Price Change Threshold (%)
                   </label>
                   <div className="flex items-center">
                     <input
@@ -208,7 +208,7 @@ const AlertSettings: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    触发价格变化通知的最小百分比
+                    Minimum percentage to trigger price change notifications
                   </p>
                 </div>
               </div>
@@ -217,7 +217,7 @@ const AlertSettings: React.FC = () => {
                 <div>
                   <label className="flex items-center justify-between">
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      情绪信号
+                      Sentiment Signals
                     </span>
                     <Switch
                       checked={getGlobalSetting().enableSentimentAlerts}
@@ -240,7 +240,7 @@ const AlertSettings: React.FC = () => {
                 <div>
                   <label className="flex items-center justify-between">
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      价格变化
+                      Price Changes
                     </span>
                     <Switch
                       checked={getGlobalSetting().enablePriceAlerts}
@@ -263,7 +263,7 @@ const AlertSettings: React.FC = () => {
                 <div>
                   <label className="flex items-center justify-between">
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      叙事变化
+                      Narrative Changes
                     </span>
                     <Switch
                       checked={getGlobalSetting().enableNarrativeAlerts}
@@ -288,7 +288,7 @@ const AlertSettings: React.FC = () => {
                 <div>
                   <label className="flex items-center justify-between">
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      实时通知
+                      Real-Time Notifications
                     </span>
                     <Switch
                       checked={getGlobalSetting().pushNotifications}
@@ -311,7 +311,7 @@ const AlertSettings: React.FC = () => {
                 <div>
                   <label className="flex items-center justify-between">
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      邮件通知
+                      Email Notifications
                     </span>
                     <Switch
                       checked={getGlobalSetting().emailNotifications}
@@ -330,23 +330,23 @@ const AlertSettings: React.FC = () => {
                     </Switch>
                   </label>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    需要验证您的邮箱地址
+                    Please verify your email address
                   </p>
                 </div>
               </div>
             </div>
           </div>
           
-          {/* 特定资产设置 */}
+          {/* Asset-specific settings */}
           <h3 className="text-md font-medium text-neutral-900 dark:text-neutral-100 mb-2">
-            资产特定设置
+            Asset-Specific Settings
           </h3>
           
           {selectedAssets.length === 0 ? (
             <div className="py-6 text-center text-neutral-500 dark:text-neutral-400">
               <InformationCircleIcon className="h-10 w-10 mx-auto mb-2" />
-              <p>未选择资产</p>
-              <p className="text-sm mt-1">请从侧边栏选择资产以配置特定通知</p>
+              <p>No assets selected</p>
+              <p className="text-sm mt-1">Please select assets from the sidebar to configure specific notifications</p>
             </div>
           ) : (
             <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
@@ -375,7 +375,7 @@ const AlertSettings: React.FC = () => {
                         
                         {assetSetting && (
                           <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-800 dark:text-primary-100">
-                            自定义
+                            Custom
                           </span>
                         )}
                       </div>
@@ -392,7 +392,7 @@ const AlertSettings: React.FC = () => {
                         {!assetSetting ? (
                           <div className="flex justify-between items-center">
                             <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                              使用全局设置
+                              Using global settings
                             </p>
                             <button
                               onClick={(e) => {
@@ -412,7 +412,7 @@ const AlertSettings: React.FC = () => {
                               }}
                               className="px-3 py-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                             >
-                              自定义设置
+                              Customize Settings
                             </button>
                           </div>
                         ) : (
@@ -420,7 +420,7 @@ const AlertSettings: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                                  情绪信号阈值
+                                  Sentiment Signal Threshold
                                 </label>
                                 <div className="flex items-center">
                                   <input
@@ -444,7 +444,7 @@ const AlertSettings: React.FC = () => {
                               
                               <div>
                                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                                  价格变化阈值 (%)
+                                  Price Change Threshold (%)
                                 </label>
                                 <div className="flex items-center">
                                   <input
@@ -471,7 +471,7 @@ const AlertSettings: React.FC = () => {
                               <div>
                                 <label className="flex items-center justify-between">
                                   <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                    情绪信号
+                                    Sentiment Signals
                                   </span>
                                   <Switch
                                     checked={assetSetting.enableSentimentAlerts}
@@ -494,7 +494,7 @@ const AlertSettings: React.FC = () => {
                               <div>
                                 <label className="flex items-center justify-between">
                                   <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                    价格变化
+                                    Price Changes
                                   </span>
                                   <Switch
                                     checked={assetSetting.enablePriceAlerts}
@@ -517,7 +517,7 @@ const AlertSettings: React.FC = () => {
                               <div>
                                 <label className="flex items-center justify-between">
                                   <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                                    叙事变化
+                                    Narrative Changes
                                   </span>
                                   <Switch
                                     checked={assetSetting.enableNarrativeAlerts}
@@ -548,7 +548,7 @@ const AlertSettings: React.FC = () => {
                                 }}
                                 className="px-3 py-1 text-sm font-medium text-red-600 hover:text-red-700"
                               >
-                                重置为全局设置
+                                Reset to Global Settings
                               </button>
                             </div>
                           </>

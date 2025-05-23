@@ -1,51 +1,53 @@
-import { Model, DataTypes } from 'sequelize';
+import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 import { Asset } from './Asset';
 
-// 来源接口
-export interface Source {
-  platform: 'twitter' | 'reddit' | 'price';
+// Source interface
+interface Source {
+  platform: 'twitter' | 'reddit' | 'news' | 'price' | 'technical' | 'onchain';
   count?: number;
-  priceChange?: number;  // 价格变化百分比
-  currentPrice?: number; // 当前价格
-  previousPrice?: number; // 之前价格
-  timeframe?: string;    // 价格变化的时间范围 (如 "1h", "24h")
+  priceChange?: number;  // Price change percentage
+  currentPrice?: number; // Current price
+  previousPrice?: number; // Previous price
+  timeframe?: string;    // Time range for price change (e.g. "1h", "24h")
 }
 
-// 信号接口
-export interface SignalAttributes {
-  id?: string;
+// Signal interface
+interface SignalAttributes {
+  id: string;
   assetId: string;
   assetSymbol: string;
   assetName: string;
   assetLogo: string;
-  type: 'sentiment' | 'narrative' | 'price';
+  type: 'sentiment' | 'narrative' | 'price' | 'technical' | 'onchain';
   strength: number;
   description: string;
   sources: Source[];
   timestamp: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
-// 信号接口(创建时)
-export interface SignalCreationAttributes extends Omit<SignalAttributes, 'id'> {}
+// Signal interface (for creation)
+interface SignalCreationAttributes extends Optional<SignalAttributes, 'id' | 'createdAt' | 'updatedAt'> {}
 
-// 信号模型类
-export class Signal extends Model<SignalAttributes, SignalCreationAttributes> {
-  declare id: string;
-  declare assetId: string;
-  declare assetSymbol: string;
-  declare assetName: string;
-  declare assetLogo: string;
-  declare type: 'sentiment' | 'narrative' | 'price';
-  declare strength: number;
-  declare description: string;
-  declare sources: Source[];
-  declare timestamp: Date;
-  declare readonly createdAt: Date;
-  declare readonly updatedAt: Date;
+// Signal model class
+class Signal extends Model<SignalAttributes, SignalCreationAttributes> implements SignalAttributes {
+  public id!: string;
+  public assetId!: string;
+  public assetSymbol!: string;
+  public assetName!: string;
+  public assetLogo!: string;
+  public type!: 'sentiment' | 'narrative' | 'price' | 'technical' | 'onchain';
+  public strength!: number;
+  public description!: string;
+  public sources!: Source[];
+  public timestamp!: Date;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
-// 初始化信号模型
+// Initialize signal model
 Signal.init(
   {
     id: {
@@ -76,7 +78,7 @@ Signal.init(
       defaultValue: '',
     },
     type: {
-      type: DataTypes.ENUM('sentiment', 'narrative', 'price'),
+      type: DataTypes.ENUM('sentiment', 'narrative', 'price', 'technical', 'onchain'),
       allowNull: false,
     },
     strength: {
@@ -107,15 +109,21 @@ Signal.init(
     timestamps: true,
     indexes: [
       {
+        unique: true,
+        fields: ['id'],
+      },
+      {
         fields: ['assetId', 'timestamp'],
+        name: 'signals_asset_id_timestamp'
       },
     ],
   }
 );
 
-// 建立关联（延迟建立关联，确保所有模型都已定义）
+// Establish associations (delayed to ensure all models are defined)
 export const initializeAssociations = () => {
-  Signal.belongsTo(Asset, { foreignKey: 'assetId', as: 'asset' });
+  // For now, signals are independent of direct model associations
+  // In the future, could add associations with assets, users, etc.
 };
 
-export default Signal; 
+export { Signal }; 

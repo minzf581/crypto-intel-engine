@@ -1,7 +1,7 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from '../config/database';
 
-// 资产接口
+// Asset interface
 export interface AssetAttributes {
   id?: string;
   symbol: string;
@@ -9,10 +9,10 @@ export interface AssetAttributes {
   logo: string;
 }
 
-// 资产接口(创建时)
+// Asset interface (for creation)
 export interface AssetCreationAttributes extends Omit<AssetAttributes, 'id'> {}
 
-// 资产模型类
+// Asset model class
 export class Asset extends Model<AssetAttributes, AssetCreationAttributes> {
   declare id: string;
   declare symbol: string;
@@ -22,7 +22,7 @@ export class Asset extends Model<AssetAttributes, AssetCreationAttributes> {
   declare readonly updatedAt: Date;
 }
 
-// 初始化资产模型
+// Initialize asset model
 Asset.init(
   {
     id: {

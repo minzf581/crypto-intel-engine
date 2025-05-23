@@ -15,8 +15,10 @@ interface AssetContextType {
   selectedAssets: Asset[];
   isLoading: boolean;
   error: string | null;
-  toggleAssetSelection: (assetId: string) => void;
+  toggleAssetSelection: (assetSymbol: string) => void;
   saveAssetPreferences: () => Promise<void>;
+  searchCryptocurrencies: (query: string) => Promise<Asset[]>;
+  addAssetToAvailable: (asset: Omit<Asset, 'isSelected'>) => void;
 }
 
 const AssetContext = createContext<AssetContextType | null>(null);
@@ -29,8 +31,8 @@ export const useAssets = () => {
   return context;
 };
 
-// For the prototype, we'll use a limited set of hardcoded assets
-const AVAILABLE_ASSETS: Asset[] = [
+// Default available assets
+const DEFAULT_ASSETS: Asset[] = [
   { id: '1', symbol: 'BTC', name: 'Bitcoin', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png', isSelected: false },
   { id: '2', symbol: 'ETH', name: 'Ethereum', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png', isSelected: false },
   { id: '3', symbol: 'SOL', name: 'Solana', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png', isSelected: false },
@@ -45,7 +47,7 @@ const AVAILABLE_ASSETS: Asset[] = [
 
 export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
-  const [availableAssets, setAvailableAssets] = useState<Asset[]>(AVAILABLE_ASSETS);
+  const [availableAssets, setAvailableAssets] = useState<Asset[]>(DEFAULT_ASSETS);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,17 +60,34 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setError(null);
       
       try {
+        // Get user's selected asset symbols from backend
         const response = await axios.get('/api/users/assets');
-        const selectedAssetIds = new Set(response.data.map((asset: { id: string }) => asset.id));
+        let selectedSymbols: string[] = [];
         
+        if (response.data && Array.isArray(response.data)) {
+          selectedSymbols = response.data.map((asset: any) => asset.symbol);
+        } else if (user?.selectedAssets) {
+          selectedSymbols = user.selectedAssets;
+        }
+        
+        // Update available assets with selection status
         setAvailableAssets(prevAssets => 
           prevAssets.map(asset => ({
             ...asset,
-            isSelected: selectedAssetIds.has(asset.id)
+            isSelected: selectedSymbols.includes(asset.symbol)
           }))
         );
       } catch (error) {
         console.error('Error fetching asset preferences:', error);
+        // Try to use user data as fallback
+        if (user?.selectedAssets) {
+          setAvailableAssets(prevAssets => 
+            prevAssets.map(asset => ({
+              ...asset,
+              isSelected: user.selectedAssets?.includes(asset.symbol) || false
+            }))
+          );
+        }
         setError('Failed to load your asset preferences');
       } finally {
         setIsLoading(false);
@@ -78,23 +97,25 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     fetchAssetPreferences();
   }, [isAuthenticated, user?.id]);
 
-  // Toggle asset selection
-  const toggleAssetSelection = (assetId: string) => {
+  // Toggle asset selection by symbol
+  const toggleAssetSelection = (assetSymbol: string) => {
     setAvailableAssets(prevAssets => {
       // Count currently selected assets
       const selectedCount = prevAssets.filter(asset => asset.isSelected).length;
       
       // Find the asset we're trying to update
-      const targetAsset = prevAssets.find(asset => asset.id === assetId);
+      const targetAsset = prevAssets.find(asset => asset.symbol === assetSymbol);
+      
+      if (!targetAsset) return prevAssets;
       
       // If we're trying to select a 6th asset, prevent it
-      if (targetAsset && !targetAsset.isSelected && selectedCount >= 5) {
+      if (!targetAsset.isSelected && selectedCount >= 5) {
         setError('You can select a maximum of 5 assets');
         return prevAssets;
       }
       
       // If we're trying to deselect when only 3 are selected, prevent it
-      if (targetAsset && targetAsset.isSelected && selectedCount <= 3) {
+      if (targetAsset.isSelected && selectedCount <= 3) {
         setError('You must select at least 3 assets');
         return prevAssets;
       }
@@ -104,7 +125,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       // Toggle the selection
       return prevAssets.map(asset => 
-        asset.id === assetId 
+        asset.symbol === assetSymbol 
           ? { ...asset, isSelected: !asset.isSelected } 
           : asset
       );
@@ -119,11 +140,11 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setError(null);
     
     try {
-      const selectedAssetIds = availableAssets
+      const selectedSymbols = availableAssets
         .filter(asset => asset.isSelected)
-        .map(asset => asset.id);
+        .map(asset => asset.symbol);
       
-      await axios.post('/api/users/assets', { assets: selectedAssetIds });
+      await axios.post('/api/users/assets', { assets: selectedSymbols });
       return Promise.resolve();
     } catch (error) {
       console.error('Error saving asset preferences:', error);
@@ -131,6 +152,63 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return Promise.reject(error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Search for cryptocurrencies using CoinGecko API
+  const searchCryptocurrencies = async (query: string): Promise<Asset[]> => {
+    if (!query.trim()) return [];
+    
+    try {
+      // Using CoinGecko search API
+      const response = await axios.get(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
+      
+      if (response.data && response.data.coins) {
+        return response.data.coins.slice(0, 10).map((coin: any, index: number) => ({
+          id: `search-${coin.id}`,
+          symbol: coin.symbol.toUpperCase(),
+          name: coin.name,
+          logo: coin.large || coin.small || coin.thumb || `https://via.placeholder.com/64x64/6366f1/ffffff?text=${coin.symbol.toUpperCase()}`,
+          isSelected: false
+        }));
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error searching cryptocurrencies:', error);
+      return [];
+    }
+  };
+
+  // Add a new asset to available assets list and save to backend
+  const addAssetToAvailable = async (newAsset: Omit<Asset, 'isSelected'>) => {
+    try {
+      // Check if asset already exists locally
+      const exists = availableAssets.some(asset => asset.symbol === newAsset.symbol);
+      if (exists) return;
+      
+      // Add asset to backend
+      await axios.post('/api/assets', {
+        symbol: newAsset.symbol,
+        name: newAsset.name,
+        logo: newAsset.logo
+      });
+      
+      // Add to local state
+      setAvailableAssets(prevAssets => [
+        ...prevAssets, 
+        { ...newAsset, isSelected: false }
+      ]);
+      
+    } catch (error) {
+      console.error('Error adding asset:', error);
+      // If backend fails, still add to local state temporarily
+      setAvailableAssets(prevAssets => {
+        const exists = prevAssets.some(asset => asset.symbol === newAsset.symbol);
+        if (exists) return prevAssets;
+        return [...prevAssets, { ...newAsset, isSelected: false }];
+      });
+      setError('Asset added locally, but failed to sync with server');
     }
   };
 
@@ -143,7 +221,9 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isLoading,
     error,
     toggleAssetSelection,
-    saveAssetPreferences
+    saveAssetPreferences,
+    searchCryptocurrencies,
+    addAssetToAvailable
   };
 
   return <AssetContext.Provider value={value}>{children}</AssetContext.Provider>;

@@ -2,30 +2,30 @@ import { Request, Response } from 'express';
 import { User, Asset } from '../models';
 import { successResponse, errorResponse } from '../utils';
 
-// 获取当前用户信息
+// Get current user information
 export const getCurrentUser = async (req: Request, res: Response) => {
   try {
-    // 从身份验证中间件获取用户ID
+    // Get user ID from authentication middleware
     const userId = req.userId;
-    console.log('获取当前用户信息，用户ID:', userId);
+    console.log('Getting current user info, user ID:', userId);
     
     if (!userId) {
-      console.error('请求中缺少用户ID');
-      return errorResponse(res, '未授权的请求，缺少用户ID', 401);
+      console.error('Missing user ID in request');
+      return errorResponse(res, 'Unauthorized request, missing user ID', 401);
     }
     
-    // 查找用户
-    console.log('尝试从数据库查找用户:', userId);
+    // Find user
+    console.log('Attempting to find user in database:', userId);
     const user = await User.findByPk(userId);
     
     if (!user) {
-      console.error('找不到用户:', userId);
-      return errorResponse(res, '找不到用户', 404);
+      console.error('User not found:', userId);
+      return errorResponse(res, 'User not found', 404);
     }
     
-    console.log('成功找到用户:', user.id, user.email);
+    console.log('Successfully found user:', user.id, user.email);
     
-    // 构建用户响应对象（不包含密码）
+    // Build user response object (excluding password)
     const userResponse = {
       id: user.id,
       name: user.name,
@@ -34,28 +34,28 @@ export const getCurrentUser = async (req: Request, res: Response) => {
       selectedAssets: user.selectedAssets || []
     };
     
-    console.log('返回用户数据，用户ID:', user.id);
+    console.log('Returning user data, user ID:', user.id);
     return successResponse(res, userResponse);
   } catch (error) {
-    console.error('获取用户数据时发生错误:', error);
-    return errorResponse(res, '获取用户数据时出错', 500, error);
+    console.error('Error occurred while getting user data:', error);
+    return errorResponse(res, 'Error getting user data', 500, error);
   }
 };
 
-// 获取用户选择的资产
+// Get user selected assets
 export const getUserAssets = async (req: Request, res: Response) => {
   try {
-    // 从身份验证中间件获取用户ID
+    // Get user ID from authentication middleware
     const userId = req.userId;
     
-    // 查找用户
+    // Find user
     const user = await User.findByPk(userId);
     
     if (!user) {
-      return errorResponse(res, '找不到用户', 404);
+      return errorResponse(res, 'User not found', 404);
     }
     
-    // 查找用户选择的所有资产
+    // Find all user selected assets
     const assets = await Asset.findAll({
       where: {
         symbol: user.selectedAssets
@@ -64,27 +64,27 @@ export const getUserAssets = async (req: Request, res: Response) => {
     
     return successResponse(res, assets);
   } catch (error) {
-    return errorResponse(res, '获取用户资产时出错', 500, error);
+    return errorResponse(res, 'Error getting user assets', 500, error);
   }
 };
 
-// 更新用户选择的资产
+// Update user selected assets
 export const updateUserAssets = async (req: Request, res: Response) => {
   try {
     const { assets } = req.body;
     const userId = req.userId;
     
-    // 验证提供的资产是否有效
+    // Validate provided assets
     if (!Array.isArray(assets)) {
-      return errorResponse(res, '资产必须是一个数组', 400);
+      return errorResponse(res, 'Assets must be an array', 400);
     }
     
-    // 检查资产数量是否在允许范围内
+    // Check if asset count is within allowed range
     if (assets.length < 3 || assets.length > 5) {
-      return errorResponse(res, '您必须选择3到5个资产', 400);
+      return errorResponse(res, 'You must select 3 to 5 assets', 400);
     }
     
-    // 验证所有资产符号是否存在
+    // Validate all asset symbols exist
     const assetCount = await Asset.count({
       where: {
         symbol: assets
@@ -92,53 +92,53 @@ export const updateUserAssets = async (req: Request, res: Response) => {
     });
     
     if (assetCount !== assets.length) {
-      return errorResponse(res, '一个或多个资产符号无效', 400);
+      return errorResponse(res, 'One or more asset symbols are invalid', 400);
     }
     
-    // 查找用户
+    // Find user
     const user = await User.findByPk(userId);
     
     if (!user) {
-      return errorResponse(res, '找不到用户', 404);
+      return errorResponse(res, 'User not found', 404);
     }
     
-    // 更新用户资产选择
+    // Update user asset selection
     user.selectedAssets = assets;
     
-    // 如果用户尚未完成引导流程，同时设置该标志
+    // If user hasn't completed onboarding, set that flag as well
     if (!user.hasCompletedOnboarding) {
       user.hasCompletedOnboarding = true;
     }
     
     await user.save();
     
-    return successResponse(res, assets, '用户资产更新成功');
+    return successResponse(res, assets, 'User assets updated successfully');
   } catch (error) {
-    return errorResponse(res, '更新用户资产时出错', 500, error);
+    return errorResponse(res, 'Error updating user assets', 500, error);
   }
 };
 
-// 更新用户资料
+// Update user profile
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
     const { name } = req.body;
     const userId = req.userId;
     
-    // 查找用户
+    // Find user
     const user = await User.findByPk(userId);
     
     if (!user) {
-      return errorResponse(res, '找不到用户', 404);
+      return errorResponse(res, 'User not found', 404);
     }
     
-    // 更新用户名
+    // Update user name
     if (name) {
       user.name = name;
     }
     
     await user.save();
     
-    // 构建用户响应对象（不包含密码）
+    // Build user response object (excluding password)
     const userResponse = {
       id: user.id,
       name: user.name,
@@ -146,8 +146,8 @@ export const updateUserProfile = async (req: Request, res: Response) => {
       hasCompletedOnboarding: user.hasCompletedOnboarding
     };
     
-    return successResponse(res, userResponse, '资料更新成功');
+    return successResponse(res, userResponse, 'Profile updated successfully');
   } catch (error) {
-    return errorResponse(res, '更新资料时出错', 500, error);
+    return errorResponse(res, 'Error updating profile', 500, error);
   }
 }; 

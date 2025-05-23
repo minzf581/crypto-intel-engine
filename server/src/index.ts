@@ -22,7 +22,7 @@ const server = http.createServer(app);
 // Configure CORS
 const corsOptions = {
   origin: [env.clientUrl, 'http://localhost:3000'],
-  credentials: true, // 启用credentials支持WebSocket认证
+  credentials: true, // Enable credentials to support WebSocket authentication
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 200
@@ -96,15 +96,15 @@ const initializeServer = async () => {
     await seedData();
     
     // Initialize services
-    logger.info('初始化服务...');
+    logger.info('Initializing services...');
     
-    // 初始化真实信号生成器（现在只记录状态，不生成模拟信号）
+    // Initialize real signal generator (now only logs status, does not generate simulated signals)
     initializeSignalGenerator();
     
-    // 初始化价格监控服务（真实数据）
+    // Initialize price monitoring service (real data)
     initializePriceMonitor();
     
-    logger.info('所有服务初始化完成');
+    logger.info('All services initialized');
     
     // Start server
     const PORT = env.port || 5001;

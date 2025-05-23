@@ -3,7 +3,7 @@ import { Asset } from '../models';
 import { successResponse, errorResponse } from '../utils';
 import env from '../config/env';
 
-// 获取所有可用资产
+// Get all available assets
 export const getAllAssets = async (req: Request, res: Response) => {
   try {
     const assets = await Asset.findAll({
@@ -11,34 +11,63 @@ export const getAllAssets = async (req: Request, res: Response) => {
     });
     return successResponse(res, assets);
   } catch (error) {
-    return errorResponse(res, '获取资产列表失败', 500, error);
+    return errorResponse(res, 'Failed to get asset list', 500, error);
   }
 };
 
-// 获取单个资产详情
+// Get single asset details
 export const getAssetById = async (req: Request, res: Response) => {
   try {
     const asset = await Asset.findByPk(req.params.id);
     
     if (!asset) {
-      return errorResponse(res, '未找到资产', 404);
+      return errorResponse(res, 'Asset not found', 404);
     }
     
     return successResponse(res, asset);
   } catch (error) {
-    return errorResponse(res, '获取资产详情失败', 500, error);
+    return errorResponse(res, 'Failed to get asset details', 500, error);
   }
 };
 
-// 初始化默认资产 (仅在开发/测试环境使用)
+// Add new cryptocurrency asset
+export const addAsset = async (req: Request, res: Response) => {
+  try {
+    const { symbol, name, logo } = req.body;
+
+    // Validate required fields
+    if (!symbol || !name) {
+      return errorResponse(res, 'Symbol and name are required', 400);
+    }
+
+    // Check if asset already exists
+    const existingAsset = await Asset.findOne({ where: { symbol: symbol.toUpperCase() } });
+    if (existingAsset) {
+      return errorResponse(res, 'Asset already exists', 409);
+    }
+
+    // Create new asset
+    const asset = await Asset.create({
+      symbol: symbol.toUpperCase(),
+      name,
+      logo: logo || `https://via.placeholder.com/64x64/6366f1/ffffff?text=${symbol.toUpperCase()}`
+    });
+
+    return successResponse(res, asset, 'Asset added successfully', 201);
+  } catch (error) {
+    return errorResponse(res, 'Failed to add asset', 500, error);
+  }
+};
+
+// Initialize default assets (only for development/testing environment)
 export const initializeDefaultAssets = async (req: Request, res: Response) => {
-  // 仅在开发或测试环境允许此操作
+  // Only allow this operation in development or testing environment
   if (env.nodeEnv === 'production') {
-    return errorResponse(res, '此操作在生产环境中不被允许', 403);
+    return errorResponse(res, 'This operation is not allowed in production environment', 403);
   }
   
   try {
-    // 默认资产列表
+    // Default asset list
     const defaultAssets = [
       { symbol: 'BTC', name: 'Bitcoin', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png' },
       { symbol: 'ETH', name: 'Ethereum', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png' },
@@ -52,18 +81,18 @@ export const initializeDefaultAssets = async (req: Request, res: Response) => {
       { symbol: 'UNI', name: 'Uniswap', logo: 'https://s2.coinmarketcap.com/static/img/coins/64x64/7083.png' },
     ];
     
-    // 清空现有资产
+    // Clear existing assets
     await Asset.destroy({ where: {}, truncate: true });
     
-    // 创建默认资产
+    // Create default assets
     await Asset.bulkCreate(defaultAssets);
     
     const assets = await Asset.findAll({
       order: [['symbol', 'ASC']]
     });
     
-    return successResponse(res, assets, '默认资产初始化成功');
+    return successResponse(res, assets, 'Default assets initialized successfully');
   } catch (error) {
-    return errorResponse(res, '初始化默认资产失败', 500, error);
+    return errorResponse(res, 'Failed to initialize default assets', 500, error);
   }
 }; 

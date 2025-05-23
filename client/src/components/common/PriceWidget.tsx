@@ -25,7 +25,7 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
   const [data, setData] = useState<PriceWidgetData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 获取价格数据
+  // Get price data
   const fetchPriceData = async () => {
     try {
       setLoading(true);
@@ -45,7 +45,7 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
         }
       }
     } catch (error) {
-      console.error(`获取${symbol}价格数据失败:`, error);
+      console.error(`Failed to get ${symbol} price data:`, error);
     } finally {
       setLoading(false);
     }
@@ -54,13 +54,13 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
   useEffect(() => {
     fetchPriceData();
     
-    // 每2分钟更新一次
+    // Update every 2 minutes
     const interval = setInterval(fetchPriceData, 120000);
     
     return () => clearInterval(interval);
   }, [symbol]);
 
-  // 格式化价格
+  // Format price
   const formatPrice = (price: number | null): string => {
     if (price === null) return '--';
     
@@ -73,17 +73,17 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
     }
   };
 
-  // 格式化价格变化
+  // Format price change
   const formatPriceChange = (change: number | null): string => {
     if (change === null) return '--';
     return `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
   };
 
-  // 判断价格变化方向
+  // Determine price change direction
   const isPositive = data?.priceChange24h !== null && data?.priceChange24h! >= 0;
   const isNegative = data?.priceChange24h !== null && data?.priceChange24h! < 0;
 
-  // 获取样式类
+  // Get style classes
   const getSizeClasses = () => {
     switch (size) {
       case 'sm':

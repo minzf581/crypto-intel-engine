@@ -4,19 +4,18 @@ import { Signal, initializeAssociations as initSignalAssociations } from './Sign
 import { Notification, initializeAssociations as initNotificationAssociations } from './Notification';
 import { AlertSetting, initializeAssociations as initAlertSettingAssociations } from './AlertSetting';
 
-// 初始化所有模型关联
+// Initialize all model associations
 const initializeAssociations = () => {
-  // 用户-资产 多对多关系 - 使用不同的关联名避免与selectedAssets属性冲突
-  User.belongsToMany(Asset, { through: 'user_assets', as: 'watchedAssets' });
-  Asset.belongsToMany(User, { through: 'user_assets', as: 'watchers' });
+  // Remove the many-to-many association that was causing naming collision
+  // User will maintain selectedAssets as a JSON field instead
   
-  // 初始化信号模型的关联
+  // Initialize signal model associations
   initSignalAssociations();
 
-  // 初始化通知模型的关联
+  // Initialize notification model associations
   initNotificationAssociations();
 
-  // 初始化警报设置模型的关联
+  // Initialize alert setting model associations
   initAlertSettingAssociations();
 };
 

@@ -4,12 +4,12 @@ import logger from '../utils/logger';
 import notificationService from './notificationService';
 import { calculateStrength } from '../utils/signalUtils';
 
-// CoinGecko API配置
+// CoinGecko API configuration
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
-const PRICE_UPDATE_INTERVAL = 60000; // 1分钟更新一次
-const PRICE_CHANGE_THRESHOLD = 5; // 5%变化阈值
+const PRICE_UPDATE_INTERVAL = 60000; // Update every 1 minute
+const PRICE_CHANGE_THRESHOLD = 5; // 5% change threshold
 
-// 加密货币ID映射(CoinGecko API使用的ID)
+// Cryptocurrency ID mapping (IDs used by CoinGecko API)
 const COIN_ID_MAP: Record<string, string> = {
   'BTC': 'bitcoin',
   'ETH': 'ethereum', 
@@ -20,7 +20,7 @@ const COIN_ID_MAP: Record<string, string> = {
   'DOGE': 'dogecoin'
 };
 
-// 价格数据接口
+// Price data interface
 interface PriceData {
   symbol: string;
   currentPrice: number;
@@ -29,14 +29,14 @@ interface PriceData {
   lastUpdated: Date;
 }
 
-// 存储上次价格数据
+// Store previous price data
 const priceHistory: Record<string, PriceData> = {};
 
 class PriceService {
   private intervalId: NodeJS.Timeout | null = null;
 
   /**
-   * 获取加密货币实时价格
+   * Get cryptocurrency real-time prices
    */
   async fetchRealPrices(): Promise<PriceData[]> {
     try {
@@ -47,11 +47,11 @@ class PriceService {
         .join(',');
 
       if (!coinIds) {
-        logger.warn('没有找到支持的加密货币ID');
+        logger.warn('No supported cryptocurrency IDs found');
         return [];
       }
 
-      logger.info(`获取价格数据: ${coinIds}`);
+      logger.info(`Fetching price data: ${coinIds}`);
 
       const response = await axios.get(`${COINGECKO_API_BASE}/simple/price`, {
         params: {
@@ -68,7 +68,7 @@ class PriceService {
       for (const asset of assets) {
         const coinId = COIN_ID_MAP[asset.symbol];
         if (!coinId || !response.data[coinId]) {
-          logger.warn(`未找到 ${asset.symbol} 的价格数据`);
+          logger.warn(`No price data found for ${asset.symbol}`);
           continue;
         }
 
@@ -82,71 +82,71 @@ class PriceService {
         });
       }
 
-      logger.info(`成功获取 ${priceData.length} 个币种的价格数据`);
+      logger.info(`Successfully fetched price data for ${priceData.length} cryptocurrencies`);
       return priceData;
 
     } catch (error: any) {
       if (error.response?.status === 429) {
-        logger.error('CoinGecko API 请求频率限制');
+        logger.error('CoinGecko API rate limit exceeded');
       } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-        logger.error('网络连接失败，无法获取价格数据');
+        logger.error('Network connection failed, unable to fetch price data');
       } else {
-        logger.error('获取价格数据失败:', error.message);
+        logger.error('Failed to fetch price data:', error.message);
       }
-      throw new Error(`价格数据获取失败: ${error.message}`);
+      throw new Error(`Failed to fetch price data: ${error.message}`);
     }
   }
 
   /**
-   * 分析价格变化并生成信号
+   * Analyze price changes and generate signals
    */
   async analyzePriceChanges(priceData: PriceData[]): Promise<void> {
     for (const data of priceData) {
       const previousData = priceHistory[data.symbol];
       
-      // 如果没有历史数据，保存当前数据并跳过
+      // If there is no historical data, save current data and skip
       if (!previousData) {
         priceHistory[data.symbol] = data;
         continue;
       }
 
-      // 计算价格变化百分比
+      // Calculate price change percentage
       const priceChangePercent = Math.abs(data.priceChangePercentage24h);
       
-      // 只有当价格变化超过阈值时才生成信号
+      // Only generate signal when price change exceeds threshold
       if (priceChangePercent >= PRICE_CHANGE_THRESHOLD) {
         await this.createPriceSignal(data, previousData);
       }
 
-      // 更新历史数据
+      // Update historical data
       priceHistory[data.symbol] = data;
     }
   }
 
   /**
-   * 创建价格信号
+   * Create price signal
    */
   private async createPriceSignal(currentData: PriceData, previousData: PriceData): Promise<void> {
     try {
-      // 获取资产信息
+      // Get asset information
       const asset = await Asset.findOne({ where: { symbol: currentData.symbol } });
       if (!asset) {
-        logger.warn(`未找到资产: ${currentData.symbol}`);
+        logger.warn(`Asset not found: ${currentData.symbol}`);
         return;
       }
 
       const changePercent = currentData.priceChangePercentage24h;
       const isPositive = changePercent > 0;
       
-      // 生成信号描述
+      // Generate signal description
       const description = isPositive 
-        ? `${asset.name} 价格在24小时内上涨 ${changePercent.toFixed(2)}%，当前价格 $${currentData.currentPrice.toLocaleString()}`
-        : `${asset.name} 价格在24小时内下跌 ${Math.abs(changePercent).toFixed(2)}%，当前价格 $${currentData.currentPrice.toLocaleString()}`;
+        ? `${asset.name} price increased by ${changePercent.toFixed(2)}% in the last 24 hours, current price $${currentData.currentPrice.toLocaleString()}`
+        : `${asset.name} price decreased by ${Math.abs(changePercent).toFixed(2)}% in the last 24 hours, current price $${currentData.currentPrice.toLocaleString()}`;
 
-      // 计算信号强度（基于价格变化幅度）
+      // Calculate signal strength (based on price change magnitude)
       const strength = calculateStrength(Math.abs(changePercent), 'price');
 
-      // 创建信号
+      // Create signal
       const signal = await Signal.create({
         assetId: asset.id,
         assetSymbol: asset.symbol,
@@ -165,89 +165,89 @@ class PriceService {
         timestamp: new Date()
       });
 
-      logger.info(`生成价格信号: ${asset.symbol} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%, 强度: ${strength})`);
+      logger.info(`Generated price signal: ${asset.symbol} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%, strength: ${strength})`);
 
-      // 发送通知
+      // Send notification
       await notificationService.processSignal(signal);
 
     } catch (error) {
-      logger.error(`创建价格信号失败:`, error);
+      logger.error(`Failed to create price signal:`, error);
     }
   }
 
   /**
-   * 启动价格监控
+   * Start price monitoring
    */
   startPriceMonitoring(): void {
     if (this.intervalId) {
-      logger.warn('价格监控已在运行');
+      logger.warn('Price monitoring is already running');
       return;
     }
 
-    logger.info('启动实时价格监控服务');
+    logger.info('Starting real-time price monitoring service');
 
-    // 立即执行一次
+    // Execute immediately
     this.monitorPrices();
 
-    // 设置定时监控
+    // Set up scheduled monitoring
     this.intervalId = setInterval(() => {
       this.monitorPrices();
     }, PRICE_UPDATE_INTERVAL);
   }
 
   /**
-   * 停止价格监控
+   * Stop price monitoring
    */
   stopPriceMonitoring(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      logger.info('价格监控已停止');
+      logger.info('Price monitoring stopped');
     }
   }
 
   /**
-   * 执行价格监控
+   * Execute price monitoring
    */
   private async monitorPrices(): Promise<void> {
     try {
-      logger.info('开始价格监控检查...');
+      logger.info('Starting price monitoring check...');
       const priceData = await this.fetchRealPrices();
       
       if (priceData.length > 0) {
         await this.analyzePriceChanges(priceData);
-        logger.info(`价格监控完成，处理了 ${priceData.length} 个币种`);
+        logger.info(`Price monitoring completed, processed ${priceData.length} cryptocurrencies`);
       } else {
-        logger.warn('未获取到任何价格数据');
+        logger.warn('No price data fetched');
       }
     } catch (error) {
-      logger.error('价格监控过程中发生错误:', error);
+      logger.error('Error occurred during price monitoring:', error);
     }
   }
 
   /**
-   * 获取当前价格历史数据
+   * Get current price history data
    */
   getPriceHistory(): Record<string, PriceData> {
     return { ...priceHistory };
   }
 
   /**
-   * 手动触发价格检查（用于测试）
+   * Manually trigger price check (for testing)
    */
   async triggerPriceCheck(): Promise<void> {
     await this.monitorPrices();
   }
 }
 
-// 导出单例
+// Export singleton
 const priceService = new PriceService();
 
 /**
- * 初始化价格监控服务
+ * Initialize price monitoring service
  */
 export const initializePriceMonitor = () => {
-  logger.info('初始化实时价格监控服务');
+  logger.info('Initializing real-time price monitoring service');
   priceService.startPriceMonitoring();
 };
 

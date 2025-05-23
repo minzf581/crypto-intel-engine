@@ -23,7 +23,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [priceChange, setPriceChange] = useState<number | null>(null);
 
-  // 模拟情绪数据（实际项目中应该从API获取）
+  // Simulate sentiment data (should fetch from API in actual project)
   const generateMockSentimentData = (priceData: number) => {
     const now = Date.now();
     const points = timeRange === '1h' ? 12 : timeRange === '6h' ? 24 : timeRange === '24h' ? 48 : 168;
@@ -37,15 +37,15 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
     for (let i = points; i >= 0; i--) {
       const timestamp = new Date(now - (i * interval)).toISOString();
       
-      // 模拟价格变化（基于真实价格）
+      // Simulate price changes (based on real price)
       const priceVariation = (Math.random() - 0.5) * 0.1; // ±5%
       const price = priceData * (1 + priceVariation);
       
-      // 模拟情绪与价格的相关性
-      const basesentiment = 50;
-      const priceInfluence = priceVariation * 200; // 价格变化影响情绪
+      // Simulate sentiment correlation with price
+      const baseSentiment = 50;
+      const priceInfluence = priceVariation * 200; // Price change affects sentiment
       const randomNoise = (Math.random() - 0.5) * 30;
-      const sentiment = Math.max(0, Math.min(100, basesentiment + priceInfluence + randomNoise));
+      const sentiment = Math.max(0, Math.min(100, baseSentiment + priceInfluence + randomNoise));
       
       mockData.push({
         timestamp,
@@ -58,7 +58,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
     return mockData;
   };
 
-  // 获取价格数据并生成情绪数据
+  // Get price data and generate sentiment data
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -72,13 +72,13 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
           setCurrentPrice(assetData.currentPrice);
           setPriceChange(assetData.priceChange24h);
           
-          // 生成模拟情绪数据
+          // Generate mock sentiment data
           const sentimentData = generateMockSentimentData(assetData.currentPrice);
           setData(sentimentData);
         }
       }
     } catch (error) {
-      console.error('获取数据失败:', error);
+      console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
@@ -87,13 +87,13 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
   useEffect(() => {
     fetchData();
     
-    // 每5分钟更新一次
+    // Update every 5 minutes
     const interval = setInterval(fetchData, 300000);
     
     return () => clearInterval(interval);
   }, [symbol, timeRange]);
 
-  // 计算价格和情绪的相关性
+  // Calculate price and sentiment correlation
   const calculateCorrelation = (): number => {
     if (data.length < 2) return 0;
     
@@ -129,7 +129,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
   const correlation = calculateCorrelation();
   const currentSentiment = data.length > 0 ? data[data.length - 1].sentiment : 50;
 
-  // 获取情绪颜色
+  // Get sentiment color
   const getSentimentColor = (sentiment: number) => {
     if (sentiment >= 70) return 'text-green-600 dark:text-green-400';
     if (sentiment >= 40) return 'text-yellow-600 dark:text-yellow-400';
@@ -137,11 +137,11 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
   };
 
   const getSentimentLabel = (sentiment: number) => {
-    if (sentiment >= 75) return '极度乐观';
-    if (sentiment >= 60) return '乐观';
-    if (sentiment >= 40) return '中性';
-    if (sentiment >= 25) return '悲观';
-    return '极度悲观';
+    if (sentiment >= 75) return 'Extremely Bullish';
+    if (sentiment >= 60) return 'Bullish';
+    if (sentiment >= 40) return 'Neutral';
+    if (sentiment >= 25) return 'Bearish';
+    return 'Extremely Bearish';
   };
 
   if (loading) {
@@ -157,12 +157,12 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 border border-neutral-200 dark:border-neutral-700">
-      {/* 标题和控件 */}
+      {/* Title and controls */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <ChartBarIcon className="w-6 h-6 text-neutral-600 dark:text-neutral-400" />
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            {symbol} 市场情绪分析
+            {symbol} Market Sentiment Analysis
           </h3>
         </div>
         
@@ -170,7 +170,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
           {['1h', '6h', '24h', '7d'].map((range) => (
             <button
               key={range}
-              onClick={() => {/* 这里可以添加时间范围切换逻辑 */}}
+              onClick={() => {/* Add time range switching logic here */}}
               className={`px-3 py-1 text-sm rounded-md ${
                 timeRange === range
                   ? 'bg-primary-600 text-white'
@@ -183,10 +183,10 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
         </div>
       </div>
 
-      {/* 当前指标 */}
+      {/* Current metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-4">
-          <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">当前情绪</div>
+          <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Current Sentiment</div>
           <div className={`text-xl font-bold ${getSentimentColor(currentSentiment)}`}>
             {currentSentiment.toFixed(0)} / 100
           </div>
@@ -196,7 +196,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
         </div>
         
         <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-4">
-          <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">当前价格</div>
+          <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Current Price</div>
           <div className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
             ${currentPrice?.toLocaleString() || '--'}
           </div>
@@ -208,7 +208,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
         </div>
         
         <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-4">
-          <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">价格相关性</div>
+          <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Price Correlation</div>
           <div className={`text-xl font-bold ${
             Math.abs(correlation) > 0.6 ? 'text-green-600' : 
             Math.abs(correlation) > 0.3 ? 'text-yellow-600' : 'text-red-600'
@@ -216,22 +216,22 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
             {(correlation * 100).toFixed(0)}%
           </div>
           <div className="text-sm text-neutral-600 dark:text-neutral-300">
-            {Math.abs(correlation) > 0.6 ? '强相关' : 
-             Math.abs(correlation) > 0.3 ? '中等相关' : '弱相关'}
+            {Math.abs(correlation) > 0.6 ? 'Strong Correlation' : 
+             Math.abs(correlation) > 0.3 ? 'Moderate Correlation' : 'Weak Correlation'}
           </div>
         </div>
       </div>
 
-      {/* 简化的图表显示 */}
+      {/* Simplified chart display */}
       <div className="space-y-4">
         <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-          情绪趋势 (最近 {timeRange})
+          Sentiment Trend (Last {timeRange})
         </div>
         
-        {/* 情绪条 */}
+        {/* Sentiment bars */}
         <div className="space-y-2">
           {data.slice(-10).map((point, index) => {
-            const time = new Date(point.timestamp).toLocaleTimeString('zh-CN', { 
+            const time = new Date(point.timestamp).toLocaleTimeString('en-US', { 
               hour: '2-digit', 
               minute: '2-digit' 
             });
@@ -259,22 +259,22 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
         </div>
       </div>
 
-      {/* 分析说明 */}
+      {/* Analysis insights */}
       <div className="mt-6 p-4 bg-neutral-50 dark:bg-neutral-700/50 rounded-lg">
         <div className="flex items-center space-x-2 mb-2">
           <ArrowTrendingUpIcon className="w-4 h-4 text-primary-600" />
           <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            分析洞察
+            Analysis Insights
           </span>
         </div>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           {correlation > 0.3 ? 
-            `${symbol}的市场情绪与价格呈现正相关关系，情绪上升时价格倾向于上涨。` :
+            `${symbol} market sentiment shows positive correlation with price, sentiment tends to rise when price increases.` :
             correlation < -0.3 ?
-            `${symbol}的市场情绪与价格呈现负相关关系，可能存在反向投资机会。` :
-            `${symbol}的市场情绪与价格相关性较弱，建议结合其他指标进行分析。`
+            `${symbol} market sentiment shows negative correlation with price, there may be contrarian investment opportunities.` :
+            `${symbol} market sentiment has weak correlation with price, recommend combining with other indicators for analysis.`
           }
-          当前市场情绪为{getSentimentLabel(currentSentiment)}。
+          Current market sentiment is {getSentimentLabel(currentSentiment)}.
         </p>
       </div>
     </div>

@@ -60,7 +60,7 @@ export const seedData = async () => {
     if (assetCount === 0) {
       // Create default assets
       await Asset.bulkCreate(assets);
-      logger.info(`创建了 ${assets.length} 个默认资产`);
+      logger.info(`Created ${assets.length} default assets`);
     }
     
     // Check if users already exist
@@ -69,16 +69,16 @@ export const seedData = async () => {
     if (userCount === 0) {
       // Create demo users
       await Promise.all(users.map(user => User.create(user)));
-      logger.info(`创建了 ${users.length} 个演示用户`);
+      logger.info(`Created ${users.length} demo users`);
     }
     
-    // 不再生成模拟信号
-    logger.info('⚠️  模拟信号生成已禁用，现在使用真实数据源');
-    logger.info('📊 信号将来自：价格监控、情感分析等真实数据源');
+    // Log about signal generation strategy
+    logger.info('⚠️  Simulated signal generation is disabled, now using real data sources');
+    logger.info('📊 Signals will come from: price monitoring, sentiment analysis, and other real data sources');
     
-    logger.info('数据初始化完成');
+    logger.info('Data initialization complete');
   } catch (error) {
-    logger.error('数据初始化失败:', error);
+    logger.error('Data initialization failed:', error);
   }
 };
 

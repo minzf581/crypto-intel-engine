@@ -3,27 +3,27 @@ import sequelize from '../config/database';
 import { User } from './User';
 import { Asset } from './Asset';
 
-// 警报设置接口
+// Alert settings interface
 export interface AlertSettingAttributes {
   id?: string;
   userId: string;
   assetId?: string;
   assetSymbol?: string;
-  isGlobal: boolean; // 是否是全局设置
-  sentimentThreshold: number; // 情绪变化阈值
-  priceChangeThreshold: number; // 价格变化阈值(%)
-  enableSentimentAlerts: boolean; // 是否启用情绪警报
-  enablePriceAlerts: boolean; // 是否启用价格警报
-  enableNarrativeAlerts: boolean; // 是否启用叙事警报
-  alertFrequency: 'immediate' | 'hourly' | 'daily' | 'weekly'; // 警报频率
-  emailNotifications: boolean; // 是否发送邮件通知
-  pushNotifications: boolean; // 是否发送推送通知
+  isGlobal: boolean; // Whether this is a global setting
+  sentimentThreshold: number; // Sentiment change threshold
+  priceChangeThreshold: number; // Price change threshold (%)
+  enableSentimentAlerts: boolean; // Whether to enable sentiment alerts
+  enablePriceAlerts: boolean; // Whether to enable price alerts
+  enableNarrativeAlerts: boolean; // Whether to enable narrative alerts
+  alertFrequency: 'immediate' | 'hourly' | 'daily' | 'weekly'; // Alert frequency
+  emailNotifications: boolean; // Whether to send email notifications
+  pushNotifications: boolean; // Whether to send push notifications
 }
 
-// 警报设置接口(创建时)
+// Alert settings interface (for creation)
 export interface AlertSettingCreationAttributes extends Omit<AlertSettingAttributes, 'id'> {}
 
-// 警报设置模型类
+// Alert settings model class
 export class AlertSetting extends Model<AlertSettingAttributes, AlertSettingCreationAttributes> {
   declare id: string;
   declare userId: string;
@@ -42,7 +42,7 @@ export class AlertSetting extends Model<AlertSettingAttributes, AlertSettingCrea
   declare readonly updatedAt: Date;
 }
 
-// 初始化警报设置模型
+// Initialize alert settings model
 AlertSetting.init(
   {
     id: {
@@ -80,7 +80,7 @@ AlertSetting.init(
     },
     sentimentThreshold: {
       type: DataTypes.INTEGER,
-      defaultValue: 20, // 默认20点变化
+      defaultValue: 20, // Default 20 point change
       validate: {
         min: 0,
         max: 100,
@@ -88,7 +88,7 @@ AlertSetting.init(
     },
     priceChangeThreshold: {
       type: DataTypes.FLOAT,
-      defaultValue: 5.0, // 默认5%变化
+      defaultValue: 5.0, // Default 5% change
       validate: {
         min: 0.1,
         max: 50.0,
@@ -135,7 +135,7 @@ AlertSetting.init(
   }
 );
 
-// 建立关联
+// Establish associations
 export const initializeAssociations = () => {
   AlertSetting.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   AlertSetting.belongsTo(Asset, { foreignKey: 'assetId', as: 'asset' });

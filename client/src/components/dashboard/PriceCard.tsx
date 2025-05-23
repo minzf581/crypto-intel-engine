@@ -61,17 +61,17 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
     return 'bg-neutral-50 dark:bg-neutral-800';
   };
 
-  // 格式化更新时间
+  // Format updated time
   const formatLastUpdated = (timestamp: string | null): string => {
-    if (!timestamp) return '未知';
+    if (!timestamp) return 'Unknown';
     
     const date = new Date(timestamp);
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
     
-    if (diffInMinutes < 1) return '刚刚更新';
-    if (diffInMinutes < 60) return `${diffInMinutes}分钟前`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}小时前`;
+    if (diffInMinutes < 1) return 'Just updated';
+    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hrs ago`;
     return date.toLocaleDateString();
   };
 
@@ -132,7 +132,7 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
             )}
           </div>
           <div className="text-xs text-neutral-400 dark:text-neutral-500">
-            24小时变化
+            24h Change
           </div>
         </div>
       </div>

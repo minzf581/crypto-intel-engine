@@ -1,12 +1,12 @@
-import express from 'express';
-import { authController } from '../controllers';
+import { Router } from 'express';
+import { register, login } from '../controllers/authController';
 
-const router = express.Router();
+const router = Router();
 
-// 用户注册
-router.post('/register', authController.register);
+// User registration
+router.post('/register', register);
 
-// 用户登录
-router.post('/login', authController.login);
+// User login
+router.post('/login', login);
 
 export default router; 

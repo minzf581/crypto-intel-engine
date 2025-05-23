@@ -1,37 +1,37 @@
 /**
- * @fileoverview Token生成与用户响应处理工具
+ * @fileoverview Token generation and user response handling utilities
  */
 import jwt from 'jsonwebtoken';
 import env from '../config/env';
 
 /**
- * 生成JWT令牌
- * @param userId 用户ID
- * @returns JWT令牌字符串
+ * Generate JWT token
+ * @param userId User ID
+ * @returns JWT token string
  */
 export const generateToken = (userId: string): string => {
   try {
-    // 创建payload对象
+    // Create payload object
     const payload = {
       id: userId
     };
     
-    // 签名选项
+    // Signing options
     const options: jwt.SignOptions = {
       expiresIn: '30d'
     };
     
-    // 获取密钥
+    // Get secret key
     const secret = env.jwtSecret || 'fallback-secret-key-for-development';
     
-    // 使用正确的参数调用jwt.sign
+    // Call jwt.sign with correct parameters
     const token = jwt.sign(payload, secret, options);
     
     if (!token) {
-      throw new Error('JWT令牌生成失败: 返回空值');
+      throw new Error('JWT token generation failed: returned null');
     }
     
-    console.log('JWT令牌生成成功:', {
+    console.log('JWT token generation successful:', {
       userId,
       tokenLength: token.length,
       tokenPrefix: token.substring(0, 10) + '...'
@@ -39,15 +39,15 @@ export const generateToken = (userId: string): string => {
     
     return token;
   } catch (error) {
-    console.error('生成JWT令牌时出错:', error);
+    console.error('Error generating JWT token:', error);
     throw error;
   }
 };
 
 /**
- * 创建包含令牌的用户响应对象
- * @param user 用户对象
- * @returns 包含用户信息和令牌的对象
+ * Create user response object containing token
+ * @param user User object
+ * @returns Object containing user information and token
  */
 export const createUserResponse = (user: any) => {
   const token = generateToken(user.id);
@@ -65,9 +65,9 @@ export const createUserResponse = (user: any) => {
 };
 
 /**
- * 格式化用户响应，排除敏感字段
- * @param user 用户对象
- * @returns 格式化后的用户对象
+ * Format user response, excluding sensitive fields
+ * @param user User object
+ * @returns Formatted user object
  */
 export const formatUserResponse = (user: any) => {
   const { password, ...userWithoutPassword } = user.toJSON();

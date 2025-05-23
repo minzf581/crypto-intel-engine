@@ -5,24 +5,24 @@ import logger from '../utils/logger';
 
 let sequelize: Sequelize;
 
-// 根据环境选择数据库类型
+// Choose database type based on environment
 if (env.databaseUrl) {
-  // 使用PostgreSQL（生产环境）
-  logger.info('使用PostgreSQL数据库连接');
+  // Use PostgreSQL (production environment)
+  logger.info('Using PostgreSQL database connection');
   sequelize = new Sequelize(env.databaseUrl, {
     dialect: 'postgres',
     dialectOptions: {
       ssl: {
         require: true,
-        rejectUnauthorized: false // 处理自签名证书
+        rejectUnauthorized: false // Handle self-signed certificates
       }
     },
     logging: env.nodeEnv === 'development' ? (msg) => logger.debug(msg) : false,
   });
 } else {
-  // 使用SQLite（开发环境）
+  // Use SQLite (development environment)
   const dbPath = path.resolve(process.cwd(), env.sqliteDbPath || 'data/crypto-intel.sqlite');
-  logger.info(`使用SQLite数据库: ${dbPath}`);
+  logger.info(`Using SQLite database: ${dbPath}`);
   
   sequelize = new Sequelize({
     dialect: 'sqlite',
@@ -31,46 +31,46 @@ if (env.databaseUrl) {
   });
 }
 
-// 连接数据库
+// Connect to database
 export const connectDB = async () => {
   try {
     await sequelize.authenticate();
-    logger.info('数据库连接成功');
+    logger.info('Database connection successful');
     
-    // 同步模型到数据库（开发模式下可以自动创建表）
+    // Sync models to database (can automatically create tables in development mode)
     if (env.nodeEnv === 'development') {
-      // 检查是否需要重置数据库
+      // Check if database reset is needed
       const shouldResetDb = process.env.RESET_DB === 'true';
       
       if (shouldResetDb) {
-        // 使用force选项重新创建所有表
+        // Use force option to recreate all tables
         await sequelize.sync({ force: true });
-        logger.info('数据库已重置且模型已同步');
+        logger.info('Database has been reset and models synchronized');
       } else {
-        // 使用普通同步，不尝试修改表结构
+        // Use normal sync, do not attempt to modify table structure
         await sequelize.sync();
-        logger.info('数据库模型已同步');
+        logger.info('Database models synchronized');
       }
     } else {
-      // 生产环境下也需要同步表结构
+      // Production environment also needs to sync table structure
       await sequelize.sync();
-      logger.info('生产环境: 数据库模型已同步');
+      logger.info('Production environment: Database models synchronized');
     }
   } catch (error) {
-    logger.error('数据库连接错误:', error);
+    logger.error('Database connection error:', error);
     process.exit(1);
   }
 };
 
-// 关闭数据库连接
+// Close database connection
 export const closeDB = async () => {
   try {
     await sequelize.close();
-    logger.info('数据库连接已关闭');
+    logger.info('Database connection closed');
   } catch (error) {
-    logger.error('关闭数据库连接时出错:', error);
+    logger.error('Error closing database connection:', error);
   }
 };
 
-// 导出Sequelize实例
+// Export Sequelize instance
 export default sequelize; 

@@ -21,14 +21,14 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
   let token: string | undefined;
 
   try {
-    logger.debug(`${req.method} ${req.path} - 检查认证头`, {
+    logger.debug(`${req.method} ${req.path} - Checking authentication header`, {
       hasAuth: !!req.headers.authorization
     });
 
-    // 从请求头获取令牌
+    // Get token from request headers
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       const authHeader = req.headers.authorization;
-      logger.debug('认证头', { 
+      logger.debug('Authentication header', {
         authHeader: authHeader.substring(0, 20) + '...',
         length: authHeader.length
       });
@@ -38,76 +38,76 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
         token = parts[1];
       }
 
-      // 验证token值不是字符串"undefined"或"null"
+      // Verify token value is not string "undefined" or "null"
       if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-        logger.warn('请求中的令牌为无效值', { token });
+        logger.warn('Received invalid token value:', { token });
         return res.status(401).json({
           success: false,
-          message: '未认证，请登录'
+          message: 'Invalid token value'
         });
       }
 
       try {
-        // 获取密钥
+        // Get secret key
         const secret = env.jwtSecret || 'fallback-secret-key-for-development';
         
-        logger.debug('正在验证令牌...', {
+        logger.debug('Starting token verification...', {
           tokenLength: token.length,
           tokenPrefix: token.substring(0, 10) + '...'
         });
         
-        // 解码令牌
+        // Decode token
         const decoded = jwt.verify(token, secret) as { id: string };
         
         if (!decoded || !decoded.id) {
-          logger.warn('令牌解码失败或缺少id字段');
+          logger.warn('Token decoding failed, no user ID');
           return res.status(401).json({
             success: false,
-            message: '无效令牌'
+            message: 'Invalid token format'
           });
         }
 
-        // 查找用户
+        // Find user
         const user = await User.findByPk(decoded.id);
         if (!user) {
-          logger.warn('找不到令牌对应的用户');
+          logger.warn('User not found for token');
           return res.status(401).json({
             success: false,
-            message: '无效用户'
+            message: 'User not found'
           });
         }
 
-        // 在请求对象上设置用户
+        // Set user on request object
         req.userId = user.id;
         req.user = user;
         
-        logger.debug('用户已认证', { userId: user.id });
+        logger.debug('User authentication successful:', { userId: user.id });
         next();
       } catch (error) {
-        logger.error('令牌验证失败', { error });
+        logger.error('Token verification failed', { error });
         return res.status(401).json({
           success: false,
-          message: '无效令牌'
+          message: 'Invalid token'
         });
       }
     } else {
-      logger.warn('请求中未找到Bearer令牌');
+      logger.warn('Authorization header missing or invalid');
       return res.status(401).json({
         success: false,
-        message: '未认证，请登录'
+        message: 'Authorization header missing or invalid'
       });
     }
   } catch (error) {
-    logger.error('认证中间件错误', { error });
+    logger.error('Authentication middleware error', { error });
     return res.status(500).json({
       success: false,
-      message: '服务器错误'
+      message: 'Server error'
     });
   }
 };
 
 /**
- * Optional Auth Middleware - 检查令牌但不要求认证
+ * Optional Auth Middleware - Check token but don't require authentication
  */
 export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
   let token;
@@ -116,17 +116,17 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     token = req.headers.authorization.split(' ')[1];
   }
 
-  // 如果没有令牌，继续但不设置用户
+  // If no token, continue but don't set user
   if (!token || token === 'undefined' || token === 'null') {
     return next();
   }
 
   try {
-    // 验证令牌
+    // Verify token
     const secret = env.jwtSecret || 'fallback-secret-key-for-development';
     const decoded = jwt.verify(token, secret) as { id: string };
 
-    // 获取用户
+    // Get user
     const user = await User.findByPk(decoded.id);
     if (user) {
       req.userId = user.id;
@@ -134,7 +134,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
 
     next();
   } catch (error) {
-    // 忽略错误，继续处理请求
+    // Ignore errors, continue processing request
     next();
   }
 }; 

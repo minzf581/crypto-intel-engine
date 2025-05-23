@@ -1,33 +1,29 @@
-import express from 'express';
+import { Router } from 'express';
 import authRoutes from './authRoutes';
 import userRoutes from './userRoutes';
 import assetRoutes from './assetRoutes';
 import signalRoutes from './signalRoutes';
 import notificationRoutes from './notificationRoutes';
 import dashboardRoutes from './dashboard';
-import analysisRoutes from './analysis';
 
-const router = express.Router();
+const router = Router();
 
-// 认证路由
+// Authentication routes
 router.use('/auth', authRoutes);
 
-// 用户路由
+// User routes
 router.use('/users', userRoutes);
 
-// 资产路由
+// Asset routes
 router.use('/assets', assetRoutes);
 
-// 信号路由
+// Signal routes
 router.use('/signals', signalRoutes);
 
-// 通知路由
+// Notification routes
 router.use('/notifications', notificationRoutes);
 
-// 仪表板路由
+// Dashboard routes
 router.use('/dashboard', dashboardRoutes);
-
-// Analysis routes - New comprehensive analysis endpoints
-router.use('/analysis', analysisRoutes);
 
 export default router; 

@@ -1,22 +1,16 @@
-import express from 'express';
-import { userController } from '../controllers';
+import { Router } from 'express';
 import { protect } from '../middlewares/auth';
+import { getCurrentUser, updateUserAssets } from '../controllers/userController';
 
-const router = express.Router();
+const router = Router();
 
-// 所有路由都需要认证
+// All routes require authentication
 router.use(protect);
 
-// 获取当前用户信息
-router.get('/me', userController.getCurrentUser);
+// Get current user information
+router.get('/me', getCurrentUser);
 
-// 获取用户选择的资产
-router.get('/assets', userController.getUserAssets);
-
-// 更新用户选择的资产
-router.post('/assets', userController.updateUserAssets);
-
-// 更新用户资料
-router.put('/profile', userController.updateUserProfile);
+// Update user preferences (selected assets)
+router.put('/preferences', updateUserAssets);
 
 export default router; 

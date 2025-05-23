@@ -6,17 +6,17 @@ import logger from '../utils/logger';
 const router = Router();
 
 /**
- * 获取仪表板数据
+ * Get dashboard data
  */
 router.get('/data', async (req, res) => {
   try {
-    // 获取所有资产
+    // Get all assets
     const assets = await Asset.findAll();
     
-    // 获取当前价格历史数据
+    // Get current price history data
     const priceHistory = priceService.getPriceHistory();
     
-    // 构建仪表板数据
+    // Build dashboard data
     const dashboardData = assets.map(asset => {
       const priceData = priceHistory[asset.symbol];
       
@@ -30,7 +30,7 @@ router.get('/data', async (req, res) => {
       };
     });
     
-    logger.info(`返回 ${dashboardData.length} 个资产的仪表板数据`);
+    logger.info(`Returning dashboard data for ${dashboardData.length} assets`);
     
     res.json({
       success: true,
@@ -42,32 +42,32 @@ router.get('/data', async (req, res) => {
     });
     
   } catch (error) {
-    logger.error('获取仪表板数据失败:', error);
+    logger.error('Failed to get dashboard data:', error);
     res.status(500).json({
       success: false,
-      message: '获取仪表板数据失败'
+      message: 'Failed to get dashboard data'
     });
   }
 });
 
 /**
- * 手动触发价格检查（仅用于测试）
+ * Manual trigger price check (only for testing)
  */
 router.post('/trigger-price-check', async (req, res) => {
   try {
-    logger.info('手动触发价格检查');
+    logger.info('Manual trigger price check');
     await priceService.triggerPriceCheck();
     
     res.json({
       success: true,
-      message: '价格检查已触发'
+      message: 'Price check triggered'
     });
     
   } catch (error) {
-    logger.error('手动触发价格检查失败:', error);
+    logger.error('Manual trigger price check failed:', error);
     res.status(500).json({
       success: false,
-      message: '触发价格检查失败'
+      message: 'Failed to trigger price check'
     });
   }
 });

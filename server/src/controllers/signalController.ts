@@ -3,26 +3,26 @@ import { Signal, Asset } from '../models';
 import { successResponse, errorResponse } from '../utils';
 import { Op } from 'sequelize';
 
-// 获取符合条件的信号
+// Get qualified signals
 export const getSignals = async (req: Request, res: Response) => {
   try {
     const { page = 1, assets, limit = 20 } = req.query;
     const pageNumber = parseInt(page as string);
     const limitNumber = parseInt(limit as string);
     
-    // 验证请求参数
+    // Validate request parameters
     if (isNaN(pageNumber) || pageNumber < 1) {
-      return errorResponse(res, '无效的页码', 400);
+      return errorResponse(res, 'Invalid page number', 400);
     }
     
     if (isNaN(limitNumber) || limitNumber < 1 || limitNumber > 50) {
-      return errorResponse(res, '无效的限制数量(必须在1-50之间)', 400);
+      return errorResponse(res, 'Invalid limit number (must be between 1-50)', 400);
     }
     
-    // 构建查询条件
+    // Build query conditions
     const whereClause: any = {};
     
-    // 如果指定了资产列表
+    // If asset list is specified
     if (assets) {
       const assetSymbols = (assets as string).split(',');
       
@@ -33,10 +33,10 @@ export const getSignals = async (req: Request, res: Response) => {
       }
     }
     
-    // 计算分页
+    // Calculate pagination
     const offset = (pageNumber - 1) * limitNumber;
     
-    // 获取信号
+    // Get signals
     const { count, rows: signals } = await Signal.findAndCountAll({
       where: whereClause,
       order: [['timestamp', 'DESC']],
@@ -44,7 +44,7 @@ export const getSignals = async (req: Request, res: Response) => {
       limit: limitNumber
     });
     
-    // 计算是否有更多数据
+    // Calculate if there is more data
     const hasMore = offset + signals.length < count;
     
     return successResponse(res, {
@@ -55,37 +55,37 @@ export const getSignals = async (req: Request, res: Response) => {
       hasMore
     });
   } catch (error) {
-    return errorResponse(res, '获取信号列表失败', 500, error);
+    return errorResponse(res, 'Failed to get signal list', 500, error);
   }
 };
 
-// 获取单个信号详情
+// Get single signal details
 export const getSignalById = async (req: Request, res: Response) => {
   try {
     const signal = await Signal.findByPk(req.params.id);
     
     if (!signal) {
-      return errorResponse(res, '未找到信号', 404);
+      return errorResponse(res, 'Signal not found', 404);
     }
     
     return successResponse(res, signal);
   } catch (error) {
-    return errorResponse(res, '获取信号详情失败', 500, error);
+    return errorResponse(res, 'Failed to get signal details', 500, error);
   }
 };
 
-// 创建新信号 (仅供内部或测试使用)
+// Create new signal (for internal or testing use only)
 export const createSignal = async (req: Request, res: Response) => {
   try {
     const { assetId, type, strength, description, sources } = req.body;
     
-    // 验证资产是否存在
+    // Validate if asset exists
     const asset = await Asset.findByPk(assetId);
     if (!asset) {
-      return errorResponse(res, '未找到资产', 404);
+      return errorResponse(res, 'Asset not found', 404);
     }
     
-    // 创建新信号
+    // Create new signal
     const signal = await Signal.create({
       assetId: asset.id,
       assetSymbol: asset.symbol,
@@ -98,8 +98,8 @@ export const createSignal = async (req: Request, res: Response) => {
       timestamp: new Date()
     });
     
-    return successResponse(res, signal, '信号创建成功', 201);
+    return successResponse(res, signal, 'Signal created successfully', 201);
   } catch (error) {
-    return errorResponse(res, '创建信号失败', 500, error);
+    return errorResponse(res, 'Failed to create signal', 500, error);
   }
 }; 
