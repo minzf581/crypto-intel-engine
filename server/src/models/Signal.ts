@@ -4,8 +4,12 @@ import { Asset } from './Asset';
 
 // 来源接口
 export interface Source {
-  platform: 'twitter' | 'reddit';
-  count: number;
+  platform: 'twitter' | 'reddit' | 'price';
+  count?: number;
+  priceChange?: number;  // 价格变化百分比
+  currentPrice?: number; // 当前价格
+  previousPrice?: number; // 之前价格
+  timeframe?: string;    // 价格变化的时间范围 (如 "1h", "24h")
 }
 
 // 信号接口
@@ -15,7 +19,7 @@ export interface SignalAttributes {
   assetSymbol: string;
   assetName: string;
   assetLogo: string;
-  type: 'sentiment' | 'narrative';
+  type: 'sentiment' | 'narrative' | 'price';
   strength: number;
   description: string;
   sources: Source[];
@@ -32,7 +36,7 @@ export class Signal extends Model<SignalAttributes, SignalCreationAttributes> {
   declare assetSymbol: string;
   declare assetName: string;
   declare assetLogo: string;
-  declare type: 'sentiment' | 'narrative';
+  declare type: 'sentiment' | 'narrative' | 'price';
   declare strength: number;
   declare description: string;
   declare sources: Source[];
@@ -72,7 +76,7 @@ Signal.init(
       defaultValue: '',
     },
     type: {
-      type: DataTypes.ENUM('sentiment', 'narrative'),
+      type: DataTypes.ENUM('sentiment', 'narrative', 'price'),
       allowNull: false,
     },
     strength: {

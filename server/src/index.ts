@@ -5,7 +5,10 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env, connectDB } from './config';
 import routes from './routes';
-import { setupSocketHandlers, initializeSignalGenerator } from './services';
+import { setupSocketHandlers } from './services/socket';
+import { initializeSignalGenerator } from './services/signalGenerator';
+import { initializePriceMonitor } from './services/priceService';
+import notificationService from './services/notificationService';
 import logger from './utils/logger';
 import { seedData } from './config/seedData';
 import { AddressInfo } from 'net';
@@ -110,6 +113,9 @@ app.get('/health', (req, res) => {
 // Set up Socket.IO
 setupSocketHandlers(io);
 
+// Set up notification service
+notificationService.setSocketIO(io);
+
 // Connect to the database and start the server
 connectDB()
   .then(async () => {
@@ -118,8 +124,14 @@ connectDB()
       await seedData();
     }
     
+    // Initialize model associations
+    initializeAssociations();
+    
     // Start signal generator service
     initializeSignalGenerator(io);
+    
+    // Start price monitoring service
+    initializePriceMonitor(io);
     
     // Start the server
     const PORT = parseInt(env.port as string) || 5001;

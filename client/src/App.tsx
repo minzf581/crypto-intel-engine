@@ -9,6 +9,11 @@ import OnboardingPage from './pages/OnboardingPage';
 import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useEffect } from 'react';
+import { AuthProvider } from './context/AuthContext';
+import { AssetProvider } from './context/AssetContext';
+import { SignalProvider } from './context/SignalContext';
+import { SocketProvider } from './context/SocketContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -66,56 +71,70 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-function App() {
+const App = () => {
   return (
-    <Routes>
-      {/* Auth routes */}
-      <Route path="/" element={<AuthLayout />}>
-        <Route index element={<Navigate to="/login" replace />} />
-        <Route 
-          path="login" 
-          element={
-            <AuthRoute>
-              <LoginPage />
-            </AuthRoute>
-          } 
-        />
-        <Route 
-          path="register" 
-          element={
-            <AuthRoute>
-              <RegisterPage />
-            </AuthRoute>
-          } 
-        />
-      </Route>
+    <AuthProvider>
+      <SocketProvider>
+        <AssetProvider>
+          <SignalProvider>
+            <NotificationProvider>
+              <Routes>
+                {/* Auth routes */}
+                <Route path="/" element={<AuthLayout />}>
+                  <Route index element={<Navigate to="/login" replace />} />
+                  <Route 
+                    path="login" 
+                    element={
+                      <AuthRoute>
+                        <AuthLayout>
+                          <LoginPage />
+                        </AuthLayout>
+                      </AuthRoute>
+                    } 
+                  />
+                  <Route 
+                    path="register" 
+                    element={
+                      <AuthRoute>
+                        <AuthLayout>
+                          <RegisterPage />
+                        </AuthLayout>
+                      </AuthRoute>
+                    } 
+                  />
+                </Route>
 
-      {/* Onboarding route */}
-      <Route 
-        path="/onboarding" 
-        element={
-          <ProtectedRoute>
-            <OnboardingPage />
-          </ProtectedRoute>
-        } 
-      />
+                {/* Onboarding route */}
+                <Route 
+                  path="/onboarding" 
+                  element={
+                    <ProtectedRoute>
+                      <OnboardingPage />
+                    </ProtectedRoute>
+                  } 
+                />
 
-      {/* Dashboard routes */}
-      <Route 
-        path="/" 
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
+                {/* Dashboard routes */}
+                <Route 
+                  path="/" 
+                  element={
+                    <ProtectedRoute>
+                      <DashboardLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="dashboard" element={<DashboardPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                </Route>
 
-      {/* 404 page */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+                {/* 404 page */}
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </NotificationProvider>
+          </SignalProvider>
+        </AssetProvider>
+      </SocketProvider>
+    </AuthProvider>
   );
 }
 

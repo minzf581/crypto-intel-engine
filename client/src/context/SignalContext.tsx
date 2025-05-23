@@ -5,8 +5,12 @@ import { useAuth } from './AuthContext';
 import { useAssets, Asset } from './AssetContext';
 
 export interface Source {
-  platform: 'twitter' | 'reddit';
-  count: number;
+  platform: 'twitter' | 'reddit' | 'price';
+  count?: number;
+  priceChange?: number;
+  currentPrice?: number;
+  previousPrice?: number;
+  timeframe?: string;
 }
 
 export interface Signal {
@@ -15,7 +19,7 @@ export interface Signal {
   assetSymbol: string;
   assetName: string;
   assetLogo: string;
-  type: 'sentiment' | 'narrative';
+  type: 'sentiment' | 'narrative' | 'price';
   strength: number;
   description: string;
   timestamp: string;
@@ -24,9 +28,9 @@ export interface Signal {
 
 export interface SignalFilter {
   timeRange: 'hour' | 'today' | 'yesterday' | 'all';
-  types: ('sentiment' | 'narrative')[];
+  types: ('sentiment' | 'narrative' | 'price')[];
   minStrength: number;
-  sources: ('twitter' | 'reddit')[];
+  sources: ('twitter' | 'reddit' | 'price')[];
   sortBy: 'latest' | 'strength';
 }
 
@@ -56,9 +60,9 @@ export const useSignals = () => {
 // Default filters
 const DEFAULT_FILTERS: SignalFilter = {
   timeRange: 'all',
-  types: ['sentiment', 'narrative'],
+  types: ['sentiment', 'narrative', 'price'],
   minStrength: 0,
-  sources: ['twitter', 'reddit'],
+  sources: ['twitter', 'reddit', 'price'],
   sortBy: 'latest'
 };
 
