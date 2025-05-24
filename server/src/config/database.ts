@@ -45,7 +45,8 @@ export const connectDatabase = async () => {
 // Sync database models
 export const syncModels = async () => {
   try {
-    await sequelize.sync({ force: false, alter: false });
+    // Use alter: true to allow adding new columns like coingeckoId
+    await sequelize.sync({ force: false, alter: true });
     logger.info('Database models synchronized');
   } catch (error) {
     logger.error('Model synchronization failed:', error);

@@ -3,22 +3,12 @@ import { Asset, Signal } from '../models';
 import logger from '../utils/logger';
 import notificationService from './notificationService';
 import { calculateStrength } from '../utils/signalUtils';
+import coinGeckoService from './coinGeckoService';
 
 // CoinGecko API configuration
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
 const PRICE_UPDATE_INTERVAL = 60000; // Update every 1 minute
 const PRICE_CHANGE_THRESHOLD = 2; // 2% change threshold (lowered from 5% to generate more signals)
-
-// Cryptocurrency ID mapping (IDs used by CoinGecko API)
-const COIN_ID_MAP: Record<string, string> = {
-  'BTC': 'bitcoin',
-  'ETH': 'ethereum', 
-  'BNB': 'binancecoin',
-  'SOL': 'solana',
-  'ADA': 'cardano',
-  'DOT': 'polkadot',
-  'DOGE': 'dogecoin'
-};
 
 // Price data interface
 interface PriceData {
@@ -36,22 +26,75 @@ class PriceService {
   private intervalId: NodeJS.Timeout | null = null;
 
   /**
+   * Auto-resolve missing CoinGecko IDs for assets
+   */
+  private async autoResolveMissingCoinIds(): Promise<void> {
+    try {
+      const { Op } = require('sequelize');
+      const assets = await Asset.findAll({
+        where: {
+          [Op.or]: [
+            { coingeckoId: { [Op.is]: null } },
+            { coingeckoId: '' }
+          ]
+        }
+      });
+
+      logger.info(`Found ${assets.length} assets without CoinGecko IDs, attempting to resolve...`);
+
+      for (const asset of assets) {
+        const coinId = await coinGeckoService.autoResolveCoinId(asset.symbol, asset.name);
+        
+        if (coinId) {
+          await asset.update({ coingeckoId: coinId });
+          logger.info(`✅ Resolved CoinGecko ID for ${asset.symbol}: ${coinId}`);
+        } else {
+          logger.warn(`❌ Could not resolve CoinGecko ID for ${asset.symbol}`);
+        }
+      }
+
+    } catch (error: any) {
+      logger.error('Failed to auto-resolve CoinGecko IDs:', error);
+    }
+  }
+
+  /**
    * Get cryptocurrency real-time prices
    */
   async fetchRealPrices(): Promise<PriceData[]> {
     try {
-      const assets = await Asset.findAll();
+      // First, try to resolve any missing CoinGecko IDs
+      await this.autoResolveMissingCoinIds();
+
+      // Get assets with valid CoinGecko IDs
+      const { Op } = require('sequelize');
+      const assets = await Asset.findAll({
+        where: {
+          coingeckoId: {
+            [Op.and]: [
+              { [Op.not]: null },
+              { [Op.ne]: '' }
+            ]
+          }
+        }
+      });
+
+      if (assets.length === 0) {
+        logger.warn('No assets with valid CoinGecko IDs found');
+        return [];
+      }
+
       const coinIds = assets
-        .map(asset => COIN_ID_MAP[asset.symbol])
+        .map(asset => asset.coingeckoId)
         .filter(Boolean)
         .join(',');
 
       if (!coinIds) {
-        logger.warn('No supported cryptocurrency IDs found');
+        logger.warn('No valid CoinGecko IDs found');
         return [];
       }
 
-      logger.info(`Fetching price data: ${coinIds}`);
+      logger.info(`Fetching price data for: ${coinIds}`);
 
       const response = await axios.get(
         `${COINGECKO_API_BASE}/simple/price`,
@@ -68,11 +111,11 @@ class PriceService {
 
       // Convert response data to PriceData array
       const priceData: PriceData[] = assets.map(asset => {
-        const coinId = COIN_ID_MAP[asset.symbol];
-        const coinData = response.data[coinId];
+        const coinId = asset.coingeckoId;
+        const coinData = response.data[coinId!];
 
         if (!coinData) {
-          logger.warn(`Price data not found for ${asset.symbol}`);
+          logger.warn(`Price data not found for ${asset.symbol} (CoinGecko ID: ${coinId})`);
           return null;
         }
 

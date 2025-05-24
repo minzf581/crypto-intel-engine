@@ -7,6 +7,7 @@ export interface AssetAttributes {
   symbol: string;
   name: string;
   logo: string;
+  coingeckoId?: string; // CoinGecko API ID for price data
 }
 
 // Asset interface (for creation)
@@ -18,6 +19,7 @@ export class Asset extends Model<AssetAttributes, AssetCreationAttributes> {
   declare symbol: string;
   declare name: string;
   declare logo: string;
+  declare coingeckoId?: string;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -42,6 +44,11 @@ Asset.init(
     logo: {
       type: DataTypes.STRING,
       defaultValue: '',
+    },
+    coingeckoId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'CoinGecko API ID for fetching price data'
     },
   },
   {
