@@ -1,62 +1,78 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { 
+  detectFrontendEnvironment, 
+  getAxiosConfig, 
+  isInternalApiCall, 
+  logFrontendEnvironmentInfo 
+} from '../utils/environment';
 
-// Configure axios defaults - ensure correct backend endpoint
-let API_URL = import.meta.env.VITE_API_URL || '';
-
-// If environment variable is not defined, try to infer API URL
-if (!API_URL) {
-  // In production environment, infer API URL from current domain
-  if (window.location.hostname.includes('railway.app')) {
-    // Assume backend is also deployed on Railway, but with different subdomain
-    API_URL = 'https://crypto-demo.up.railway.app';
-  } else {
-    // Local development environment
-    API_URL = 'http://localhost:5001';
-  }
+// Log environment configuration for debugging
+try {
+  logFrontendEnvironmentInfo();
+} catch (error) {
+  console.error('Error logging environment info:', error);
 }
 
-console.log('Using API address:', API_URL);
-axios.defaults.baseURL = API_URL;
-// Disable withCredentials to fix CORS issues
-axios.defaults.withCredentials = false;
-axios.defaults.timeout = 10000; // 10 seconds timeout
+// Configure axios with environment-aware settings
+try {
+  const axiosConfig = getAxiosConfig();
+  if (axiosConfig && typeof axiosConfig === 'object') {
+    Object.assign(axios.defaults, axiosConfig);
+    console.log('Axios configured successfully with:', axiosConfig);
+  } else {
+    console.warn('Invalid axios config, using fallback configuration');
+    axios.defaults.baseURL = 'http://localhost:5001';
+    axios.defaults.timeout = 15000;
+    axios.defaults.withCredentials = false;
+  }
+} catch (error) {
+  console.error('Error configuring axios:', error);
+  // Fallback configuration
+  axios.defaults.baseURL = 'http://localhost:5001';
+  axios.defaults.timeout = 15000;
+  axios.defaults.withCredentials = false;
+}
 
 // Add request interceptor
 axios.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    
-    // Only add auth header for internal API calls (our backend)
-    const isInternalAPI = config.url && (
-      config.url.startsWith('/api/') || 
-      config.url.startsWith('http://localhost:5001/') ||
-      config.url.includes('localhost:5001')
-    );
-    
-    if (isInternalAPI) {
-      // Ensure token is valid
-      if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
-        config.headers.Authorization = `Bearer ${token}`;
-        // Debug information
-        console.log('Request added auth header:', { 
-          url: config.url,
-          authHeaderLength: `Bearer ${token}`.length,
-          tokenPrefix: token.substring(0, 10) + '...'
-        });
-      } else {
-        // If token is invalid, remove auth header
-        delete config.headers.Authorization;
-        console.log('Request without auth header - token invalid', { url: config.url });
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Ensure config.headers exists
+      if (!config.headers) {
+        config.headers = {};
       }
-    } else {
-      // For external APIs, don't add auth header
-      delete config.headers.Authorization;
-      console.log('External API request (no auth header):', { url: config.url });
+      
+      // Only add auth header for internal API calls (our backend)
+      if (isInternalApiCall(config.url)) {
+        // Ensure token is valid
+        if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
+          config.headers.Authorization = `Bearer ${token}`;
+          // Debug information
+          console.log('Request added auth header:', { 
+            url: config.url,
+            authHeaderLength: `Bearer ${token}`.length,
+            tokenPrefix: token.substring(0, 10) + '...'
+          });
+        } else {
+          // If token is invalid, remove auth header
+          delete config.headers.Authorization;
+          console.log('Request without auth header - token invalid', { url: config.url });
+        }
+      } else {
+        // For external APIs, don't add auth header
+        delete config.headers.Authorization;
+        console.log('External API request (no auth header):', { url: config.url });
+      }
+      
+      return config;
+    } catch (error) {
+      console.error('Error in request interceptor:', error);
+      return config;
     }
-    
-    return config;
   },
   (error) => {
     return Promise.reject(error);
@@ -70,7 +86,13 @@ axios.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       console.error('Received 401 unauthorized response, clearing token');
       localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
+      try {
+        if (axios.defaults.headers?.common) {
+          delete axios.defaults.headers.common['Authorization'];
+        }
+      } catch (e) {
+        console.warn('Could not clear auth header on 401:', e);
+      }
     }
     return Promise.reject(error);
   }
@@ -133,8 +155,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           console.log('Found token in localStorage, length:', token.length);
           
-          // Set auth header
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          // Set auth header safely
+          try {
+            if (!axios.defaults.headers) {
+              axios.defaults.headers = {};
+            }
+            if (!axios.defaults.headers.common) {
+              axios.defaults.headers.common = {};
+            }
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          } catch (headerError) {
+            console.warn('Could not set auth header in useEffect:', headerError);
+          }
           
           // Get current user info
           console.log('Getting current user info...');
@@ -150,7 +182,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error: any) {
           console.error('Authentication token verification error:', error);
           localStorage.removeItem('token');
-          delete axios.defaults.headers.common['Authorization'];
+          try {
+            if (axios.defaults.headers?.common) {
+              delete axios.defaults.headers.common['Authorization'];
+            }
+          } catch (e) {
+            console.warn('Could not clear auth header in useEffect:', e);
+          }
           setUser(null);
         }
       }
@@ -168,7 +206,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Clear old auth state
       localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
+      // Safely clear auth header
+      try {
+        if (axios.defaults.headers?.common) {
+          delete axios.defaults.headers.common['Authorization'];
+        }
+      } catch (e) {
+        console.warn('Could not clear auth header:', e);
+      }
       
       // Try multiple login approaches to avoid CORS issues
       let userData;
@@ -180,39 +225,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Login attempt 1: Using axios');
         response = await axios.post('/api/auth/login', { email, password });
         
-        if (response.data && response.data.data) {
+        if (response && response.data && response.data.data) {
           userData = response.data.data.user;
           token = response.data.data.token;
         }
       } catch (axiosError) {
-        console.log('Axios login failed, trying alternative method');
+        console.log('Axios login failed, trying alternative method', axiosError);
         
         // Second try: Direct fetch without credentials
-        const loginUrl = `${API_URL}/api/auth/login`;
+        // Safely get baseURL
+        const baseURL = axios.defaults.baseURL || 'http://localhost:5001';
+        const loginUrl = `${baseURL}/api/auth/login`;
         console.log('Login attempt 2: Using fetch to', loginUrl);
         
-        const fetchResponse = await fetch(loginUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email, password }),
-          // Don't include credentials to avoid CORS issues
-          credentials: 'omit'
-        });
-        
-        if (!fetchResponse.ok) {
-          throw new Error(`Login request failed: ${fetchResponse.status} ${fetchResponse.statusText}`);
-        }
-        
-        const data = await fetchResponse.json();
-        console.log('Login fetch response:', data);
-        
-        if (data && data.data) {
-          userData = data.data.user;
-          token = data.data.token;
-        } else {
-          throw new Error('Server response format error');
+        try {
+          const fetchResponse = await fetch(loginUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+            // Don't include credentials to avoid CORS issues
+            credentials: 'omit'
+          });
+          
+          if (!fetchResponse.ok) {
+            throw new Error(`Login request failed: ${fetchResponse.status} ${fetchResponse.statusText}`);
+          }
+          
+          const data = await fetchResponse.json();
+          console.log('Login fetch response:', data);
+          
+          if (data && data.data) {
+            userData = data.data.user;
+            token = data.data.token;
+          } else {
+            throw new Error('Server response format error');
+          }
+        } catch (fetchError) {
+          console.error('Fetch login also failed:', fetchError);
+          throw fetchError;
         }
       }
       
@@ -255,9 +307,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Cannot save token: ' + (storageError as Error).message);
       }
       
-      // Set axios default auth header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      console.log('Set axios global auth header');
+      // Set axios default auth header safely
+      try {
+        // Ensure axios.defaults.headers exists
+        if (!axios.defaults.headers) {
+          axios.defaults.headers = {};
+        }
+        if (!axios.defaults.headers.common) {
+          axios.defaults.headers.common = {};
+        }
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('Set axios global auth header');
+      } catch (headerError) {
+        console.error('Could not set auth header:', headerError);
+        // Continue without setting header - request interceptor will handle it
+      }
       
       // Update user state
       setUser(userData);
@@ -267,7 +331,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Login error:', error);
       localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
+      try {
+        if (axios.defaults.headers?.common) {
+          delete axios.defaults.headers.common['Authorization'];
+        }
+      } catch (e) {
+        console.warn('Could not clear auth header on error:', e);
+      }
       throw error;
     }
   };

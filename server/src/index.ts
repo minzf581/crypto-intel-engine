@@ -15,18 +15,16 @@ import { seedData } from './config/seedData';
 import { AddressInfo } from 'net';
 import path from 'path';
 import fs from 'fs';
+import { getCorsConfig, logEnvironmentInfo, detectEnvironment } from './utils/environment';
 
 const app = express();
 const server = http.createServer(app);
 
-// Configure CORS
-const corsOptions = {
-  origin: [env.clientUrl, 'http://localhost:3000'],
-  credentials: true, // Enable credentials to support WebSocket authentication
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200
-};
+// Log environment configuration for debugging
+logEnvironmentInfo();
+
+// Get environment-aware CORS configuration
+const corsOptions = getCorsConfig();
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
@@ -35,10 +33,19 @@ app.use(cookieParser());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  const environment = detectEnvironment();
   res.json({ 
     status: 'OK', 
     uptime: process.uptime(),
-    env: env.nodeEnv
+    env: env.nodeEnv,
+    environment: {
+      isRailway: environment.isRailway,
+      isProduction: environment.isProduction,
+      isLocal: environment.isLocal,
+      frontendUrl: environment.frontendUrl,
+      backendUrl: environment.backendUrl
+    },
+    timestamp: new Date().toISOString()
   });
 });
 
