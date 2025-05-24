@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { successResponse, errorResponse } from '../utils';
 import notificationService from '../services/notificationService';
 import { Notification, AlertSetting } from '../models';
+// import NotificationService from '../services/NotificationService'; // Using default export instead
+import logger from '../utils/logger';
 
 /**
  * Get user's notification list
@@ -293,6 +295,213 @@ export const deleteAlertSetting = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Get notification history
+ */
+async function getHistory(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const type = req.query.type as string;
+    const priority = req.query.priority as string;
+
+    const result = await notificationService.getNotificationHistory(
+      userId,
+      page,
+      limit,
+      type,
+      priority
+    );
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to get notification history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Get grouped notifications
+ */
+async function getGrouped(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const groups = await notificationService.getGroupedNotifications(userId);
+    res.json(groups);
+  } catch (error) {
+    logger.error('Failed to get grouped notifications:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Mark notification as read
+ */
+async function markAsRead(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const { notificationId } = req.params;
+    const success = await notificationService.markAsRead(notificationId, userId);
+
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Notification not found' });
+    }
+  } catch (error) {
+    logger.error('Failed to mark notification as read:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Mark group as read
+ */
+async function markGroupAsRead(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const { groupId } = req.params;
+    const count = await notificationService.markGroupAsRead(groupId, userId);
+
+    res.json({ success: true, markedCount: count });
+  } catch (error) {
+    logger.error('Failed to mark group as read:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Archive notification
+ */
+async function archive(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const { notificationId } = req.params;
+    const success = await notificationService.archiveNotification(notificationId, userId);
+
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Notification not found' });
+    }
+  } catch (error) {
+    logger.error('Failed to archive notification:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Get unread count
+ */
+async function getUnreadCount(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const count = await notificationService.getUnreadCount(userId);
+    res.json({ count });
+  } catch (error) {
+    logger.error('Failed to get unread count:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Update notification settings
+ */
+async function updateSettings(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const settings = await notificationService.updateNotificationSettings(userId, req.body);
+    res.json(settings);
+  } catch (error) {
+    logger.error('Failed to update notification settings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Create a test notification
+ */
+async function createTest(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const { title, message, type, priority, fcmToken } = req.body;
+
+    const notification = await notificationService.createNotification(
+      userId,
+      title || 'Test Notification',
+      message || 'This is a test notification',
+      type || 'system',
+      priority || 'medium',
+      { test: true },
+      fcmToken
+    );
+
+    res.json(notification);
+  } catch (error) {
+    logger.error('Failed to create test notification:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Register FCM token
+ */
+async function registerFCMToken(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const { fcmToken } = req.body;
+    if (!fcmToken) {
+      return res.status(400).json({ error: 'FCM token is required' });
+    }
+
+    // Store FCM token in user settings or separate table
+    // For now, we'll just acknowledge receipt
+    logger.info(`FCM token registered for user ${userId}: ${fcmToken}`);
+    
+    res.json({ success: true, message: 'FCM token registered successfully' });
+  } catch (error) {
+    logger.error('Failed to register FCM token:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 export default {
   getUserNotifications,
   getUnreadNotificationsCount,
@@ -300,5 +509,14 @@ export default {
   markAllNotificationsAsRead,
   getAlertSettings,
   updateAlertSettings,
-  deleteAlertSetting
+  deleteAlertSetting,
+  getHistory,
+  getGrouped,
+  markAsRead,
+  markGroupAsRead,
+  archive,
+  getUnreadCount,
+  updateSettings,
+  createTest,
+  registerFCMToken
 }; 

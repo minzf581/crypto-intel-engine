@@ -12,6 +12,10 @@ import notificationService from './services/notificationService';
 import { initializeAssociations } from './models';
 import logger from './utils/logger';
 import { seedData } from './config/seedData';
+import { initializeFirebase } from './config/firebase';
+import cron from 'node-cron';
+import { VolumeAnalysisService } from './services/VolumeAnalysisService';
+import { NewsAnalysisService } from './services/NewsAnalysisService';
 import { AddressInfo } from 'net';
 import path from 'path';
 import fs from 'fs';
@@ -90,6 +94,59 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
+// Enhanced services initialization
+const initializeEnhancedServices = () => {
+  logger.info('Starting enhanced services initialization...');
+  
+  // Schedule volume analysis every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const volumeService = VolumeAnalysisService.getInstance();
+      const symbols = ['BTC', 'ETH', 'ADA', 'SOL', 'DOT', 'LINK', 'MATIC', 'AVAX'];
+      
+      logger.info('Running scheduled volume analysis...');
+      await volumeService.analyzeMultipleSymbols(symbols);
+      logger.info('Volume analysis completed');
+    } catch (error) {
+      logger.error('Scheduled volume analysis failed:', error);
+    }
+  });
+
+  // Schedule news analysis every 15 minutes
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const newsService = NewsAnalysisService.getInstance();
+      
+      logger.info('Running scheduled news analysis...');
+      await newsService.fetchAndAnalyzeNews();
+      logger.info('News analysis completed');
+    } catch (error) {
+      logger.error('Scheduled news analysis failed:', error);
+    }
+  });
+
+  // Schedule anomaly detection every hour
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const volumeService = VolumeAnalysisService.getInstance();
+      const symbols = ['BTC', 'ETH', 'ADA', 'SOL'];
+      
+      logger.info('Running anomaly detection...');
+      for (const symbol of symbols) {
+        const anomaly = await volumeService.detectVolumeAnomalies(symbol);
+        if (anomaly.isAnomaly) {
+          logger.warn(`Volume anomaly detected for ${symbol}: ${anomaly.reason}`);
+        }
+      }
+      logger.info('Anomaly detection completed');
+    } catch (error) {
+      logger.error('Anomaly detection failed:', error);
+    }
+  });
+
+  logger.info('Enhanced services cron jobs scheduled');
+};
+
 // Server initialization
 const initializeServer = async () => {
   try {
@@ -108,11 +165,17 @@ const initializeServer = async () => {
     // Initialize services
     logger.info('Initializing services...');
     
+    // Initialize Firebase for push notifications
+    initializeFirebase();
+    
     // Initialize real signal generator (now only logs status, does not generate simulated signals)
     initializeSignalGenerator();
     
     // Initialize price monitoring service (real data)
     initializePriceMonitor();
+    
+    // Initialize enhanced services
+    initializeEnhancedServices();
     
     logger.info('All services initialized');
     

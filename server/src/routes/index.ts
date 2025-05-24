@@ -4,6 +4,7 @@ import userRoutes from './userRoutes';
 import assetRoutes from './assetRoutes';
 import signalRoutes from './signalRoutes';
 import notificationRoutes from './notificationRoutes';
+import notificationEnhancedRoutes from './notificationEnhanced';
 import dashboardRoutes from './dashboard';
 import analysisRoutes from './analysisRoutes';
 
@@ -23,6 +24,9 @@ router.use('/signals', signalRoutes);
 
 // Notification routes
 router.use('/notifications', notificationRoutes);
+
+// Enhanced notification routes
+router.use('/notifications-enhanced', notificationEnhancedRoutes);
 
 // Dashboard routes
 router.use('/dashboard', dashboardRoutes);

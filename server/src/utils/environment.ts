@@ -102,10 +102,10 @@ export function getCorsConfig() {
       const isAllowed = env.allowedOrigins.some((allowedOrigin) => {
         if (typeof allowedOrigin === 'string') {
           return allowedOrigin === origin;
-        } else {
-          // allowedOrigin is a RegExp
+        } else if (allowedOrigin instanceof RegExp) {
           return allowedOrigin.test(origin);
         }
+        return false;
       });
       
       if (isAllowed) {

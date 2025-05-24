@@ -2,12 +2,19 @@ import { Signal, User, Asset, Notification, AlertSetting } from '../models';
 import { Server as SocketIOServer } from 'socket.io';
 import { isSignificantStrengthShift, getSignalStrengthLevel } from '../utils/signalUtils';
 import logger from '../utils/logger';
+import { getMessaging } from '../config/firebase';
+import { NotificationHistory } from '../models/NotificationHistory';
+import { NotificationSettings } from '../models/NotificationSettings';
+import { PushNotificationPayload, NotificationGroup, QuickAction } from '../types/notification';
+import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
 
 /**
  * Notification Service
  */
 class NotificationService {
   private io: SocketIOServer | null = null;
+  private messaging = getMessaging();
   
   /**
    * Set Socket.IO instance
@@ -51,65 +58,11 @@ class NotificationService {
   }
   
   /**
-   * Create new notification for user
-   * @param userId User ID
-   * @param signal Signal
-   * @param alertSetting Alert setting that triggered notification
-   * @returns Created notification
-   */
-  private async createNotification(userId: string, signal: any, alertSetting: AlertSetting) {
-    try {
-      // Build notification title and message
-      let title = '';
-      let message = '';
-      
-      switch (signal.type) {
-        case 'sentiment':
-          title = `${signal.assetSymbol} ${getSignalStrengthLevel(signal.strength)} sentiment change`;
-          message = `${signal.description}`;
-          break;
-        
-        case 'narrative':
-          title = `${signal.assetSymbol} ${getSignalStrengthLevel(signal.strength)} narrative change`;
-          message = `${signal.description}`;
-          break;
-        
-        case 'price':
-          const priceSource = signal.sources.find((s: any) => s.platform === 'price');
-          const priceChange = priceSource?.priceChange || 0;
-          const direction = priceChange >= 0 ? 'increase' : 'decrease';
-          
-          title = `${signal.assetSymbol} price ${direction} alert`;
-          message = `${signal.description}`;
-          break;
-      }
-      
-      // Create notification
-      const notification = await Notification.create({
-        userId,
-        assetId: signal.assetId,
-        assetSymbol: signal.assetSymbol,
-        type: signal.type === 'price' ? 'alert' : 'signal',
-        title,
-        message,
-        read: false,
-        data: { signal, triggerThreshold: signal.type === 'price' ? alertSetting.priceChangeThreshold : alertSetting.sentimentThreshold },
-        timestamp: new Date()
-      });
-      
-      return notification;
-    } catch (error) {
-      logger.error('Failed to create notification:', error);
-      return null;
-    }
-  }
-  
-  /**
    * Send notification to user's WebSocket connection
    * @param userId User ID
    * @param notification Notification object
    */
-  private sendNotificationToUserSocket(userId: string, notification: any) {
+  private sendNotificationToUserSocket(userId: string, notification: NotificationHistory) {
     // Skip if Socket.IO is not initialized
     if (!this.io) {
       logger.warn('Cannot send real-time notification: Socket.IO not initialized');
@@ -131,7 +84,77 @@ class NotificationService {
       socket.emit('notification', notification);
     });
   }
-  
+
+  /**
+   * Create new notification for user
+   * @param userId User ID
+   * @param title Notification title
+   * @param message Notification message
+   * @param type Notification type
+   * @param priority Notification priority
+   * @param data Additional data
+   * @param fcmToken FCM token for push notifications
+   * @param quickActions Quick actions for the notification
+   * @returns Created notification
+   */
+  async createNotification(
+    userId: string,
+    title: string,
+    message: string,
+    type: 'price_alert' | 'signal' | 'news' | 'system',
+    priority: 'low' | 'medium' | 'high' | 'critical',
+    data?: any,
+    fcmToken?: string,
+    quickActions?: QuickAction[]
+  ): Promise<NotificationHistory | null> {
+    try {
+      const settings = await NotificationSettings.findOne({ where: { userId } });
+      
+      let groupId: string | undefined;
+      if (settings?.groupingEnabled) {
+        groupId = await this.getOrCreateGroupId(userId, type, title);
+      }
+
+      const notification = await NotificationHistory.create({
+        id: uuidv4(),
+        userId,
+        title,
+        message,
+        type,
+        priority,
+        data,
+        fcmToken,
+        sentAt: new Date(),
+        groupId,
+        quickActions,
+        read: false,
+        archived: false,
+      });
+
+      // Send push notification if FCM token is provided
+      if (fcmToken && settings?.pushEnabled) {
+        await this.sendPushNotification(userId, fcmToken, {
+          title,
+          body: message,
+          data,
+          actions: quickActions?.map(action => ({
+            action: action.action,
+            title: action.label,
+            icon: action.icon,
+          })),
+        });
+      }
+
+      // Send real-time notification
+      this.sendNotificationToUserSocket(userId, notification);
+
+      return notification;
+    } catch (error) {
+      logger.error('Failed to create notification:', error);
+      return null;
+    }
+  }
+
   /**
    * Process new signal and check if notifications need to be sent
    * @param signal New signal
@@ -189,143 +212,381 @@ class NotificationService {
           alertSettings = [{
             id: 'default',
             userId: user.id,
-            isGlobal: true,
-            sentimentThreshold: 20,
-            priceChangeThreshold: 5.0,
-            enableSentimentAlerts: true,
+            assetSymbol: signal.assetSymbol,
+            isGlobal: false,
             enablePriceAlerts: true,
+            enableSentimentAlerts: true,
             enableNarrativeAlerts: true,
-            alertFrequency: 'immediate',
-            emailNotifications: false,
-            pushNotifications: true
+            priceChangeThreshold: 5,
+            sentimentThreshold: 70,
+            createdAt: new Date(),
+            updatedAt: new Date()
           } as any];
         }
         
         // 2.4. Check each alert setting
         for (const alertSetting of alertSettings) {
-          // 2.4.1. Check if alert should be triggered
           if (this.shouldTriggerAlert(signal, alertSetting)) {
-            // 2.4.2. Create new notification
-            const notification = await this.createNotification(user.id, signal, alertSetting);
+            // Build notification title and message
+            let title = '';
+            let message = '';
             
-            if (notification) {
-              // 2.4.3. Send real-time notification
-              this.sendNotificationToUserSocket(user.id, notification);
+            switch (signal.type) {
+              case 'sentiment':
+                title = `${signal.assetSymbol} ${getSignalStrengthLevel(signal.strength)} sentiment change`;
+                message = `${signal.description}`;
+                break;
               
-              logger.info(`Created new notification for user ${user.id}: ${notification.title}`);
+              case 'narrative':
+                title = `${signal.assetSymbol} ${getSignalStrengthLevel(signal.strength)} narrative change`;
+                message = `${signal.description}`;
+                break;
+              
+              case 'price':
+                const priceSource = signal.sources.find((s: any) => s.platform === 'price');
+                const priceChange = priceSource?.priceChange || 0;
+                const direction = priceChange >= 0 ? 'increase' : 'decrease';
+                
+                title = `${signal.assetSymbol} price ${direction} alert`;
+                message = `${signal.description}`;
+                break;
             }
+            
+            // Create notification using the new method
+            await this.createNotification(
+              user.id,
+              title,
+              message,
+              signal.type === 'price' ? 'price_alert' : 'signal',
+              'medium',
+              { signal, triggerThreshold: signal.type === 'price' ? alertSetting.priceChangeThreshold : alertSetting.sentimentThreshold }
+            );
+            
+            logger.info(`Notification sent to user ${user.id} for ${signal.assetSymbol} ${signal.type} signal`);
           }
         }
       }
     } catch (error) {
-      logger.error('Failed to process signal notification:', error);
+      logger.error('Failed to process new signal for notifications:', error);
     }
   }
-  
+
   /**
-   * processSignal method alias, compatible with new price service
+   * Send push notification via Firebase
+   */
+  async sendPushNotification(
+    userId: string,
+    fcmToken: string,
+    payload: PushNotificationPayload
+  ): Promise<boolean> {
+    try {
+      if (!this.messaging) {
+        logger.warn('Firebase messaging not initialized. Skipping push notification.');
+        return false;
+      }
+
+      const settings = await NotificationSettings.findOne({ where: { userId } });
+      if (!settings?.pushEnabled) {
+        logger.info(`Push notifications disabled for user ${userId}`);
+        return false;
+      }
+
+      // Check rate limiting
+      const isRateLimited = await this.checkRateLimit(userId, settings.maxPerHour);
+      if (isRateLimited) {
+        logger.warn(`Rate limit exceeded for user ${userId}`);
+        return false;
+      }
+
+      const message = {
+        token: fcmToken,
+        notification: {
+          title: payload.title,
+          body: payload.body,
+          imageUrl: payload.icon,
+        },
+        data: payload.data ? Object.fromEntries(
+          Object.entries(payload.data).map(([key, value]) => [key, String(value)])
+        ) : {},
+        android: {
+          notification: {
+            sound: settings.soundEnabled ? (settings.soundType || 'default') : undefined,
+            priority: this.mapPriorityToAndroid(settings.priority),
+            channelId: 'crypto_signals',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: settings.soundEnabled ? `${settings.soundType}.caf` : undefined,
+              badge: 1,
+            },
+          },
+        },
+        webpush: {
+          notification: {
+            icon: payload.icon || '/icon-192x192.png',
+            badge: payload.badge || '/badge-72x72.png',
+            actions: payload.actions?.map(action => ({
+              action: action.action,
+              title: action.title,
+              icon: action.icon,
+            })),
+          },
+        },
+      };
+
+      const response = await this.messaging.send(message);
+      logger.info(`Push notification sent successfully: ${response}`);
+      return true;
+    } catch (error) {
+      logger.error('Failed to send push notification:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get notification history with pagination and filtering
+   */
+  async getNotificationHistory(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    type?: string,
+    priority?: string
+  ): Promise<{ notifications: NotificationHistory[]; total: number; pages: number }> {
+    const whereClause: any = { userId };
+    
+    if (type) whereClause.type = type;
+    if (priority) whereClause.priority = priority;
+
+    const { count, rows } = await NotificationHistory.findAndCountAll({
+      where: whereClause,
+      order: [['sentAt', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    return {
+      notifications: rows,
+      total: count,
+      pages: Math.ceil(count / limit),
+    };
+  }
+
+  /**
+   * Get grouped notifications
+   */
+  async getGroupedNotifications(userId: string): Promise<NotificationGroup[]> {
+    const notifications = await NotificationHistory.findAll({
+      where: {
+        userId,
+        groupId: { [Op.not]: null as any },
+        archived: false,
+      },
+      order: [['sentAt', 'DESC']],
+    });
+
+    const groups = new Map<string, NotificationGroup>();
+    
+    for (const notification of notifications) {
+      if (!notification.groupId) continue;
+      
+      if (!groups.has(notification.groupId)) {
+        groups.set(notification.groupId, {
+          id: notification.groupId,
+          title: this.generateGroupTitle(notification.type, notification.title),
+          count: 0,
+          latestNotification: notification,
+          createdAt: notification.sentAt,
+        });
+      }
+      
+      const group = groups.get(notification.groupId)!;
+      group.count++;
+      
+      if (notification.sentAt > group.latestNotification.sentAt) {
+        group.latestNotification = notification;
+      }
+    }
+
+    return Array.from(groups.values()).sort((a, b) => 
+      b.latestNotification.sentAt.getTime() - a.latestNotification.sentAt.getTime()
+    );
+  }
+
+  /**
+   * Mark notification as read
+   */
+  async markAsRead(notificationId: string, userId: string): Promise<boolean> {
+    const [affectedRows] = await NotificationHistory.update(
+      { read: true, readAt: new Date() },
+      { where: { id: notificationId, userId } }
+    );
+    
+    return affectedRows > 0;
+  }
+
+  /**
+   * Mark group as read
+   */
+  async markGroupAsRead(groupId: string, userId: string): Promise<number> {
+    const [affectedRows] = await NotificationHistory.update(
+      { read: true, readAt: new Date() },
+      { where: { groupId, userId, read: false } }
+    );
+    
+    return affectedRows;
+  }
+
+  /**
+   * Archive notification
+   */
+  async archiveNotification(notificationId: string, userId: string): Promise<boolean> {
+    const [affectedRows] = await NotificationHistory.update(
+      { archived: true },
+      { where: { id: notificationId, userId } }
+    );
+    
+    return affectedRows > 0;
+  }
+
+  /**
+   * Get unread notifications count
+   */
+  async getUnreadCount(userId: string): Promise<number> {
+    return await NotificationHistory.count({
+      where: {
+        userId,
+        read: false,
+        archived: false,
+      },
+    });
+  }
+
+  /**
+   * Update notification settings
+   */
+  async updateNotificationSettings(
+    userId: string,
+    settings: Partial<NotificationSettings>
+  ): Promise<NotificationSettings> {
+    const [notification, created] = await NotificationSettings.findOrCreate({
+      where: { userId },
+      defaults: {
+        id: uuidv4(),
+        userId,
+        pushEnabled: true,
+        soundEnabled: true,
+        emailEnabled: false,
+        soundType: 'default',
+        priority: 'medium',
+        groupingEnabled: true,
+        maxPerHour: 10,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    if (!created) {
+      await notification.update(settings);
+    }
+
+    return notification;
+  }
+
+  /**
+   * Legacy methods for backward compatibility
    */
   async processSignal(signal: any) {
     return this.processNewSignal(signal);
   }
-  
-  /**
-   * Get user's unread notifications
-   * @param userId User ID
-   * @param limit Number limit
-   * @param offset Offset
-   * @returns Notification list
-   */
+
   async getUserNotifications(userId: string, limit = 20, offset = 0) {
-    try {
-      const notifications = await Notification.findAll({
-        where: { userId },
-        order: [['timestamp', 'DESC']],
-        limit,
-        offset
-      });
-      
-      return notifications;
-    } catch (error) {
-      logger.error(`Failed to get notifications for user ${userId}:`, error);
-      return [];
-    }
+    const { notifications } = await this.getNotificationHistory(userId, Math.floor(offset / limit) + 1, limit);
+    return notifications;
   }
-  
-  /**
-   * Get user's unread notifications count
-   * @param userId User ID
-   * @returns Unread notifications count
-   */
+
   async getUnreadNotificationsCount(userId: string) {
-    try {
-      const count = await Notification.count({
-        where: {
-          userId,
-          read: false
-        }
-      });
-      
-      return count;
-    } catch (error) {
-      logger.error(`Failed to get unread notifications count for user ${userId}:`, error);
-      return 0;
-    }
+    return this.getUnreadCount(userId);
   }
-  
-  /**
-   * Mark notification as read
-   * @param notificationId Notification ID
-   * @param userId User ID (for ownership verification)
-   * @returns Whether successful
-   */
+
   async markNotificationAsRead(notificationId: string, userId: string) {
-    try {
-      const notification = await Notification.findOne({
-        where: {
-          id: notificationId,
-          userId
-        }
-      });
-      
-      if (!notification) {
-        return false;
-      }
-      
-      notification.read = true;
-      await notification.save();
-      
-      return true;
-    } catch (error) {
-      logger.error(`Failed to mark notification ${notificationId} as read:`, error);
-      return false;
-    }
+    return this.markAsRead(notificationId, userId);
   }
-  
-  /**
-   * Mark all user's notifications as read
-   * @param userId User ID
-   * @returns Updated notification count
-   */
+
   async markAllNotificationsAsRead(userId: string) {
-    try {
-      const result = await Notification.update(
-        { read: true },
-        {
-          where: {
-            userId,
-            read: false
-          }
-        }
-      );
-      
-      return result[0]; // Return affected row count
-    } catch (error) {
-      logger.error(`Failed to mark all notifications for user ${userId} as read:`, error);
-      return 0;
-    }
+    const [affectedRows] = await NotificationHistory.update(
+      { read: true, readAt: new Date() },
+      { where: { userId, read: false } }
+    );
+    
+    return affectedRows;
+  }
+
+  /**
+   * Private helper methods
+   */
+  private async checkRateLimit(userId: string, maxPerHour: number): Promise<boolean> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    
+    const count = await NotificationHistory.count({
+      where: {
+        userId,
+        sentAt: {
+          [Op.gte]: oneHourAgo,
+        },
+      },
+    });
+
+    return count >= maxPerHour;
+  }
+
+  private async getOrCreateGroupId(userId: string, type: string, title: string): Promise<string> {
+    // Group notifications by type and similar titles within the last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    
+    const existingNotification = await NotificationHistory.findOne({
+      where: {
+        userId,
+        type,
+        title: {
+          [Op.like]: `%${title.split(' ').slice(0, 3).join(' ')}%`,
+        },
+        sentAt: {
+          [Op.gte]: oneHourAgo,
+        },
+        groupId: {
+          [Op.not]: null as any,
+        },
+      },
+      order: [['sentAt', 'DESC']],
+    });
+
+    return existingNotification?.groupId || uuidv4();
+  }
+
+  private generateGroupTitle(type: string, originalTitle: string): string {
+    const typeMap: Record<string, string> = {
+      price_alert: 'Price Alerts',
+      signal: 'Trading Signals',
+      news: 'News Updates',
+      system: 'System Notifications',
+    };
+
+    return typeMap[type] || 'Notifications';
+  }
+
+  private mapPriorityToAndroid(priority: string): 'default' | 'min' | 'low' | 'high' | 'max' {
+    const priorityMap: Record<string, 'default' | 'min' | 'low' | 'high' | 'max'> = {
+      low: 'low',
+      medium: 'default',
+      high: 'high',
+      critical: 'max',
+    };
+
+    return priorityMap[priority] || 'default';
   }
 }
 
-// Export singleton instance
 export default new NotificationService(); 

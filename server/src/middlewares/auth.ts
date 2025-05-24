@@ -144,4 +144,10 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     // Ignore errors, continue processing request
     next();
   }
-}; 
+};
+
+// Alias for protect middleware
+export const authenticateToken = protect;
+
+// Alias for authMiddleware compatibility
+export const authMiddleware = protect; 
