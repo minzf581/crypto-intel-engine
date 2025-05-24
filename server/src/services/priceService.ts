@@ -7,7 +7,7 @@ import { calculateStrength } from '../utils/signalUtils';
 // CoinGecko API configuration
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
 const PRICE_UPDATE_INTERVAL = 60000; // Update every 1 minute
-const PRICE_CHANGE_THRESHOLD = 5; // 5% change threshold
+const PRICE_CHANGE_THRESHOLD = 2; // 2% change threshold (lowered from 5% to generate more signals)
 
 // Cryptocurrency ID mapping (IDs used by CoinGecko API)
 const COIN_ID_MAP: Record<string, string> = {
@@ -53,47 +53,44 @@ class PriceService {
 
       logger.info(`Fetching price data: ${coinIds}`);
 
-      const response = await axios.get(`${COINGECKO_API_BASE}/simple/price`, {
-        params: {
-          ids: coinIds,
-          vs_currencies: 'usd',
-          include_24hr_change: true,
-          include_last_updated_at: true
-        },
-        timeout: 10000
-      });
+      const response = await axios.get(
+        `${COINGECKO_API_BASE}/simple/price`,
+        {
+          params: {
+            ids: coinIds,
+            vs_currencies: 'usd',
+            include_24hr_change: true,
+            include_last_updated_at: true
+          },
+          timeout: 10000
+        }
+      );
 
-      const priceData: PriceData[] = [];
-
-      for (const asset of assets) {
+      // Convert response data to PriceData array
+      const priceData: PriceData[] = assets.map(asset => {
         const coinId = COIN_ID_MAP[asset.symbol];
-        if (!coinId || !response.data[coinId]) {
-          logger.warn(`No price data found for ${asset.symbol}`);
-          continue;
+        const coinData = response.data[coinId];
+
+        if (!coinData) {
+          logger.warn(`Price data not found for ${asset.symbol}`);
+          return null;
         }
 
-        const data = response.data[coinId];
-        priceData.push({
+        return {
           symbol: asset.symbol,
-          currentPrice: data.usd || 0,
-          priceChange24h: data.usd_24h_change || 0,
-          priceChangePercentage24h: data.usd_24h_change || 0,
-          lastUpdated: new Date(data.last_updated_at * 1000 || Date.now())
-        });
-      }
+          currentPrice: coinData.usd,
+          priceChange24h: coinData.usd_24h_change || 0,
+          priceChangePercentage24h: coinData.usd_24h_change || 0,
+          lastUpdated: new Date(coinData.last_updated_at * 1000)
+        };
+      }).filter(Boolean) as PriceData[];
 
       logger.info(`Successfully fetched price data for ${priceData.length} cryptocurrencies`);
       return priceData;
 
     } catch (error: any) {
-      if (error.response?.status === 429) {
-        logger.error('CoinGecko API rate limit exceeded');
-      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-        logger.error('Network connection failed, unable to fetch price data');
-      } else {
-        logger.error('Failed to fetch price data:', error.message);
-      }
-      throw new Error(`Failed to fetch price data: ${error.message}`);
+      logger.error('Error fetching price data from CoinGecko:', error);
+      return [];
     }
   }
 
@@ -237,6 +234,53 @@ class PriceService {
    */
   async triggerPriceCheck(): Promise<void> {
     await this.monitorPrices();
+  }
+
+  /**
+   * Generate test signals for demonstration (development only)
+   */
+  async generateTestSignals(): Promise<void> {
+    if (process.env.NODE_ENV !== 'development') return;
+    
+    try {
+      const assets = await Asset.findAll();
+      
+      for (const asset of assets) {
+        // Generate a mock price signal with fake data
+        const mockChange = (Math.random() - 0.5) * 10; // Random change between -5% and +5%
+        
+        if (Math.abs(mockChange) >= PRICE_CHANGE_THRESHOLD) {
+          const description = mockChange > 0 
+            ? `${asset.name} price increased by ${mockChange.toFixed(2)}% in the last 24 hours, current price $${(50000 * (1 + mockChange/100)).toLocaleString()}`
+            : `${asset.name} price decreased by ${Math.abs(mockChange).toFixed(2)}% in the last 24 hours, current price $${(50000 * (1 + mockChange/100)).toLocaleString()}`;
+
+          const strength = calculateStrength(Math.abs(mockChange), 'price');
+
+          const signal = await Signal.create({
+            assetId: asset.id,
+            assetSymbol: asset.symbol,
+            assetName: asset.name,
+            assetLogo: asset.logo,
+            type: 'price',
+            strength,
+            description,
+            sources: [{
+              platform: 'price',
+              priceChange: mockChange,
+              currentPrice: 50000 * (1 + mockChange/100),
+              previousPrice: 50000,
+              timeframe: '24h'
+            }],
+            timestamp: new Date()
+          });
+
+          logger.info(`Generated test signal: ${asset.symbol} (${mockChange > 0 ? '+' : ''}${mockChange.toFixed(2)}%, strength: ${strength})`);
+          await notificationService.processSignal(signal);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to generate test signals:', error);
+    }
   }
 }
 

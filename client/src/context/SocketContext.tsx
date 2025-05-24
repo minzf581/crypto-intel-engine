@@ -24,14 +24,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('无法初始化WebSocket连接：未找到认证令牌');
+      console.error('Cannot initialize WebSocket connection: authentication token not found');
       return;
     }
     
     try {
-      console.log('初始化WebSocket连接...');
+      console.log('Initializing WebSocket connection...');
       const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      console.log('WebSocket连接地址:', socketUrl);
+      console.log('WebSocket connection URL:', socketUrl);
       
       const newSocket = io(socketUrl, {
         withCredentials: true,
@@ -45,30 +45,30 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       
       newSocket.on('connect', () => {
-        console.log('WebSocket连接成功');
+        console.log('WebSocket connection successful');
         setConnected(true);
       });
       
       newSocket.on('connect_error', (error) => {
-        console.error('WebSocket连接错误:', error);
+        console.error('WebSocket connection error:', error);
         setConnected(false);
       });
       
       newSocket.on('disconnect', () => {
-        console.log('WebSocket断开连接');
+        console.log('WebSocket disconnected');
         setConnected(false);
       });
       
       setSocket(newSocket);
     } catch (error) {
-      console.error('WebSocket初始化错误:', error);
+      console.error('WebSocket initialization error:', error);
     }
   };
   
   // 断开Socket连接
   const disconnect = () => {
     if (socket) {
-      console.log('断开WebSocket连接');
+      console.log('Disconnecting WebSocket');
       socket.disconnect();
       setSocket(null);
       setConnected(false);

@@ -1,8 +1,8 @@
 import env from './env';
-import { connectDB, closeDB } from './database';
+import { connectDatabase, syncModels } from './database';
 
 export {
   env,
-  connectDB,
-  closeDB
+  connectDatabase,
+  syncModels
 }; 

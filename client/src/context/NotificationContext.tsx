@@ -3,10 +3,10 @@ import axios from 'axios';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 
-// 通知类型
+// Notification types
 export type NotificationType = 'signal' | 'price' | 'system';
 
-// 通知接口
+// Notification interface
 export interface Notification {
   id: string;
   userId: string;
@@ -20,7 +20,7 @@ export interface Notification {
   timestamp: string;
 }
 
-// 通知上下文类型
+// Notification context type
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
@@ -31,10 +31,10 @@ interface NotificationContextType {
   markAllAsRead: () => Promise<void>;
 }
 
-// 创建上下文
+// Create context
 const NotificationContext = createContext<NotificationContextType | null>(null);
 
-// 通知提供组件
+// Notification provider component
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
   const socket = useSocket();
@@ -44,7 +44,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // 获取通知列表
+  // Fetch notifications list
   const fetchNotifications = async () => {
     if (!isAuthenticated) return;
     
@@ -59,14 +59,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setUnreadCount(response.data.data.unreadCount);
       }
     } catch (error) {
-      console.error('获取通知失败:', error);
-      setError('获取通知列表失败');
+      console.error('Failed to fetch notifications:', error);
+      setError('Failed to fetch notifications list');
     } finally {
       setIsLoading(false);
     }
   };
   
-  // 标记通知为已读
+  // Mark notification as read
   const markAsRead = async (id: string) => {
     if (!isAuthenticated) return;
     
@@ -74,23 +74,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const response = await axios.put(`/api/notifications/${id}/read`);
       
       if (response.data && response.data.success) {
-        // 更新通知列表中的已读状态
+        // Update read status in notifications list
         setNotifications(prev => 
           prev.map(notif => 
             notif.id === id ? { ...notif, read: true } : notif
           )
         );
         
-        // 更新未读数量
+        // Update unread count
         setUnreadCount(response.data.data.unreadCount);
       }
     } catch (error) {
-      console.error('标记通知为已读失败:', error);
-      setError('标记通知为已读失败');
+      console.error('Failed to mark notification as read:', error);
+      setError('Failed to mark notification as read');
     }
   };
   
-  // 标记所有通知为已读
+  // Mark all notifications as read
   const markAllAsRead = async () => {
     if (!isAuthenticated) return;
     
@@ -98,41 +98,41 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const response = await axios.put('/api/notifications/read-all');
       
       if (response.data && response.data.success) {
-        // 更新所有通知的已读状态
+        // Update read status for all notifications
         setNotifications(prev => 
           prev.map(notif => ({ ...notif, read: true }))
         );
         
-        // 重置未读数量
+        // Reset unread count
         setUnreadCount(0);
       }
     } catch (error) {
-      console.error('标记所有通知为已读失败:', error);
-      setError('标记所有通知为已读失败');
+      console.error('Failed to mark all notifications as read:', error);
+      setError('Failed to mark all notifications as read');
     }
   };
   
-  // 初始加载通知
+  // Initial load notifications
   useEffect(() => {
     if (isAuthenticated) {
       fetchNotifications();
     }
   }, [isAuthenticated]);
   
-  // 监听实时通知
+  // Listen for real-time notifications
   useEffect(() => {
     if (!socket || !isAuthenticated) return;
     
     const handleNewNotification = (notification: Notification) => {
-      console.log('收到新通知:', notification);
+      console.log('Received new notification:', notification);
       
-      // 将新通知添加到列表
+      // Add new notification to list
       setNotifications(prev => [notification, ...prev]);
       
-      // 更新未读数量
+      // Update unread count
       setUnreadCount(prev => prev + 1);
       
-      // 显示浏览器通知 (如果用户已授权)
+      // Show browser notification (if user has granted permission)
       if (Notification.permission === 'granted') {
         new Notification(notification.title, {
           body: notification.message,
@@ -141,16 +141,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
     
-    // 注册通知事件监听器
+    // Register notification event listener
     socket.on('notification', handleNewNotification);
     
-    // 清理函数
+    // Cleanup function
     return () => {
       socket.off('notification', handleNewNotification);
     };
   }, [socket, isAuthenticated]);
   
-  // 请求浏览器通知权限
+  // Request browser notification permission
   useEffect(() => {
     if (isAuthenticated && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
       Notification.requestPermission();
@@ -174,12 +174,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 };
 
-// 通知上下文Hook
+// Notification context hook
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   
   if (!context) {
-    throw new Error('useNotifications必须在NotificationProvider内使用');
+    throw new Error('useNotifications must be used within NotificationProvider');
   }
   
   return context;

@@ -24,37 +24,44 @@ export const authenticateSocketConnection = async (socket: Socket, next: (err?: 
       return next(new Error('Invalid token'));
     }
 
-    // Log token information for debugging
     logger.debug('Verifying Socket connection token', {
       tokenLength: token.length,
       tokenPrefix: token.substring(0, 10) + '...'
     });
 
-    // Use the same method to verify token
-    const secret = env.jwtSecret || 'fallback-secret-key-for-development';
-    const decoded = jwt.verify(token, secret) as { id: string };
-
+    // Verify JWT token
+    const decoded = jwt.verify(token, env.jwtSecret) as any;
+    
     if (!decoded || !decoded.id) {
-      logger.warn('Socket connection token decoding failed');
-      return next(new Error('Invalid token'));
+      logger.warn('Socket token verification failed: no user ID in token');
+      return next(new Error('Invalid token format'));
     }
 
-    // Get user
+    // Find user in database
     const user = await User.findByPk(decoded.id);
     if (!user) {
-      logger.warn(`Socket connection could not find user for token: ${decoded.id}`);
+      logger.warn('Socket user not found for token');
       return next(new Error('User not found'));
     }
 
-    logger.debug(`Socket connection authenticated: ${user.id}`);
-    
-    // Add user information to socket object
+    logger.debug('Socket connection authenticated:', decoded.id);
+
+    // Add user to socket data
     socket.data.user = user;
     socket.data.userId = user.id;
-    
+
     next();
-  } catch (error) {
-    logger.error('Socket connection authentication failed:', error);
+  } catch (error: any) {
+    logger.error('Socket authentication error:', error);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return next(new Error('Invalid token'));
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return next(new Error('Token expired'));
+    }
+    
     return next(new Error('Authentication failed'));
   }
 }; 

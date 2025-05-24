@@ -138,23 +138,34 @@ class NotificationService {
    */
   async processNewSignal(signal: any) {
     try {
-      // 1. Find users subscribed to this asset
-      const users = await User.findAll({
-        include: {
-          model: Asset,
-          as: 'watchedAssets',
-          where: { symbol: signal.assetSymbol },
-          required: true,
+      // 1. Find users subscribed to this asset from their selectedAssets field
+      const users = await User.findAll();
+      
+      // Filter users who have this asset in their selectedAssets
+      const subscribedUsers = users.filter(user => {
+        if (!user.selectedAssets) return false;
+        
+        try {
+          const selectedAssets = typeof user.selectedAssets === 'string' 
+            ? JSON.parse(user.selectedAssets) 
+            : user.selectedAssets;
+          
+          // Check if selectedAssets is array and contains the asset symbol
+          return Array.isArray(selectedAssets) && selectedAssets.includes(signal.assetSymbol);
+        } catch {
+          return false;
         }
       });
       
-      if (users.length === 0) {
+      if (subscribedUsers.length === 0) {
         logger.debug(`No users subscribed to ${signal.assetSymbol}, skipping notification processing`);
         return;
       }
       
-      // 2. Process notifications for each user
-      for (const user of users) {
+      logger.info(`Found ${subscribedUsers.length} users subscribed to ${signal.assetSymbol}`);
+      
+      // 2. Process notifications for each subscribed user
+      for (const user of subscribedUsers) {
         // 2.1. Find user's alert settings for this asset
         let alertSettings = await AlertSetting.findAll({
           where: {

@@ -3,7 +3,7 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { env, connectDB } from './config';
+import { env, connectDatabase, syncModels } from './config';
 import routes from './routes';
 import { setupSocketHandlers } from './services/socket';
 import { initializeSignalGenerator } from './services/signalGenerator';
@@ -87,10 +87,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 const initializeServer = async () => {
   try {
     // Connect to database
-    await connectDB();
+    await connectDatabase();
     
     // Initialize model associations
     initializeAssociations();
+    
+    // Sync models
+    await syncModels();
     
     // Initialize data
     await seedData();

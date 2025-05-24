@@ -5,6 +5,7 @@ import assetRoutes from './assetRoutes';
 import signalRoutes from './signalRoutes';
 import notificationRoutes from './notificationRoutes';
 import dashboardRoutes from './dashboard';
+import analysisRoutes from './analysisRoutes';
 
 const router = Router();
 
@@ -25,5 +26,8 @@ router.use('/notifications', notificationRoutes);
 
 // Dashboard routes
 router.use('/dashboard', dashboardRoutes);
+
+// Analysis routes
+router.use('/analysis', analysisRoutes);
 
 export default router; 

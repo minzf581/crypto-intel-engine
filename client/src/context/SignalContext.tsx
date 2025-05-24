@@ -85,14 +85,14 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('无法初始化WebSocket连接：未找到认证令牌');
+      console.error('Cannot initialize WebSocket connection: authentication token not found');
       return;
     }
 
     try {
-      console.log('初始化WebSocket连接...');
+      console.log('Initializing WebSocket connection...');
       const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      console.log('WebSocket连接地址:', socketUrl);
+      console.log('WebSocket connection URL:', socketUrl);
       
       const newSocket = io(socketUrl, {
         withCredentials: true,
@@ -106,27 +106,27 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       newSocket.on('connect', () => {
-        console.log('WebSocket连接成功');
+        console.log('WebSocket connection successful');
         
-        // 确保selectedAssets存在并且是数组
+        // Ensure selectedAssets exists and is an array
         if (selectedAssets && Array.isArray(selectedAssets) && selectedAssets.length > 0) {
-          // 确保每个资产都有symbol属性
+          // Ensure each asset has symbol property
           const validAssets = selectedAssets.filter(asset => asset && typeof asset === 'object' && 'symbol' in asset);
           if (validAssets.length > 0) {
             const assetSymbols = validAssets.map(asset => asset.symbol);
-            console.log('订阅资产:', assetSymbols);
+            console.log('Subscribing to assets:', assetSymbols);
             newSocket.emit('subscribe', { assets: assetSymbols });
           } else {
-            console.warn('已选择的资产没有symbol属性:', selectedAssets);
+            console.warn('Selected assets do not have symbol property:', selectedAssets);
           }
         } else {
-          console.log('没有选择资产进行订阅');
+          console.log('No assets selected for subscription');
         }
       });
 
       newSocket.on('connect_error', (error) => {
-        console.error('WebSocket连接错误:', error);
-        setError(`WebSocket连接错误: ${error.message}`);
+        console.error('WebSocket connection error:', error);
+        setError(`WebSocket connection error: ${error.message}`);
       });
 
       newSocket.on('disconnect', () => {
@@ -141,9 +141,9 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       newSocket.on('newSignal', (signal) => {
         console.log('Received new signal:', signal);
         setSignals(prev => {
-          // 确保prev是一个数组，如果不是，则使用空数组
+          // Ensure prev is an array, if not, use empty array
           if (!Array.isArray(prev)) {
-            console.warn('信号状态不是数组，重置为：', [signal]);
+            console.warn('Signal state is not an array, resetting to:', [signal]);
             return [signal];
           }
           return [signal, ...prev];
@@ -157,8 +157,8 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         newSocket.disconnect();
       };
     } catch (error) {
-      console.error('WebSocket初始化错误:', error);
-      setError('WebSocket初始化错误');
+      console.error('WebSocket initialization error:', error);
+      setError('WebSocket initialization error');
     }
   }, [isAuthenticated, selectedAssets]);
 
@@ -176,24 +176,24 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const assetIds = selectedAssets.map(asset => asset.id).join(',');
         const response = await axios.get(`/api/signals?assets=${assetIds}&page=1`);
         
-        // 修复数据结构问题 - 确保处理正确的数据结构
-        console.log('信号API响应:', response.data);
+        // Fix data structure issue - ensure correct data structure handling
+        console.log('Signal API response:', response.data);
         
         if (response.data && response.data.success && response.data.data) {
-          // 提取正确的数据结构
+          // Extract correct data structure
           const signalData = response.data.data;
           
           if (signalData.signals && Array.isArray(signalData.signals)) {
-            console.log('收到信号数据:', signalData.signals.length);
+            console.log('Received signal data:', signalData.signals.length);
             setSignals(signalData.signals);
             setHasMore(signalData.hasMore || false);
           } else {
-            console.warn('服务器返回的信号数据中没有signals数组', signalData);
+            console.warn('Server returned signal data without signals array', signalData);
             setSignals([]);
             setHasMore(false);
           }
         } else {
-          console.warn('服务器返回的信号数据格式不符合预期', response.data);
+          console.warn('Server returned unexpected signal data format', response.data);
           setSignals([]);
           setHasMore(false);
         }
@@ -219,15 +219,15 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const assetIds = selectedAssets.map(asset => asset.id).join(',');
       const response = await axios.get(`/api/signals?assets=${assetIds}&page=${nextPage}`);
       
-      // 使用相同的数据处理方式
+      // Use the same data processing approach
       if (response.data && response.data.success && response.data.data) {
         const signalData = response.data.data;
         
         if (signalData.signals && Array.isArray(signalData.signals)) {
           setSignals(prev => {
-            // 确保prev是一个数组
+            // Ensure prev is an array
             if (!Array.isArray(prev)) {
-              console.warn('加载更多信号时，现有信号状态不是数组，使用新加载的信号');
+              console.warn('When loading more signals, existing signal state is not an array, using newly loaded signals');
               return signalData.signals;
             }
             return [...prev, ...signalData.signals];
@@ -235,11 +235,11 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setHasMore(signalData.hasMore || false);
           setPage(nextPage);
         } else {
-          console.warn('加载更多信号时，服务器返回的数据中没有signals数组', signalData);
+          console.warn('When loading more signals, server returned data without signals array', signalData);
           setHasMore(false);
         }
       } else {
-        console.warn('加载更多信号时，服务器返回的数据格式不符合预期', response.data);
+        console.warn('When loading more signals, server returned unexpected data format', response.data);
         setHasMore(false);
       }
       

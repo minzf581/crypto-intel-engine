@@ -31,34 +31,25 @@ if (env.databaseUrl) {
   });
 }
 
-// Connect to database
-export const connectDB = async () => {
+// Test database connection
+export const connectDatabase = async () => {
   try {
     await sequelize.authenticate();
     logger.info('Database connection successful');
-    
-    // Sync models to database (can automatically create tables in development mode)
-    if (env.nodeEnv === 'development') {
-      // Check if database reset is needed
-      const shouldResetDb = process.env.RESET_DB === 'true';
-      
-      if (shouldResetDb) {
-        // Use force option to recreate all tables
-        await sequelize.sync({ force: true });
-        logger.info('Database has been reset and models synchronized');
-      } else {
-        // Use normal sync, do not attempt to modify table structure
-        await sequelize.sync();
-        logger.info('Database models synchronized');
-      }
-    } else {
-      // Production environment also needs to sync table structure
-      await sequelize.sync();
-      logger.info('Production environment: Database models synchronized');
-    }
   } catch (error) {
-    logger.error('Database connection error:', error);
+    logger.error('Database connection failed:', error);
     process.exit(1);
+  }
+};
+
+// Sync database models
+export const syncModels = async () => {
+  try {
+    await sequelize.sync({ force: false, alter: false });
+    logger.info('Database models synchronized');
+  } catch (error) {
+    logger.error('Model synchronization failed:', error);
+    throw error;
   }
 };
 

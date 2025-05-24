@@ -27,20 +27,35 @@ axios.defaults.timeout = 10000; // 10 seconds timeout
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    // Ensure token is valid
-    if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
-      config.headers.Authorization = `Bearer ${token}`;
-      // Debug information
-      console.log('Request added auth header:', { 
-        url: config.url,
-        authHeaderLength: `Bearer ${token}`.length,
-        tokenPrefix: token.substring(0, 10) + '...'
-      });
+    
+    // Only add auth header for internal API calls (our backend)
+    const isInternalAPI = config.url && (
+      config.url.startsWith('/api/') || 
+      config.url.startsWith('http://localhost:5001/') ||
+      config.url.includes('localhost:5001')
+    );
+    
+    if (isInternalAPI) {
+      // Ensure token is valid
+      if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
+        config.headers.Authorization = `Bearer ${token}`;
+        // Debug information
+        console.log('Request added auth header:', { 
+          url: config.url,
+          authHeaderLength: `Bearer ${token}`.length,
+          tokenPrefix: token.substring(0, 10) + '...'
+        });
+      } else {
+        // If token is invalid, remove auth header
+        delete config.headers.Authorization;
+        console.log('Request without auth header - token invalid', { url: config.url });
+      }
     } else {
-      // If token is invalid, remove auth header
+      // For external APIs, don't add auth header
       delete config.headers.Authorization;
-      console.log('Request without auth header - token invalid', { url: config.url });
+      console.log('External API request (no auth header):', { url: config.url });
     }
+    
     return config;
   },
   (error) => {

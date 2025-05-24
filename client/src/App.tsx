@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import OnboardingPage from './pages/OnboardingPage';
 import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
+import TestDataSourceStatus from './TestDataSourceStatus';
 import { useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { AssetProvider } from './context/AssetContext';
@@ -122,6 +123,9 @@ const App = () => {
                   <Route path="dashboard" element={<DashboardPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
+
+                {/* Test Data Source Status route */}
+                <Route path="test-data-source-status" element={<TestDataSourceStatus />} />
 
                 {/* 404 page */}
                 <Route path="*" element={<NotFoundPage />} />

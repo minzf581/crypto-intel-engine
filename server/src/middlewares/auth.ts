@@ -28,80 +28,87 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     // Get token from request headers
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       const authHeader = req.headers.authorization;
-      logger.debug('Authentication header', {
-        authHeader: authHeader.substring(0, 20) + '...',
+      token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      
+      logger.debug('Authentication header found', {
+        authHeader: `Bearer ${token.substring(0, 10)}...`,
         length: authHeader.length
       });
-      
-      const parts = authHeader.split(' ');
-      if (parts.length === 2) {
-        token = parts[1];
-      }
+    }
 
-      // Verify token value is not string "undefined" or "null"
-      if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-        logger.warn('Received invalid token value:', { token });
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid token value'
-        });
-      }
-
-      try {
-        // Get secret key
-        const secret = env.jwtSecret || 'fallback-secret-key-for-development';
-        
-        logger.debug('Starting token verification...', {
-          tokenLength: token.length,
-          tokenPrefix: token.substring(0, 10) + '...'
-        });
-        
-        // Decode token
-        const decoded = jwt.verify(token, secret) as { id: string };
-        
-        if (!decoded || !decoded.id) {
-          logger.warn('Token decoding failed, no user ID');
-          return res.status(401).json({
-            success: false,
-            message: 'Invalid token format'
-          });
-        }
-
-        // Find user
-        const user = await User.findByPk(decoded.id);
-        if (!user) {
-          logger.warn('User not found for token');
-          return res.status(401).json({
-            success: false,
-            message: 'User not found'
-          });
-        }
-
-        // Set user on request object
-        req.userId = user.id;
-        req.user = user;
-        
-        logger.debug('User authentication successful:', { userId: user.id });
-        next();
-      } catch (error) {
-        logger.error('Token verification failed', { error });
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid token'
-        });
-      }
-    } else {
+    if (!token) {
       logger.warn('Authorization header missing or invalid');
       return res.status(401).json({
         success: false,
-        message: 'Authorization header missing or invalid'
+        message: 'Access denied. No valid authentication token provided.'
       });
     }
-  } catch (error) {
-    logger.error('Authentication middleware error', { error });
+
+    // Check if token is literally string 'undefined' or 'null'
+    if (token === 'undefined' || token === 'null' || token.trim() === '') {
+      logger.warn('Token is invalid string value', { token });
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. Invalid authentication token.'
+      });
+    }
+
+    logger.debug('Verifying token...', {
+      tokenLength: token.length,
+      tokenPrefix: token.substring(0, 10) + '...'
+    });
+
+    // Verify JWT token
+    const decoded = jwt.verify(token, env.jwtSecret) as any;
+    
+    if (!decoded || !decoded.id) {
+      logger.warn('Token verification failed: no user ID in token');
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. Invalid token format.'
+      });
+    }
+
+    // Find user in database
+    const user = await User.findByPk(decoded.id);
+    
+    if (!user) {
+      logger.warn('User not found for token');
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. User not found.'
+      });
+    }
+
+    logger.debug('User authenticated', {
+      userId: user.id
+    });
+
+    // Add user to request object
+    req.user = user;
+    req.userId = user.id;
+    
+    next();
+  } catch (error: any) {
+    logger.error('Authentication error:', error);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. Invalid token.'
+      });
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. Token has expired.'
+      });
+    }
+    
     return res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Authentication verification failed.'
     });
   }
 };
