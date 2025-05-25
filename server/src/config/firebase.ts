@@ -9,10 +9,24 @@ export const initializeFirebase = () => {
     
     if (!serviceAccount) {
       logger.warn('Firebase service account key not found. Push notifications will be disabled.');
+      logger.info('To enable push notifications, set FIREBASE_SERVICE_ACCOUNT_KEY environment variable');
       return null;
     }
 
-    const serviceAccountKey = JSON.parse(serviceAccount);
+    // Validate JSON format
+    let serviceAccountKey;
+    try {
+      serviceAccountKey = JSON.parse(serviceAccount);
+    } catch (parseError) {
+      logger.error('Invalid Firebase service account key format. Must be valid JSON.');
+      return null;
+    }
+
+    // Validate required fields
+    if (!serviceAccountKey.project_id || !serviceAccountKey.private_key || !serviceAccountKey.client_email) {
+      logger.error('Firebase service account key missing required fields (project_id, private_key, client_email)');
+      return null;
+    }
 
     firebaseApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccountKey),
@@ -23,6 +37,7 @@ export const initializeFirebase = () => {
     return firebaseApp;
   } catch (error) {
     logger.error('Failed to initialize Firebase:', error);
+    logger.warn('Push notifications will be disabled');
     return null;
   }
 };

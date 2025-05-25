@@ -1,4 +1,4 @@
-import { useSound } from 'use-sound';
+import useSound from 'use-sound';
 import { useCallback } from 'react';
 
 // Import sound files (you'll need to add these to public/sounds/)

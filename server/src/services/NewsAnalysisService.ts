@@ -25,16 +25,21 @@ export class NewsAnalysisService {
       const newsItems = [];
       
       // Fetch from News API if available
-      if (this.newsApiKey) {
+      if (this.newsApiKey && this.newsApiKey.trim() !== '') {
+        logger.info('Fetching news from NewsAPI...');
         const newsApiData = await this.fetchFromNewsAPI();
         newsItems.push(...newsApiData);
+      } else {
+        logger.info('NewsAPI key not configured, skipping NewsAPI source');
       }
 
       // Fetch from RSS feeds
+      logger.info('Fetching news from RSS feeds...');
       const rssData = await this.fetchFromRSSFeeds();
       newsItems.push(...rssData);
 
       // Fetch from CoinDesk
+      logger.info('Fetching news from CoinDesk...');
       const coinDeskData = await this.fetchFromCoinDesk();
       newsItems.push(...coinDeskData);
 
@@ -47,7 +52,7 @@ export class NewsAnalysisService {
         }
       }
 
-      logger.info(`Fetched and analyzed ${analyzedNews.length} news items`);
+      logger.info(`Fetched and analyzed ${analyzedNews.length} news items from ${newsItems.length} raw items`);
       return analyzedNews;
     } catch (error) {
       logger.error('Failed to fetch and analyze news:', error);

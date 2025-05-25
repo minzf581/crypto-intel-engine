@@ -9,7 +9,8 @@
     "restartPolicyMaxRetries": 10,
     "startCommand": "npm start",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 30
+    "healthcheckTimeout": 60,
+    "healthcheckInterval": 30
   },
   "environments": {
     "production": {
@@ -17,10 +18,15 @@
         "NODE_ENV": "production",
         "FRONTEND_URL": "https://crypto-front-demo.up.railway.app",
         "BACKEND_URL": "https://crypto-demo.up.railway.app",
-        "CORS_ORIGIN": "https://crypto-front-demo.up.railway.app",
+        "CORS_ORIGIN": "*",
         "JWT_SECRET": "crypto-intel-production-secret-key-railway-2024",
         "JWT_EXPIRES_IN": "30d",
-        "ENABLE_MOCK_SIGNALS": "true"
+        "ENABLE_MOCK_SIGNALS": "false",
+        "COINGECKO_API_KEY": "",
+        "NEWSAPI_KEY": "",
+        "FIREBASE_SERVICE_ACCOUNT_KEY": "",
+        "LOG_LEVEL": "info",
+        "SQLITE_DB_PATH": "data/crypto-intel.sqlite"
       }
     }
   }
