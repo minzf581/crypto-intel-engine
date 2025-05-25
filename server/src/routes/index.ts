@@ -7,6 +7,7 @@ import notificationRoutes from './notificationRoutes';
 import notificationEnhancedRoutes from './notificationEnhanced';
 import dashboardRoutes from './dashboard';
 import analysisRoutes from './analysisRoutes';
+import enhancedRoutes from './enhanced';
 
 const router = Router();
 
@@ -27,6 +28,9 @@ router.use('/notifications', notificationRoutes);
 
 // Enhanced notification routes
 router.use('/notifications-enhanced', notificationEnhancedRoutes);
+
+// Enhanced data features routes
+router.use('/enhanced', enhancedRoutes);
 
 // Dashboard routes
 router.use('/dashboard', dashboardRoutes);

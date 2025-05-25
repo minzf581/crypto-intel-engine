@@ -45,7 +45,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {
   const [analysisData, setAnalysisData] = useState<BackendAnalysisData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(symbols[0] || 'BTC');
+  const [selectedSymbol, setSelectedSymbol] = useState<string>((symbols && symbols.length > 0) ? symbols[0] : 'BTC');
 
   const fetchAnalysisData = async (symbol: string) => {
     try {
@@ -76,7 +76,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {
   };
 
   useEffect(() => {
-    if (symbols.length > 0) {
+    if (symbols && symbols.length > 0) {
       fetchAnalysisData(selectedSymbol);
     }
   }, [selectedSymbol]);
@@ -171,9 +171,11 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {
           onChange={(e) => setSelectedSymbol(e.target.value)}
           className="px-3 py-1 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-md focus:ring-2 focus:ring-primary-500"
         >
-          {symbols.map(symbol => (
+          {symbols && symbols.length > 0 ? symbols.map(symbol => (
             <option key={symbol} value={symbol}>{symbol}</option>
-          ))}
+          )) : (
+            <option value="">No assets available</option>
+          )}
         </select>
       </div>
 
