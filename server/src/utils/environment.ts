@@ -35,11 +35,16 @@ export function detectEnvironment(): EnvironmentConfig {
   let allowedOrigins: (string | RegExp)[];
   
   if (isRailway) {
-    // Railway production
-    frontendUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
-    backendUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
+    // Railway production - use environment variables with fallback to actual deployed URLs
+    frontendUrl = process.env.FRONTEND_URL || 'https://crypto-front-demo.up.railway.app';
+    backendUrl = process.env.BACKEND_URL || 'https://crypto-demo.up.railway.app';
     allowedOrigins = [
-      'https://crypto-intelligence-engine-production.up.railway.app',
+      frontendUrl,
+      backendUrl,
+      'https://crypto-front-demo.up.railway.app',
+      'https://crypto-demo.up.railway.app',
+      // Add wildcard for broader Railway compatibility
+      /^https:\/\/.*\.up\.railway\.app$/
     ];
     console.log('🚄 Running on Railway');
   } else if (isProduction) {
@@ -90,6 +95,20 @@ export function detectEnvironment(): EnvironmentConfig {
 export function getCorsConfig() {
   const env = detectEnvironment();
   
+  // Check if CORS_ORIGIN is set to wildcard (allows all)
+  const corsOrigin = process.env.CORS_ORIGIN;
+  
+  if (corsOrigin === '*') {
+    console.log('🌐 CORS: Allowing all origins (*)');
+    return {
+      origin: true, // Allow all origins
+      credentials: false, // Don't allow credentials with wildcard
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      optionsSuccessStatus: 200
+    };
+  }
+  
   return {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow requests with no origin (like mobile apps or curl requests)
@@ -108,9 +127,11 @@ export function getCorsConfig() {
       });
       
       if (isAllowed) {
+        console.log(`🌐 CORS: Allowed origin: ${origin}`);
         callback(null, true);
       } else {
-        console.warn(`CORS: Blocked origin: ${origin}`);
+        console.warn(`🚫 CORS: Blocked origin: ${origin}`);
+        console.log('   Allowed origins:', env.allowedOrigins);
         callback(new Error('Not allowed by CORS'));
       }
     },
