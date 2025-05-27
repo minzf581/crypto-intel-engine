@@ -29,7 +29,7 @@ interface OnChainMetrics {
   };
   supplyMetrics: {
     circulatingSupply: number;
-    maxSupply: number;
+    maxSupply: number | null;
     inflationRate: number;
     burnedTokens24h?: number;
   };
