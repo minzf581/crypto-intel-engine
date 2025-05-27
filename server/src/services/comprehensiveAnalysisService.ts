@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import SocialSentimentService, { SocialMetrics } from './socialSentimentService';
+import { SocialSentimentService, SocialMetrics } from './socialSentimentService';
 import NewsSentimentService, { NewsMetrics } from './newsSentimentService';
 import TechnicalIndicatorService, { TechnicalAnalysis } from './technicalIndicatorService';
 import OnChainAnalysisService, { OnChainAnalysis } from './onChainAnalysisService';
@@ -70,7 +70,7 @@ class ComprehensiveAnalysisService {
   private onchainService: OnChainAnalysisService;
 
   constructor() {
-    this.socialService = new SocialSentimentService();
+    this.socialService = SocialSentimentService.getInstance();
     this.newsService = new NewsSentimentService();
     this.technicalService = new TechnicalIndicatorService();
     this.onchainService = new OnChainAnalysisService();

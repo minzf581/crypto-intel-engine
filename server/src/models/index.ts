@@ -3,6 +3,13 @@ import { Asset } from './Asset';
 import { Signal, initializeAssociations as initSignalAssociations } from './Signal';
 import { Notification, initializeAssociations as initNotificationAssociations } from './Notification';
 import { AlertSetting, initializeAssociations as initAlertSettingAssociations } from './AlertSetting';
+import { TwitterAccount, initializeAssociations as initTwitterAccountAssociations } from './TwitterAccount';
+import { TwitterPost, initializeAssociations as initTwitterPostAssociations } from './TwitterPost';
+import { AccountCoinRelevance, initializeAssociations as initAccountCoinRelevanceAssociations } from './AccountCoinRelevance';
+import { VolumeAnalysis } from './VolumeAnalysis';
+import { NewsData } from './NewsData';
+import { NotificationHistory } from './NotificationHistory';
+import { NotificationSettings } from './NotificationSettings';
 
 // Initialize all model associations
 const initializeAssociations = () => {
@@ -17,6 +24,11 @@ const initializeAssociations = () => {
 
   // Initialize alert setting model associations
   initAlertSettingAssociations();
+
+  // Initialize social sentiment model associations
+  initTwitterAccountAssociations();
+  initTwitterPostAssociations();
+  initAccountCoinRelevanceAssociations();
 };
 
 export { 
@@ -25,5 +37,12 @@ export {
   Signal,
   Notification,
   AlertSetting,
+  TwitterAccount,
+  TwitterPost,
+  AccountCoinRelevance,
+  VolumeAnalysis,
+  NewsData,
+  NotificationHistory,
+  NotificationSettings,
   initializeAssociations 
 }; 

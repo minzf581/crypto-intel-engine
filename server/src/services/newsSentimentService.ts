@@ -37,44 +37,35 @@ class NewsSentimentService {
    */
   async analyzeNewsSentiment(symbol: string): Promise<NewsMetrics> {
     try {
-      // For demo purposes, we'll generate mock news articles with sentiment
-      // In production, you would use NewsAPI, CoinDesk API, etc.
-      const mockArticles = this.generateMockNewsArticles(symbol);
-      
+      // News API is now configured - proceed with real news analysis
+      logger.info(`Fetching news for ${symbol} using NewsAPI`);
+
+      const articles = await this.fetchRealNewsArticles(symbol);
       const processedArticles = await Promise.all(
-        mockArticles.map(article => this.analyzeArticleSentiment(article))
+        articles.map(article => this.analyzeArticleSentiment(article))
       );
 
-      const totalSentiment = processedArticles.reduce((sum, article) => {
-        return sum + (article.sentiment * article.confidence);
-      }, 0);
-
-      const totalConfidence = processedArticles.reduce((sum, article) => sum + article.confidence, 0);
-      const overallSentiment = totalConfidence > 0 ? totalSentiment / totalConfidence : 0;
-
+      // Calculate overall metrics
+      const totalSentiment = processedArticles.reduce((sum, article) => sum + article.sentiment, 0);
+      const overallSentiment = processedArticles.length > 0 ? totalSentiment / processedArticles.length : 0;
+      
+      // Determine sentiment trend
       let sentimentTrend: 'bullish' | 'bearish' | 'neutral' = 'neutral';
       if (overallSentiment > 0.2) sentimentTrend = 'bullish';
       else if (overallSentiment < -0.2) sentimentTrend = 'bearish';
 
+      // Calculate average impact
       const averageImpact = this.calculateAverageImpact(processedArticles);
 
-      const metrics: NewsMetrics = {
+      return {
         symbol,
         overallSentiment,
         sentimentTrend,
         newsVolume: processedArticles.length,
         averageImpact,
         articles: processedArticles,
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
       };
-
-      logger.info(`Analyzed news sentiment for ${symbol}`, {
-        sentiment: overallSentiment,
-        trend: sentimentTrend,
-        articleCount: processedArticles.length
-      });
-
-      return metrics;
     } catch (error) {
       logger.error(`Failed to analyze news sentiment for ${symbol}:`, error);
       throw error;
@@ -82,10 +73,65 @@ class NewsSentimentService {
   }
 
   /**
+   * Fetch real news articles from NewsAPI
+   */
+  private async fetchRealNewsArticles(symbol: string): Promise<Partial<NewsArticle>[]> {
+    try {
+      const query = this.buildNewsSearchQuery(symbol);
+      const response = await axios.get('https://newsapi.org/v2/everything', {
+        params: {
+          q: query,
+          language: 'en',
+          sortBy: 'publishedAt',
+          pageSize: 20,
+          apiKey: this.newsApiKey
+        }
+      });
+
+      return response.data.articles.map((article: any) => ({
+        title: article.title,
+        content: article.description || article.content,
+        source: article.source.name,
+        url: article.url,
+        publishedAt: new Date(article.publishedAt)
+      }));
+    } catch (error) {
+      logger.error(`Failed to fetch news articles for ${symbol}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Build search query for news API
+   */
+  private buildNewsSearchQuery(symbol: string): string {
+    const cryptoTerms = ['cryptocurrency', 'crypto', 'blockchain', 'bitcoin', 'ethereum'];
+    const symbolTerms = [symbol.toLowerCase()];
+    
+    // Add specific terms for major cryptocurrencies
+    const specificTerms: Record<string, string[]> = {
+      'BTC': ['bitcoin'],
+      'ETH': ['ethereum'],
+      'ADA': ['cardano'],
+      'SOL': ['solana'],
+      'DOGE': ['dogecoin'],
+      'DOT': ['polkadot'],
+      'LINK': ['chainlink'],
+      'MATIC': ['polygon']
+    };
+
+    if (specificTerms[symbol]) {
+      symbolTerms.push(...specificTerms[symbol]);
+    }
+
+    return `(${symbolTerms.join(' OR ')}) AND (${cryptoTerms.join(' OR ')})`;
+  }
+
+  /**
    * Analyze sentiment of a single news article
    */
   private async analyzeArticleSentiment(article: Partial<NewsArticle>): Promise<NewsArticle> {
-    // Simulate sentiment analysis using keyword-based approach
+    // Real sentiment analysis using keyword-based approach (placeholder for ML/AI)
     const sentiment = this.calculateSentimentFromText(article.title + ' ' + article.content);
     const confidence = 0.6 + Math.random() * 0.4;
     const keywords = this.extractKeywords(article.title + ' ' + article.content);
@@ -194,63 +240,63 @@ class NewsSentimentService {
   }
 
   /**
-   * Generate mock news articles for demo purposes
-   */
-  private generateMockNewsArticles(symbol: string): Partial<NewsArticle>[] {
-    const newsTemplates = [
-      {
-        title: `${symbol} Shows Strong Momentum as Institutional Interest Grows`,
-        content: `Recent analysis suggests that ${symbol} is gaining significant traction among institutional investors, with several major funds reportedly increasing their positions.`,
-        source: 'CoinDesk'
-      },
-      {
-        title: `Technical Analysis: ${symbol} Breaks Key Resistance Level`,
-        content: `Technical indicators suggest that ${symbol} has successfully broken through a critical resistance level, potentially signaling further upward movement.`,
-        source: 'CoinTelegraph'
-      },
-      {
-        title: `Market Update: ${symbol} Trading Volume Surges`,
-        content: `Trading volume for ${symbol} has increased dramatically over the past 24 hours, indicating heightened market interest and activity.`,
-        source: 'Crypto News'
-      },
-      {
-        title: `Regulatory Clarity Could Benefit ${symbol} Adoption`,
-        content: `Industry experts believe that recent regulatory developments could provide a clearer framework for ${symbol} adoption and institutional investment.`,
-        source: 'Bloomberg Crypto'
-      }
-    ];
-
-    return newsTemplates.map(template => ({
-      ...template,
-      url: `https://example.com/news/${symbol.toLowerCase()}-${Date.now()}`,
-      publishedAt: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000) // Random time within last 24h
-    }));
-  }
-
-  /**
    * Get news sentiment trends over time
    */
   async getNewsTrends(symbol: string, timeframe: '1d' | '7d' | '30d' = '7d'): Promise<any[]> {
     try {
+      logger.info(`Fetching news trends for ${symbol} (${timeframe})`);
+      
       const days = timeframe === '1d' ? 1 : timeframe === '7d' ? 7 : 30;
-      const trends = [];
+      const query = this.buildNewsSearchQuery(symbol);
+      
+      const response = await axios.get('https://newsapi.org/v2/everything', {
+        params: {
+          q: query,
+          language: 'en',
+          sortBy: 'publishedAt',
+          from: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          pageSize: 100,
+          apiKey: this.newsApiKey
+        }
+      });
 
-      for (let i = days; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
+      // Group articles by day and calculate sentiment trends
+      const trendData: any[] = [];
+      const articlesGrouped: Record<string, any[]> = {};
 
-        trends.push({
-          date: date.toISOString().split('T')[0],
-          sentiment: this.calculateSentimentFromText(`${symbol} crypto news analysis`),
-          volume: Math.floor(Math.random() * 20) + 5,
-          impact: Math.random() * 0.8 + 0.2
+      response.data.articles.forEach((article: any) => {
+        const date = article.publishedAt.split('T')[0];
+        if (!articlesGrouped[date]) {
+          articlesGrouped[date] = [];
+        }
+        articlesGrouped[date].push(article);
+      });
+
+      // Process each day's articles
+      for (const [date, articles] of Object.entries(articlesGrouped)) {
+        const processedArticles = await Promise.all(
+          articles.map(article => this.analyzeArticleSentiment({
+            title: article.title,
+            content: article.description || article.content,
+            source: article.source.name,
+            publishedAt: new Date(article.publishedAt)
+          }))
+        );
+
+        const avgSentiment = processedArticles.reduce((sum, article) => sum + article.sentiment, 0) / processedArticles.length;
+        
+        trendData.push({
+          date,
+          sentiment: avgSentiment,
+          articleCount: articles.length,
+          articles: processedArticles.slice(0, 5) // Top 5 articles for the day
         });
       }
 
-      return trends;
+      return trendData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     } catch (error) {
       logger.error(`Failed to get news trends for ${symbol}:`, error);
-      return [];
+      throw error;
     }
   }
 
@@ -259,35 +305,54 @@ class NewsSentimentService {
    */
   async getBreakingNews(symbols: string[]): Promise<NewsArticle[]> {
     try {
-      const allNews: NewsArticle[] = [];
+      logger.info(`Fetching breaking news for ${symbols.join(', ')}`);
+      
+      const allArticles: NewsArticle[] = [];
       
       for (const symbol of symbols) {
-        const mockArticles = this.generateMockNewsArticles(symbol);
+        const query = this.buildNewsSearchQuery(symbol);
+        
+        const response = await axios.get('https://newsapi.org/v2/everything', {
+          params: {
+            q: query,
+            language: 'en',
+            sortBy: 'publishedAt',
+            from: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // Last 6 hours
+            pageSize: 10,
+            apiKey: this.newsApiKey
+          }
+        });
+
         const processedArticles = await Promise.all(
-          mockArticles.map(article => this.analyzeArticleSentiment(article))
+          response.data.articles.map((article: any) => this.analyzeArticleSentiment({
+            title: article.title,
+            content: article.description || article.content,
+            source: article.source.name,
+            url: article.url,
+            publishedAt: new Date(article.publishedAt)
+          }))
         );
-        
-        // Filter for high-impact news only
+
+        // Only include high-impact articles
         const breakingNews = processedArticles.filter(article => 
-          article.impact === 'high' || Math.abs(article.sentiment) > 0.5
+          article.impact === 'high' || Math.abs(article.sentiment) > 0.6
         );
-        
-        allNews.push(...breakingNews);
+
+        allArticles.push(...breakingNews);
       }
 
       // Sort by impact and recency
-      return allNews.sort((a, b) => {
-        const impactScore = (article: NewsArticle) => {
-          let score = article.impact === 'high' ? 3 : article.impact === 'medium' ? 2 : 1;
-          score += Math.abs(article.sentiment) * 2;
-          return score;
-        };
-        
-        return impactScore(b) - impactScore(a);
-      }).slice(0, 10); // Return top 10 breaking news
+      return allArticles
+        .sort((a, b) => {
+          const impactWeight = { high: 3, medium: 2, low: 1 };
+          const impactDiff = impactWeight[b.impact] - impactWeight[a.impact];
+          if (impactDiff !== 0) return impactDiff;
+          return b.publishedAt.getTime() - a.publishedAt.getTime();
+        })
+        .slice(0, 20); // Top 20 breaking news items
     } catch (error) {
       logger.error('Failed to get breaking news:', error);
-      return [];
+      throw error;
     }
   }
 }

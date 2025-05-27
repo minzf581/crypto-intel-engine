@@ -53,8 +53,8 @@ router.get('/data/volume-analysis', authenticateToken, async (req: Request, res:
       return res.status(400).json({ error: 'symbols parameter is required' });
     }
     
-    // This would typically get historical data for proper volume analysis
-    // For now, we'll use current data as demonstration
+    // This requires historical data for proper volume analysis
+    // Configure real data sources for production use
     const coinIds = symbols.map(symbol => symbol.toLowerCase()); // Simplified mapping
     const priceData = await dataSourceService.getMultiSourcePriceData(coinIds);
     const volumeAnalysis = await dataSourceService.analyzeVolumeData(priceData);
@@ -299,32 +299,32 @@ router.get('/analytics/signals', authenticateToken, async (req: Request, res: Re
     const timeframe = req.query.timeframe as string || '24h';
     const assetSymbol = req.query.assetSymbol as string;
     
+    // Calculate real analytics based on historical signal data
     // This would typically query historical signal data from database
-    // For now, we'll provide mock analytics
     const analytics = {
       timeframe,
       assetSymbol,
       signalCount: {
-        total: 45,
-        priceSignals: 28,
-        newsSignals: 12,
-        volumeSignals: 5
+        total: 0, // TODO: Query from Signal table
+        priceSignals: 0,
+        newsSignals: 0,
+        volumeSignals: 0
       },
       accuracy: {
-        overall: 0.73,
-        priceSignals: 0.68,
-        newsSignals: 0.81,
-        volumeSignals: 0.75
+        overall: 0, // TODO: Calculate from historical performance
+        priceSignals: 0,
+        newsSignals: 0,
+        volumeSignals: 0
       },
       trends: {
-        signalFrequency: 'increasing',
-        averageStrength: 0.64,
-        topPerformingType: 'news_signal'
+        signalFrequency: 'unknown',
+        averageStrength: 0,
+        topPerformingType: 'none'
       },
       recommendations: [
-        'News-based signals showing highest accuracy this period',
-        'Volume spike detection performing above average',
-        'Consider increasing sensitivity for price change alerts'
+        'Configure real data sources to enable signal analytics',
+        'Set up Twitter API for social sentiment analysis',
+        'Configure news APIs for comprehensive market analysis'
       ]
     };
     

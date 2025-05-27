@@ -63,35 +63,24 @@ class TechnicalIndicatorService {
    */
   async analyzeTechnicalIndicators(symbol: string, timeframe: '1h' | '4h' | '1d' = '1d'): Promise<TechnicalAnalysis> {
     try {
-      // Generate mock price data for demonstration
-      const priceData = this.generateMockPriceData(symbol, timeframe);
-      
-      // Calculate technical indicators
-      const indicators = this.calculateIndicators(priceData);
-      
-      // Generate signals based on indicators
-      const signals = this.generateSignals(indicators);
-      
-      // Determine overall trend and strength
-      const { trend, strength } = this.analyzeTrend(indicators, signals);
+      // Check if we have real price data sources configured
+      throw new Error(`Real technical analysis not yet implemented. Please configure price data sources for ${symbol}.`);
 
-      const analysis: TechnicalAnalysis = {
-        symbol,
-        indicators,
-        signals,
-        overallTrend: trend,
-        strength,
-        timeframe,
-        lastUpdated: new Date()
-      };
+      // TODO: Implement real price data fetching from configured sources
+      // const priceData = await this.fetchRealPriceData(symbol, timeframe);
+      // const indicators = this.calculateIndicators(priceData);
+      // const signals = this.generateSignals(indicators);
+      // const { trend, strength } = this.analyzeTrend(indicators, signals);
 
-      logger.info(`Generated technical analysis for ${symbol}`, {
-        trend,
-        strength,
-        signalCount: signals.length
-      });
-
-      return analysis;
+      // return {
+      //   symbol,
+      //   indicators,
+      //   signals,
+      //   overallTrend: trend,
+      //   strength,
+      //   timeframe,
+      //   lastUpdated: new Date()
+      // };
     } catch (error) {
       logger.error(`Failed to analyze technical indicators for ${symbol}:`, error);
       throw error;
@@ -394,44 +383,6 @@ class TechnicalIndicatorService {
     const strength = Math.round(Math.abs(bullishPercentage - 50) * 2);
 
     return { trend, strength };
-  }
-
-  /**
-   * Generate mock price data for demonstration
-   */
-  private generateMockPriceData(symbol: string, timeframe: string): PricePoint[] {
-    const data: PricePoint[] = [];
-    const periods = 200; // Generate 200 data points
-    let basePrice = 50000; // Starting price
-
-    for (let i = 0; i < periods; i++) {
-      const timestamp = new Date();
-      timestamp.setHours(timestamp.getHours() - (periods - i));
-
-      // Generate realistic price movement
-      const change = (Math.random() - 0.5) * 0.02; // ±1% change
-      basePrice = basePrice * (1 + change);
-
-      const volatility = basePrice * 0.005; // 0.5% volatility
-      const open = basePrice;
-      const high = basePrice + (Math.random() * volatility);
-      const low = basePrice - (Math.random() * volatility);
-      const close = low + (Math.random() * (high - low));
-      const volume = Math.floor(Math.random() * 1000000) + 100000;
-
-      data.push({
-        timestamp,
-        open,
-        high,
-        low,
-        close,
-        volume
-      });
-
-      basePrice = close; // Use close as next base price
-    }
-
-    return data;
   }
 
   /**

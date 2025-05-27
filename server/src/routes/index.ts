@@ -8,6 +8,7 @@ import notificationEnhancedRoutes from './notificationEnhanced';
 import dashboardRoutes from './dashboard';
 import analysisRoutes from './analysisRoutes';
 import enhancedRoutes from './enhanced';
+import socialSentimentRoutes from './socialSentimentRoutes';
 
 const router = Router();
 
@@ -37,5 +38,8 @@ router.use('/dashboard', dashboardRoutes);
 
 // Analysis routes
 router.use('/analysis', analysisRoutes);
+
+// Social sentiment routes
+router.use('/social-sentiment', socialSentimentRoutes);
 
 export default router; 

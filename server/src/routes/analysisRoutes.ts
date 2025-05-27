@@ -186,17 +186,19 @@ router.post('/test-signals', async (req, res) => {
   }
 
   try {
-    await priceService.generateTestSignals();
+    // Since we removed demo data, this endpoint now returns a message
+    // indicating that real signals are generated automatically
+    logger.info('Test signals endpoint called - real signals are generated automatically');
     
     res.json({
       success: true,
-      message: 'Test signals generated successfully'
+      message: 'Real signals are generated automatically by the system. No test signals needed.'
     });
   } catch (error) {
-    logger.error('Failed to generate test signals:', error);
+    logger.error('Failed to process test signals request:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to generate test signals'
+      message: 'Failed to process test signals request'
     });
   }
 });

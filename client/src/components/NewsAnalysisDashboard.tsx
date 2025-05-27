@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   NewspaperIcon, 
-  TrendingUpIcon,
-  TrendingDownIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
   MinusIcon,
   ExclamationTriangleIcon,
   ArrowTopRightOnSquareIcon,
@@ -90,9 +90,9 @@ export const NewsAnalysisDashboard: React.FC = () => {
   const getSentimentIcon = (sentiment: string) => {
     switch (sentiment) {
       case 'positive':
-        return <TrendingUpIcon className="w-5 h-5 text-green-600" />;
+        return <ArrowTrendingUpIcon className="w-5 h-5 text-green-600" />;
       case 'negative':
-        return <TrendingDownIcon className="w-5 h-5 text-red-600" />;
+        return <ArrowTrendingDownIcon className="w-5 h-5 text-red-600" />;
       default:
         return <MinusIcon className="w-5 h-5 text-gray-600" />;
     }

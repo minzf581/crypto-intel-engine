@@ -13,6 +13,7 @@ import DataSourceStatus from '@/components/DataSourceStatus';
 import VolumeAnalysisPanel from '@/components/VolumeAnalysisPanel';
 import NewsAnalysisPanel from '@/components/NewsAnalysisPanel';
 import EnhancedNotificationCenter from '@/components/EnhancedNotificationCenter';
+import SocialSentimentWidget from '@/components/dashboard/SocialSentimentWidget';
 import { 
   InformationCircleIcon, 
   CurrencyDollarIcon, 
@@ -251,6 +252,12 @@ const DashboardPage = () => {
           )}
         </div>
       )}
+
+      {/* Social Sentiment Analysis Widget */}
+      <SocialSentimentWidget 
+        selectedCoin={selectedAssets.length > 0 ? selectedAssets[0].symbol : 'BTC'}
+        coinName={selectedAssets.length > 0 ? selectedAssets[0].name : 'Bitcoin'}
+      />
 
       {/* Three-column analysis section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

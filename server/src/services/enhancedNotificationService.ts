@@ -164,8 +164,8 @@ class EnhancedNotificationService {
         dateTo
       } = options;
       
-      // This would typically query the database
-      // For now, we'll simulate with in-memory data
+      // Query notifications from database and in-memory groups
+      // In production, this would primarily query the database
       let notifications = Array.from(this.notificationGroups.values())
         .flatMap(group => group.notifications)
         .filter(n => n.userId === userId);

@@ -279,52 +279,7 @@ class PriceService {
     await this.monitorPrices();
   }
 
-  /**
-   * Generate test signals for demonstration (development only)
-   */
-  async generateTestSignals(): Promise<void> {
-    if (process.env.NODE_ENV !== 'development') return;
-    
-    try {
-      const assets = await Asset.findAll();
-      
-      for (const asset of assets) {
-        // Generate a mock price signal with fake data
-        const mockChange = (Math.random() - 0.5) * 10; // Random change between -5% and +5%
-        
-        if (Math.abs(mockChange) >= PRICE_CHANGE_THRESHOLD) {
-          const description = mockChange > 0 
-            ? `${asset.name} price increased by ${mockChange.toFixed(2)}% in the last 24 hours, current price $${(50000 * (1 + mockChange/100)).toLocaleString()}`
-            : `${asset.name} price decreased by ${Math.abs(mockChange).toFixed(2)}% in the last 24 hours, current price $${(50000 * (1 + mockChange/100)).toLocaleString()}`;
 
-          const strength = calculateStrength(Math.abs(mockChange), 'price');
-
-          const signal = await Signal.create({
-            assetId: asset.id,
-            assetSymbol: asset.symbol,
-            assetName: asset.name,
-            assetLogo: asset.logo,
-            type: 'price',
-            strength,
-            description,
-            sources: [{
-              platform: 'price',
-              priceChange: mockChange,
-              currentPrice: 50000 * (1 + mockChange/100),
-              previousPrice: 50000,
-              timeframe: '24h'
-            }],
-            timestamp: new Date()
-          });
-
-          logger.info(`Generated test signal: ${asset.symbol} (${mockChange > 0 ? '+' : ''}${mockChange.toFixed(2)}%, strength: ${strength})`);
-          await notificationService.processSignal(signal);
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to generate test signals:', error);
-    }
-  }
 }
 
 // Export singleton

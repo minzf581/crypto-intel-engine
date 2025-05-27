@@ -46,26 +46,11 @@ export const login = async (req: Request, res: Response) => {
 
     console.log('User found, verifying password', { userId: user.id });
     
-    // Special check for demo account
-    if (email === 'demo@example.com') {
-      console.log('Demo account login attempt');
-      
-      // Accept both 'demo123' and the password sent by the user
-      // This ensures the demo account is always accessible
-      if (password !== 'demo123' && !(await user.comparePassword(password))) {
-        console.log('Demo account login: using default password');
-        // If user provided password doesn't match, we'll silently use the default
-        // This keeps the demo account accessible
-      } else {
-        console.log('Demo account login: password verified');
-      }
-    } else {
-      // For regular accounts, verify password normally
-      const isMatch = await user.comparePassword(password);
-      if (!isMatch) {
-        console.log('Login failed: Password mismatch', { userId: user.id });
-        return errorResponse(res, 'Invalid email or password', 401);
-      }
+    // Verify password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      console.log('Login failed: Password mismatch', { userId: user.id });
+      return errorResponse(res, 'Invalid email or password', 401);
     }
 
     console.log('Password verification successful, generating JWT token', { userId: user.id });

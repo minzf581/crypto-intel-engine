@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import OnboardingPage from './pages/OnboardingPage';
 import SettingsPage from './pages/SettingsPage';
+import SocialSentimentPage from './pages/SocialSentimentPage';
 import NotFoundPage from './pages/NotFoundPage';
 import TestDataSourceStatus from './TestDataSourceStatus';
 import { useEffect } from 'react';
@@ -121,6 +122,7 @@ const App = () => {
                   }
                 >
                   <Route path="dashboard" element={<DashboardPage />} />
+                  <Route path="social-sentiment" element={<SocialSentimentPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
 

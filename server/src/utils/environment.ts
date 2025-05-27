@@ -35,12 +35,11 @@ export function detectEnvironment(): EnvironmentConfig {
   let allowedOrigins: (string | RegExp)[];
   
   if (isRailway) {
-    // Railway production environment
-    frontendUrl = 'https://crypto-front-demo.up.railway.app';
-    backendUrl = 'https://crypto-demo.up.railway.app';
+    // Railway production
+    frontendUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
+    backendUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
     allowedOrigins = [
-      'https://crypto-front-demo.up.railway.app',
-      /^https:\/\/.*\.railway\.app$/
+      'https://crypto-intelligence-engine-production.up.railway.app',
     ];
     console.log('🚄 Running on Railway');
   } else if (isProduction) {

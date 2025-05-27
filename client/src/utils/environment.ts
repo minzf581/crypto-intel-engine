@@ -38,8 +38,14 @@ export function detectFrontendEnvironment(): FrontendEnvironmentConfig {
   
   if (isRailway) {
     // Railway production
-    apiUrl = 'https://crypto-demo.up.railway.app';
-    frontendUrl = 'https://crypto-front-demo.up.railway.app';
+    if (isDomain('crypto-intelligence-engine-production.up.railway.app')) {
+      apiUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
+      frontendUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
+    } else {
+      // Default production URLs (configure for your actual production environment)
+      apiUrl = 'https://api.crypto-intelligence.com';
+      frontendUrl = 'https://crypto-intelligence.com';
+    }
   } else if (isProduction) {
     // Other production environment
     apiUrl = process.env.REACT_APP_API_URL || 'https://localhost:5001';

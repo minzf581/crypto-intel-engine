@@ -53,20 +53,22 @@ const assets = [
   },
 ];
 
-// Demo user data
-const users = [
-  {
-    name: 'Demo User',
-    email: 'demo@example.com',
-    password: 'demo123',
-    hasCompletedOnboarding: true,
-    selectedAssets: ['BTC', 'ETH', 'SOL'],
-  },
-];
-
 // Initialize data
 export const seedData = async () => {
   try {
+    // Create default demo user if not exists
+    const demoUserExists = await User.findOne({ where: { email: 'demo@example.com' } });
+    if (!demoUserExists) {
+      await User.create({
+        name: 'Demo User',
+        email: 'demo@example.com',
+        password: 'demo123', // Let User model handle password hashing
+        hasCompletedOnboarding: true,
+        selectedAssets: ['BTC', 'ETH', 'SOL', 'ADA']
+      });
+      logger.info('Created default demo user: demo@example.com');
+    }
+
     // Check if assets already exist
     const assetCount = await Asset.count();
     
@@ -93,22 +95,13 @@ export const seedData = async () => {
           logo: '',
           coingeckoId: undefined
         });
-        logger.info('Added TRUMP token for testing');
+        logger.info('Added TRUMP token');
       }
     }
     
-    // Check if users already exist
-    const userCount = await User.count();
-    
-    if (userCount === 0) {
-      // Create demo users
-      await Promise.all(users.map(user => User.create(user)));
-      logger.info(`Created ${users.length} demo users`);
-    }
-    
     // Log about signal generation strategy
-    logger.info('⚠️  Simulated signal generation is disabled, now using real data sources');
-    logger.info('📊 Signals will come from: price monitoring, sentiment analysis, and other real data sources');
+    logger.info('Signal generation using real data sources only');
+    logger.info('📊 Signals come from: price monitoring, sentiment analysis, and other verified data sources');
     
     logger.info('Data initialization complete');
   } catch (error) {

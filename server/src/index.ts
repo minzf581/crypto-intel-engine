@@ -16,6 +16,7 @@ import { initializeFirebase } from './config/firebase';
 import cron from 'node-cron';
 import { VolumeAnalysisService } from './services/VolumeAnalysisService';
 import { NewsAnalysisService } from './services/NewsAnalysisService';
+import { SocialSentimentService } from './services/socialSentimentService';
 import { AddressInfo } from 'net';
 import path from 'path';
 import fs from 'fs';
@@ -144,6 +145,16 @@ const initializeEnhancedServices = () => {
     }
   });
 
+  // Initialize social sentiment monitoring
+  try {
+    const socialSentimentService = SocialSentimentService.getInstance();
+    socialSentimentService.setSocketIO(io);
+    socialSentimentService.startMonitoring();
+    logger.info('Social sentiment monitoring started');
+  } catch (error) {
+    logger.error('Failed to start social sentiment monitoring:', error);
+  }
+
   logger.info('Enhanced services cron jobs scheduled');
 };
 
@@ -168,7 +179,7 @@ const initializeServer = async () => {
     // Initialize Firebase for push notifications
     initializeFirebase();
     
-    // Initialize real signal generator (now only logs status, does not generate simulated signals)
+    // Initialize signal generation system (real signals only)
     initializeSignalGenerator();
     
     // Initialize price monitoring service (real data)

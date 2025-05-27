@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // Set default API URL based on environment
   const apiUrl = env.VITE_API_URL || (mode === 'production' 
-    ? 'https://crypto-back-demo.up.railway.app'
+    ? 'https://crypto-intelligence-engine-production.up.railway.app'
     : 'http://localhost:5001');
 
   console.log(`Building for ${mode} mode with API URL: ${apiUrl}`);
