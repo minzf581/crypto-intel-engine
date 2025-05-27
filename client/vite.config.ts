@@ -6,10 +6,22 @@ import { loadEnv } from 'vite';
 // Load environment variables
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  // Detect Railway environment
+  const isRailway = !!(env.RAILWAY_ENVIRONMENT || env.RAILWAY_PROJECT_ID);
+  
   // Set default API URL based on environment
-  const apiUrl = env.VITE_API_URL || (mode === 'production' 
-    ? 'https://crypto-intelligence-engine-production.up.railway.app'
-    : 'http://localhost:5001');
+  let apiUrl = env.VITE_API_URL;
+  
+  if (!apiUrl) {
+    if (isRailway) {
+      // On Railway, use relative path since frontend and backend are on same domain
+      apiUrl = '';
+    } else if (mode === 'production') {
+      apiUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
+    } else {
+      apiUrl = 'http://localhost:5001';
+    }
+  }
 
   console.log(`Building for ${mode} mode with API URL: ${apiUrl}`);
 

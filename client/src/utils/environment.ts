@@ -37,22 +37,16 @@ export function detectFrontendEnvironment(): FrontendEnvironmentConfig {
   let frontendUrl: string;
   
   if (isRailway) {
-    // Railway production
-    if (isDomain('crypto-intelligence-engine-production.up.railway.app')) {
-      apiUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
-      frontendUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
-    } else {
-      // Default production URLs (configure for your actual production environment)
-      apiUrl = 'https://api.crypto-intelligence.com';
-      frontendUrl = 'https://crypto-intelligence.com';
-    }
+    // Railway production - use current domain
+    apiUrl = `${protocol}//${hostname}`;
+    frontendUrl = `${protocol}//${hostname}`;
   } else if (isProduction) {
     // Other production environment
-    apiUrl = process.env.REACT_APP_API_URL || 'https://localhost:5001';
+    apiUrl = import.meta.env.VITE_API_URL || 'https://localhost:5001';
     frontendUrl = currentUrl;
   } else {
     // Local development - always use port 5001 for API
-    apiUrl = 'http://localhost:5001';
+    apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     frontendUrl = currentUrl;
   }
   
