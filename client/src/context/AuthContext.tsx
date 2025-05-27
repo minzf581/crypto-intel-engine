@@ -215,58 +215,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Could not clear auth header:', e);
       }
       
-      // Try multiple login approaches to avoid CORS issues
-      let userData;
-      let token;
-      let response;
+      // Send login request
+      console.log('Sending login request...');
+      const response = await axios.post('/api/auth/login', { email, password });
       
-      try {
-        // First try: Regular axios POST
-        console.log('Login attempt 1: Using axios');
-        response = await axios.post('/api/auth/login', { email, password });
-        
-        if (response && response.data && response.data.data) {
-          userData = response.data.data.user;
-          token = response.data.data.token;
-        }
-      } catch (axiosError) {
-        console.log('Axios login failed, trying alternative method', axiosError);
-        
-        // Second try: Direct fetch without credentials
-        // Safely get baseURL
-        const baseURL = axios.defaults.baseURL || 'http://localhost:5001';
-        const loginUrl = `${baseURL}/api/auth/login`;
-        console.log('Login attempt 2: Using fetch to', loginUrl);
-        
-        try {
-          const fetchResponse = await fetch(loginUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-            // Don't include credentials to avoid CORS issues
-            credentials: 'omit'
-          });
-          
-          if (!fetchResponse.ok) {
-            throw new Error(`Login request failed: ${fetchResponse.status} ${fetchResponse.statusText}`);
-          }
-          
-          const data = await fetchResponse.json();
-          console.log('Login fetch response:', data);
-          
-          if (data && data.data) {
-            userData = data.data.user;
-            token = data.data.token;
-          } else {
-            throw new Error('Server response format error');
-          }
-        } catch (fetchError) {
-          console.error('Fetch login also failed:', fetchError);
-          throw fetchError;
-        }
+      console.log('Login response received:', response.data);
+      
+      // Validate response structure
+      if (!response.data || !response.data.success) {
+        throw new Error('Login failed: Invalid server response');
       }
+      
+      if (!response.data.data) {
+        throw new Error('Login failed: Missing response data');
+      }
+      
+      const { user: userData, token } = response.data.data;
       
       // Validate token and user data
       if (!token || typeof token !== 'string' || token.trim() === '') {
