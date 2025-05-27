@@ -16,7 +16,23 @@ const logger = winston.createLogger({
         winston.format.colorize(),
         winston.format.timestamp(),
         winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
-          const metaString = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
+          let metaString = '';
+          if (Object.keys(meta).length) {
+            try {
+              metaString = JSON.stringify(meta, null, 2);
+            } catch (error) {
+              // Handle circular references
+              metaString = JSON.stringify(meta, (key, value) => {
+                if (typeof value === 'object' && value !== null) {
+                  if (value.constructor.name === 'ClientRequest' || 
+                      value.constructor.name === 'IncomingMessage') {
+                    return '[Circular]';
+                  }
+                }
+                return value;
+              }, 2);
+            }
+          }
           return `${timestamp} [${level}]: ${message} ${metaString}`;
         })
       )
