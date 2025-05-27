@@ -37,9 +37,20 @@ export function detectFrontendEnvironment(): FrontendEnvironmentConfig {
   let frontendUrl: string;
   
   if (isRailway) {
-    // Railway production - use current domain
-    apiUrl = `${protocol}//${hostname}`;
-    frontendUrl = `${protocol}//${hostname}`;
+    // Railway production - detect if this is frontend or backend domain
+    if (hostname.includes('crypto-front-demo')) {
+      // This is the frontend domain, API should point to backend
+      apiUrl = 'https://crypto-demo.up.railway.app';
+      frontendUrl = `${protocol}//${hostname}`;
+    } else if (hostname.includes('crypto-demo')) {
+      // This is the backend domain
+      apiUrl = `${protocol}//${hostname}`;
+      frontendUrl = 'https://crypto-front-demo.up.railway.app';
+    } else {
+      // Fallback for other Railway domains
+      apiUrl = import.meta.env.VITE_API_URL || `${protocol}//${hostname}`;
+      frontendUrl = `${protocol}//${hostname}`;
+    }
   } else if (isProduction) {
     // Other production environment
     apiUrl = import.meta.env.VITE_API_URL || 'https://localhost:5001';
