@@ -36,11 +36,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Health check endpoint
+// Health check endpoint - Available immediately
+let serverReady = false;
 app.get('/health', (req, res) => {
   const environment = detectEnvironment();
   res.json({ 
-    status: 'OK', 
+    status: serverReady ? 'OK' : 'STARTING',
+    ready: serverReady,
     uptime: process.uptime(),
     env: env.nodeEnv,
     environment: {
@@ -161,6 +163,27 @@ const initializeEnhancedServices = () => {
 // Server initialization
 const initializeServer = async () => {
   try {
+    // Start server first for Railway health checks
+    const PORT = env.port || 5001;
+    server.listen(PORT, () => {
+      const address = server.address() as AddressInfo;
+      logger.info(`Server listening on port ${address.port} (${env.nodeEnv} mode)`);
+    });
+    
+    // Then initialize services in background
+    initializeServicesAsync();
+    
+  } catch (error: any) {
+    logger.error('Server startup error:', error);
+    process.exit(1);
+  }
+};
+
+// Async service initialization
+const initializeServicesAsync = async () => {
+  try {
+    logger.info('Starting background service initialization...');
+    
     // Connect to database
     await connectDatabase();
     
@@ -188,18 +211,16 @@ const initializeServer = async () => {
     // Initialize enhanced services
     initializeEnhancedServices();
     
-    logger.info('All services initialized');
-    
-    // Start server
-    const PORT = env.port || 5001;
-    server.listen(PORT, () => {
-      const address = server.address() as AddressInfo;
-      logger.info(`Server running on port ${address.port} (${env.nodeEnv} mode)`);
-    });
+    // Mark server as ready
+    serverReady = true;
+    logger.info('All services initialized - Server ready!');
     
   } catch (error: any) {
-    logger.error('Server initialization error:', error);
-    process.exit(1);
+    logger.error('Service initialization error:', error);
+    // Don't exit in production - let health check show error state
+    if (env.nodeEnv !== 'production') {
+      process.exit(1);
+    }
   }
 };
 
