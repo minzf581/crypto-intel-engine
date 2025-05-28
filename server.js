@@ -3,6 +3,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const express = require('express');
 
 // Use Railway's PORT environment variable
 const PORT = process.env.PORT || 5001;
@@ -46,8 +47,33 @@ process.on('unhandledRejection', (reason, promise) => {
 const serverPath = path.join(__dirname, 'server/dist/index.js');
 if (!fs.existsSync(serverPath)) {
   console.error('❌ Compiled server not found at:', serverPath);
-  console.error('   Please run "npm run build" first');
-  process.exit(1);
+  console.error('   Starting fallback health check server...');
+  
+  // Create a fallback health check server
+  const app = express();
+  
+  app.get('/', (req, res) => {
+    res.status(503).json({ 
+      status: 'error', 
+      message: 'Server not compiled. Run npm run build first.',
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  app.get('/health', (req, res) => {
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      message: 'Server not compiled',
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  app.listen(PORT, () => {
+    console.log(`❌ Fallback server running on port ${PORT}`);
+    console.log('   This server will respond to health checks but is not functional');
+  });
+  
+  return;
 }
 
 console.log('✅ Starting compiled server...');
@@ -58,5 +84,28 @@ try {
   console.log('🎉 Server initialization completed');
 } catch (error) {
   console.error('❌ Failed to start server:', error);
-  process.exit(1);
+  
+  // Create emergency health check server
+  const app = express();
+  
+  app.get('/', (req, res) => {
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Server failed to start: ' + error.message,
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  app.get('/health', (req, res) => {
+    res.status(500).json({ 
+      status: 'unhealthy', 
+      message: 'Server startup failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  app.listen(PORT, () => {
+    console.log(`❌ Emergency server running on port ${PORT}`);
+  });
 } 

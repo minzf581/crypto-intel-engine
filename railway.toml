@@ -2,12 +2,13 @@
 builder = "nixpacks"
 
 [deploy]
-healthcheckPath = "/"
+healthcheckPath = "/health"
 healthcheckTimeout = 300
 healthcheckInterval = 30
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 5
 startCommand = "npm start"
 
 [env]
-NODE_ENV = "production" 
+NODE_ENV = "production"
+CORS_ORIGIN = "${{RAILWAY_PUBLIC_DOMAIN}}" 

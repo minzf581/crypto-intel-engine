@@ -2,31 +2,19 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "nixpacks",
-    "buildCommand": "npm install && npm run build"
+    "buildCommand": "npm run build"
   },
   "deploy": {
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10,
-    "startCommand": "npm start",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 120,
-    "healthcheckInterval": 30
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "on_failure",
+    "restartPolicyMaxRetries": 5,
+    "startCommand": "npm start"
   },
   "environments": {
     "production": {
       "variables": {
-        "NODE_ENV": "production",
-        "FRONTEND_URL": "https://crypto-front-demo.up.railway.app",
-        "BACKEND_URL": "https://crypto-demo.up.railway.app",
-        "CORS_ORIGIN": "*",
-        "JWT_SECRET": "crypto-intel-production-secret-key-railway-2024",
-        "JWT_EXPIRES_IN": "30d",
-        "ENABLE_MOCK_SIGNALS": "false",
-        "COINGECKO_API_KEY": "",
-        "NEWSAPI_KEY": "",
-        "FIREBASE_SERVICE_ACCOUNT_KEY": "",
-        "LOG_LEVEL": "info",
-        "SQLITE_DB_PATH": "data/crypto-intel.sqlite"
+        "NODE_ENV": "production"
       }
     }
   }
