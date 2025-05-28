@@ -37,7 +37,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Health check endpoint - Available immediately
+// Health check endpoint - Available immediately (MUST be before static files)
 let serverReady = false;
 app.get('/health', (req, res) => {
   const environment = detectEnvironment();
@@ -57,18 +57,34 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
+// API routes (MUST be before static files)
 app.use('/api', routes);
 
-// Serve static files in production
+// Serve static files in production (MUST be after API routes and health check)
 if (env.nodeEnv === 'production') {
   const buildPath = path.join(__dirname, '../../client/dist');
   
   if (fs.existsSync(buildPath)) {
-    app.use(express.static(buildPath));
+    // Serve static files with conditional middleware to avoid conflicts
+    app.use((req, res, next) => {
+      // Skip static file serving for API routes and health check
+      if (req.path.startsWith('/api') || req.path === '/health') {
+        return next();
+      }
+      
+      // Use express.static for other requests
+      express.static(buildPath)(req, res, next);
+    });
     
-    // Handle client-side routing
-    app.get('*', (req, res) => {
+    // Handle client-side routing - catch-all for frontend routes
+    // CRITICAL: Explicitly exclude /health and /api routes
+    app.get('*', (req, res, next) => {
+      // Skip if it's an API route or health check
+      if (req.path.startsWith('/api') || req.path === '/health') {
+        return next();
+      }
+      
+      // Only serve index.html for frontend routes
       res.sendFile(path.join(buildPath, 'index.html'));
     });
   } else {
