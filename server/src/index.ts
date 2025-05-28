@@ -207,15 +207,24 @@ const initializeServer = async () => {
   try {
     // Get port from Railway environment or fallback
     const PORT = parseInt(process.env.PORT || env.port?.toString() || '5001', 10);
+    const HOST = process.env.HOST || '0.0.0.0'; // Railway requires binding to 0.0.0.0
     
     // Mark server as ready immediately for Railway health checks
     serverReady = true;
     
     // Start server immediately for Railway health checks
-    server.listen(PORT, () => {
+    server.listen(PORT, HOST, () => {
       const address = server.address() as AddressInfo;
-      logger.info(`🚀 Server listening on port ${address.port} (${env.nodeEnv} mode)`);
+      logger.info(`🚀 Server listening on ${HOST}:${address.port} (${env.nodeEnv} mode)`);
       logger.info('✅ Server ready for health checks');
+      
+      // Log Railway-specific information
+      if (process.env.RAILWAY_ENVIRONMENT) {
+        logger.info('🚂 Railway environment detected');
+        logger.info(`   Service ID: ${process.env.RAILWAY_SERVICE_ID || 'unknown'}`);
+        logger.info(`   Project ID: ${process.env.RAILWAY_PROJECT_ID || 'unknown'}`);
+        logger.info(`   Environment: ${process.env.RAILWAY_ENVIRONMENT || 'unknown'}`);
+      }
       
       // Initialize services in background after server is listening
       setImmediate(() => {

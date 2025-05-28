@@ -3,10 +3,11 @@ builder = "nixpacks"
 
 [deploy]
 healthcheckPath = "/health"
-healthcheckTimeout = 300
+healthcheckTimeout = 600
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 5
 
 [env]
 NODE_ENV = "production"
+HOST = "0.0.0.0"
 PORT = { default = "5001" } 
