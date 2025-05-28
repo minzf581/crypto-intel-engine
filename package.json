@@ -16,6 +16,7 @@
     "verify:build": "node verify-build.js",
     "test:railway": "node railway-deploy-test.js",
     "test:quick": "node quick-railway-test.js",
+    "check:ready": "node check-railway-ready.js",
     "preinstall": "echo 'Starting dependency installation...'",
     "postinstall": "npm run install:deps",
     "install:deps": "npm ci --prefer-offline --no-audit && cd server && npm ci --prefer-offline --no-audit && cd ../client && npm ci --prefer-offline --no-audit",
