@@ -192,20 +192,31 @@ const initializeServer = async () => {
     
     console.log(`🚀 Starting server on ${HOST}:${PORT}`);
     
-    // Start server immediately for Railway health checks
+    // Start server immediately for Railway
     server.listen(PORT, HOST, () => {
       console.log(`✅ Server listening on ${HOST}:${PORT} (${env.nodeEnv} mode)`);
       console.log('🔗 Health check available at /health');
+      console.log('🔗 Root endpoint available at /');
       
       // Mark server as ready
       serverReady = true;
       
-      // Initialize services in background after server is listening
-      setImmediate(() => {
+      // Initialize services in background - don't wait for them
+      setTimeout(() => {
         initializeServicesAsync().catch(error => {
           console.error('Background service initialization failed:', error);
+          // Don't exit - keep server running
         });
-      });
+      }, 100); // Start after 100ms
+    });
+    
+    // Handle server errors
+    server.on('error', (error: any) => {
+      console.error('Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+        process.exit(1);
+      }
     });
     
   } catch (error: any) {
