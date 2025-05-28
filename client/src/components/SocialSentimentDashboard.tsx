@@ -7,9 +7,12 @@ import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
+// Twitter OAuth removed - using basic search by default
 
 interface TwitterAccount {
   id: string;
@@ -62,6 +65,7 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   const [sentimentSummary, setSentimentSummary] = useState<SentimentSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [timeframe, setTimeframe] = useState<'1h' | '4h' | '24h' | '7d'>('24h');
+  const [searchMethod, setSearchMethod] = useState<string>('Basic Search');
 
   useEffect(() => {
     if (activeTab === 'analysis') {
@@ -72,18 +76,26 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   const searchAccounts = async () => {
     setIsLoading(true);
     try {
-      const response = await socialSentimentApi.searchAccounts(selectedCoin, coinName, {
+      const searchParams = {
         limit: 20,
         minFollowers: 1000,
-        includeVerified: true
-      });
+        includeVerified: true,
+        useOAuth: false // Always use basic search
+      };
+
+      const response = await socialSentimentApi.searchAccounts(selectedCoin, coinName, searchParams);
       setSearchResults(response.data.accounts);
-    } catch (error) {
+      setSearchMethod(response.data.searchMethod || 'Basic Search');
+      
+    } catch (error: any) {
       console.error('Failed to search accounts:', error);
+      alert('Search failed. Please check your internet connection and try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // OAuth search removed - using basic search only
 
   const setupMonitoring = async () => {
     if (selectedAccounts.size === 0) {
@@ -137,6 +149,25 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
             Find influential Twitter accounts related to this cryptocurrency
           </p>
         </div>
+      </div>
+
+      {/* Search Status */}
+      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <div className="flex items-center">
+          <ShieldCheckIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
+          <div>
+            <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
+              Twitter Search Ready
+            </h4>
+            <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+              Using Twitter API to find influential accounts related to {coinName}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Controls */}
+      <div className="flex items-center space-x-4">
         <button
           onClick={searchAccounts}
           disabled={isLoading}
@@ -147,11 +178,41 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
         </button>
       </div>
 
+      {/* Search Method Indicator */}
+      {searchMethod && (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          Last search method: {searchMethod}
+        </div>
+      )}
+
       {searchResults.length > 0 && (
         <div className="space-y-4">
+          {/* Demo Data Notice */}
+          {searchMethod === 'Demo Data (Rate Limited)' && (
+            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <div className="flex items-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mr-2" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Demo Data - Rate Limited
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    Twitter API rate limit reached. Showing demo data for development purposes. 
+                    Real data will be available after the rate limit resets (typically 15 minutes).
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between">
             <h4 className="text-md font-medium text-gray-900 dark:text-white">
               Found {searchResults.length} accounts
+              {searchMethod && (
+                <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                  ({searchMethod})
+                </span>
+              )}
             </h4>
             <button
               onClick={setupMonitoring}

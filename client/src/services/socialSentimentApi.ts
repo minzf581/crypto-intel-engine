@@ -2,7 +2,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/social-sentiment`,
+  baseURL: `${API_BASE_URL}/api/social-sentiment`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -21,6 +21,7 @@ export interface SearchAccountsOptions {
   limit?: number;
   minFollowers?: number;
   includeVerified?: boolean;
+  useOAuth?: boolean;
 }
 
 export interface SetupMonitoringOptions {
@@ -40,6 +41,7 @@ export const socialSentimentApi = {
     if (options.limit) params.append('limit', options.limit.toString());
     if (options.minFollowers) params.append('minFollowers', options.minFollowers.toString());
     if (options.includeVerified !== undefined) params.append('includeVerified', options.includeVerified.toString());
+    if (options.useOAuth !== undefined) params.append('useOAuth', options.useOAuth.toString());
 
     const response = await api.get(`/search-accounts/${coinSymbol}/${coinName}?${params}`);
     return response.data;

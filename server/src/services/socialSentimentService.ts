@@ -133,10 +133,10 @@ export class SocialSentimentService {
       // Get posts for the symbol
       const posts = await TwitterPost.findAll({
         where: {
-          relevantCoins: { [Op.contains]: [symbol] },
+          content: { [Op.like]: `%${symbol}%` },
           publishedAt: { [Op.gte]: startDate },
         },
-        include: [TwitterAccount],
+        include: [{ model: TwitterAccount, as: 'account' }],
         order: [['publishedAt', 'DESC']],
       });
 
@@ -225,8 +225,8 @@ export class SocialSentimentService {
       maxAccounts?: number;
     } = {}
   ): Promise<{
-    suggestedAccounts: TwitterAccount[];
-    confirmedAccounts: TwitterAccount[];
+    suggestedAccounts: any[];
+    confirmedAccounts: any[];
   }> {
     const { autoConfirm = false, minRelevanceScore = 0.5, maxAccounts = 20 } = options;
 
@@ -240,7 +240,7 @@ export class SocialSentimentService {
       );
 
       const suggestedAccounts = searchResult.accounts.slice(0, maxAccounts);
-      let confirmedAccounts: TwitterAccount[] = [];
+      let confirmedAccounts: any[] = [];
 
       if (autoConfirm) {
         confirmedAccounts = suggestedAccounts.slice(0, Math.floor(maxAccounts / 2));
@@ -290,10 +290,10 @@ export class SocialSentimentService {
       // Get relevant posts
       const posts = await TwitterPost.findAll({
         where: {
-          relevantCoins: { [Op.contains]: [coinSymbol] },
+          content: { [Op.like]: `%${coinSymbol}%` },
           publishedAt: { [Op.gte]: startDate },
         },
-        include: [TwitterAccount],
+        include: [{ model: TwitterAccount, as: 'account' }],
         order: [['publishedAt', 'DESC']],
       });
 
@@ -355,7 +355,7 @@ export class SocialSentimentService {
           coinSymbol,
           isConfirmed: true,
         },
-        include: [TwitterAccount],
+        include: [{ model: TwitterAccount, as: 'account' }],
         order: [['relevanceScore', 'DESC']],
       });
 
@@ -368,7 +368,7 @@ export class SocialSentimentService {
         const recentActivity = await TwitterPost.findAll({
           where: {
             twitterAccountId: account.id,
-            relevantCoins: { [Op.contains]: [coinSymbol] },
+            content: { [Op.like]: `%${coinSymbol}%` },
             publishedAt: { [Op.gte]: startDate },
           },
           order: [['publishedAt', 'DESC']],
@@ -422,6 +422,12 @@ export class SocialSentimentService {
 
   private async processAccountUpdates(accountId: string, coinSymbol: string): Promise<void> {
     try {
+      // Skip demo accounts - they don't exist in real Twitter API
+      if (accountId.startsWith('demo_')) {
+        logger.debug(`Skipping demo account ${accountId} for real-time updates`);
+        return;
+      }
+
       const newPosts = await this.twitterService.getAccountPosts(accountId, { limit: 5 });
       
       for (const post of newPosts) {
@@ -523,7 +529,7 @@ export class SocialSentimentService {
         isConfirmed: true,
         lastMentionAt: { [Op.gte]: startDate },
       },
-      include: [TwitterAccount],
+      include: [{ model: TwitterAccount, as: 'account' }],
       order: [['relevanceScore', 'DESC']],
       limit: 5,
     });
@@ -870,7 +876,7 @@ export class SocialSentimentService {
       
       const posts = await TwitterPost.findAll({
         where: {
-          relevantCoins: { [Op.contains]: [coinSymbol] },
+          content: { [Op.like]: `%${coinSymbol}%` },
           publishedAt: { [Op.gte]: startDate },
         },
         order: [['publishedAt', 'ASC']],

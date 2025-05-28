@@ -1,23 +1,29 @@
 import { Request, Response } from 'express';
 import { SocialSentimentService } from '../services/socialSentimentService';
 import { TwitterService } from '../services/TwitterService';
+import { TwitterOAuthService } from '../services/TwitterOAuthService';
 import { TwitterAccount } from '../models/TwitterAccount';
 import { TwitterPost } from '../models/TwitterPost';
 import { AccountCoinRelevance } from '../models/AccountCoinRelevance';
 import logger from '../utils/logger';
 import { Op } from 'sequelize';
+import jwt from 'jsonwebtoken';
+import env from '../config/env';
 
 export class SocialSentimentController {
   private socialSentimentService: SocialSentimentService;
   private twitterService: TwitterService;
+  private twitterOAuthService: TwitterOAuthService;
 
   constructor() {
     this.socialSentimentService = SocialSentimentService.getInstance();
     this.twitterService = TwitterService.getInstance();
+    this.twitterOAuthService = TwitterOAuthService.getInstance();
   }
 
   /**
    * Search for Twitter accounts related to a cryptocurrency
+   * Now supports both Bearer Token and OAuth 2.0 methods
    */
   searchAccountsForCoin = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -25,35 +31,181 @@ export class SocialSentimentController {
       const { 
         limit = 20, 
         minFollowers = 1000, 
-        includeVerified = true 
+        includeVerified = true,
+        useOAuth = false 
       } = req.query;
 
-      logger.info(`Searching accounts for ${coinSymbol} (${coinName})`);
+      logger.info(`Searching accounts for ${coinSymbol} (${coinName}) with params:`, {
+        limit: Number(limit),
+        minFollowers: Number(minFollowers),
+        includeVerified: includeVerified === 'true',
+        useOAuth: useOAuth === 'true'
+      });
 
-      const result = await this.twitterService.searchAccountsForCoin(
-        coinSymbol,
-        coinName,
-        {
-          limit: Number(limit),
-          minFollowers: Number(minFollowers),
-          includeVerified: includeVerified === 'true',
+      let result;
+
+      // Check if OAuth is requested and available
+      if (useOAuth === 'true') {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+          res.status(401).json({
+            success: false,
+            message: 'Authorization required for OAuth search',
+            requiresAuth: true
+          });
+          return;
         }
-      );
+
+        try {
+          const token = authHeader.replace('Bearer ', '');
+          const decoded = jwt.verify(token, env.jwtSecret) as any;
+
+          if (!decoded.twitterAccessToken) {
+            res.status(401).json({
+              success: false,
+              message: 'Twitter OAuth required. Please connect your Twitter account first.',
+              requiresTwitterAuth: true,
+              authUrl: '/auth/twitter/login'
+            });
+            return;
+          }
+
+          // Use OAuth search
+          const users = await this.twitterOAuthService.searchAccountsForCoinWithOAuth(
+            decoded.twitterAccessToken,
+            coinSymbol,
+            coinName,
+            {
+              limit: Number(limit),
+              minFollowers: Number(minFollowers),
+              includeVerified: includeVerified === 'true',
+            }
+          );
+
+          result = {
+            accounts: users.map(user => ({
+              id: user.id,
+              username: user.username,
+              displayName: user.name,
+              bio: user.description || '',
+              followersCount: user.public_metrics.followers_count,
+              followingCount: user.public_metrics.following_count,
+              tweetsCount: user.public_metrics.tweet_count,
+              verified: user.verified || false,
+              profileImageUrl: user.profile_image_url || '',
+              isInfluencer: user.public_metrics.followers_count > 10000,
+              influenceScore: this.calculateInfluenceScore(user.public_metrics),
+              relevanceScore: 0,
+              mentionCount: 0,
+              avgSentiment: 0,
+            })),
+            totalCount: users.length,
+            hasMore: false,
+            query: `${coinSymbol} ${coinName}`,
+            searchMethod: 'OAuth 2.0 User Context'
+          };
+
+          logger.info(`Successfully found ${users.length} Twitter accounts for ${coinSymbol} using OAuth`);
+
+        } catch (jwtError) {
+          logger.error('JWT verification failed:', jwtError);
+          res.status(401).json({
+            success: false,
+            message: 'Invalid authentication token',
+            requiresAuth: true
+          });
+          return;
+        }
+      } else {
+        // Use Bearer Token search (fallback to tweet search)
+        result = await this.twitterService.searchAccountsForCoin(
+          coinSymbol,
+          coinName,
+          {
+            limit: Number(limit),
+            minFollowers: Number(minFollowers),
+            includeVerified: includeVerified === 'true',
+          }
+        );
+        result.searchMethod = 'Bearer Token (Tweet Search)';
+      }
 
       res.json({
         success: true,
         data: result,
-        message: `Found ${result.accounts.length} accounts for ${coinSymbol}`,
+        message: `Found ${result.totalCount} Twitter accounts for ${coinSymbol}`,
+        metadata: {
+          coinSymbol,
+          coinName,
+          searchQuery: result.query,
+          totalFound: result.totalCount,
+          hasMore: result.hasMore,
+          searchMethod: result.searchMethod,
+          oauthAvailable: true,
+        },
       });
     } catch (error) {
-      logger.error('Failed to search accounts for coin:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to search accounts',
+      logger.error('Failed to search accounts for coin:', {
         error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        coinSymbol: req.params.coinSymbol,
+        coinName: req.params.coinName,
+        params: req.query,
+      });
+
+      // Determine appropriate status code based on error type
+      let statusCode = 500;
+      let errorMessage = 'Internal server error while searching accounts';
+
+      if (error instanceof Error) {
+        if (error.message.includes('Twitter API configuration required')) {
+          statusCode = 503;
+          errorMessage = 'Twitter API service not configured. Please contact administrator.';
+        } else if (error.message.includes('authentication failed')) {
+          statusCode = 401;
+          errorMessage = 'Twitter API authentication failed';
+        } else if (error.message.includes('rate limit')) {
+          statusCode = 429;
+          errorMessage = 'Rate limit exceeded. Please try again later';
+        } else if (error.message.includes('temporarily unavailable')) {
+          statusCode = 503;
+          errorMessage = 'Twitter search service temporarily unavailable';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+        suggestion: statusCode === 401 ? 'Try using OAuth search by adding ?useOAuth=true and connecting your Twitter account' : undefined
       });
     }
   };
+
+  /**
+   * Calculate influence score from public metrics
+   */
+  private calculateInfluenceScore(metrics: { followers_count: number; following_count: number; tweet_count: number }): number {
+    const followers = metrics.followers_count;
+    const following = metrics.following_count;
+    const tweets = metrics.tweet_count;
+    
+    // Avoid division by zero
+    const followRatio = following > 0 ? followers / following : followers;
+    const engagementRate = tweets > 0 ? followers / tweets : 0;
+    
+    // Calculate score (0-100)
+    let score = Math.log10(followers + 1) * 10; // Base score from followers
+    score += Math.min(followRatio / 10, 20); // Bonus for good follow ratio
+    score += Math.min(engagementRate / 100, 10); // Bonus for engagement
+    
+    // Cap at 100
+    return Math.min(Math.round(score), 100);
+  }
 
   /**
    * Setup monitoring for a specific cryptocurrency
@@ -149,10 +301,10 @@ export class SocialSentimentController {
 
       const posts = await TwitterPost.findAll({
         where: {
-          relevantCoins: { [Op.contains]: [coinSymbol] },
+          content: { [Op.like]: `%${coinSymbol}%` },
           publishedAt: { [Op.gte]: startDate },
         },
-        include: [TwitterAccount],
+        include: [{ model: TwitterAccount, as: 'account' }],
         order: [['publishedAt', 'DESC']],
       });
 
@@ -220,7 +372,7 @@ export class SocialSentimentController {
           coinSymbol,
           isConfirmed: true,
         },
-        include: [TwitterAccount],
+        include: [{ model: TwitterAccount, as: 'account' }],
         order: [['relevanceScore', 'DESC']],
       });
 
@@ -237,7 +389,7 @@ export class SocialSentimentController {
         const recentActivity = await TwitterPost.findAll({
           where: {
             twitterAccountId: account.id,
-            relevantCoins: { [Op.contains]: [coinSymbol] },
+            content: { [Op.like]: `%${coinSymbol}%` },
             publishedAt: { [Op.gte]: startDate },
           },
           order: [['publishedAt', 'DESC']],
@@ -284,7 +436,7 @@ export class SocialSentimentController {
         where: {
           twitterAccountId: accountId,
           ...(coinSymbol && {
-            relevantCoins: { [Op.contains]: [coinSymbol as string] },
+            content: { [Op.like]: `%${coinSymbol as string}%` },
           }),
         },
         include: [TwitterAccount],
@@ -389,7 +541,7 @@ export class SocialSentimentController {
 
       const posts = await TwitterPost.findAll({
         where: {
-          relevantCoins: { [Op.contains]: [coinSymbol] },
+          content: { [Op.like]: `%${coinSymbol}%` },
           publishedAt: { [Op.gte]: startDate },
         },
         order: [['publishedAt', 'DESC']],
@@ -474,7 +626,7 @@ export class SocialSentimentController {
         where: {
           twitterAccountId: accountId,
           ...(coinSymbol && {
-            relevantCoins: { [Op.contains]: [coinSymbol as string] },
+            content: { [Op.like]: `%${coinSymbol as string}%` },
           }),
           publishedAt: { [Op.gte]: startDate },
         },
@@ -569,7 +721,7 @@ export class SocialSentimentController {
 
         const recentPostCount = await TwitterPost.count({
           where: {
-            relevantCoins: { [Op.contains]: [coin.coinSymbol] },
+            content: { [Op.like]: `%${coin.coinSymbol}%` },
             publishedAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) },
           },
         });

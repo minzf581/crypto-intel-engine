@@ -187,4 +187,32 @@ server/src/
 - Verify responsive design implementation
 - Ensure accessibility compliance
 
-Remember: ANY Chinese text found in code, UI, logs, or documentation should be immediately converted to English. 
+Remember: ANY Chinese text found in code, UI, logs, or documentation should be immediately converted to English.
+
+## NO Demo/Mock Data Policy
+**CRITICAL: NEVER create or use demo/mock/fake data in this application**
+
+### Why Demo Data is Prohibited
+- Users will question the authenticity and credibility of the platform
+- Demo data creates false impressions about real market conditions
+- It undermines user trust in the intelligence and analysis provided
+- Real users expect real data for making real financial decisions
+
+### Requirements for Real Data Only
+- All cryptocurrency prices must come from actual market APIs (CoinGecko, etc.)
+- All social sentiment data must come from real social media platforms
+- All news data must be from legitimate cryptocurrency news sources
+- All trading signals must be based on real market analysis
+- All user accounts and authentication must be production-ready
+
+### When APIs are Not Available
+- Show appropriate error messages explaining the service is temporarily unavailable
+- Display "Data source not configured" or "API connection required" messages
+- Provide clear instructions for administrators to configure required APIs
+- Never substitute with placeholder or demo data
+
+### Implementation Guidelines
+- Use try-catch blocks with proper error handling for API failures
+- Log when external services are unavailable but don't mask it with fake data
+- Implement graceful degradation that informs users of limited functionality
+- Show loading states and error states transparently 

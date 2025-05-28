@@ -21,13 +21,27 @@ const logger = winston.createLogger({
             try {
               metaString = JSON.stringify(meta, null, 2);
             } catch (error) {
-              // Handle circular references
+              // Handle circular references and undefined values
               metaString = JSON.stringify(meta, (key, value) => {
                 if (typeof value === 'object' && value !== null) {
-                  if (value.constructor.name === 'ClientRequest' || 
-                      value.constructor.name === 'IncomingMessage') {
-                    return '[Circular]';
+                  // Safely check constructor name
+                  try {
+                    if (value.constructor && value.constructor.name && 
+                        (value.constructor.name === 'ClientRequest' || 
+                         value.constructor.name === 'IncomingMessage')) {
+                      return '[Circular]';
+                    }
+                  } catch (e) {
+                    // If we can't access constructor, just return a safe representation
+                    return '[Object]';
                   }
+                }
+                // Handle undefined, null, and other edge cases
+                if (value === undefined) {
+                  return '[Undefined]';
+                }
+                if (value === null) {
+                  return '[Null]';
                 }
                 return value;
               }, 2);
