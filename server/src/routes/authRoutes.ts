@@ -128,6 +128,31 @@ router.get('/twitter/callback', async (req: Request, res: Response) => {
 });
 
 /**
+ * Check Twitter OAuth configuration status (public endpoint)
+ */
+router.get('/twitter/config-status', (req: Request, res: Response) => {
+  try {
+    const isConfigured = twitterOAuthService.isTwitterOAuthConfigured();
+    
+    res.json({
+      success: true,
+      available: isConfigured,
+      message: isConfigured 
+        ? 'Twitter OAuth is configured and available'
+        : 'Twitter OAuth is not configured. Set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET to enable.'
+    });
+  } catch (error) {
+    logger.error('Failed to check Twitter OAuth configuration status:', error);
+    res.status(500).json({
+      success: false,
+      available: false,
+      message: 'Failed to check Twitter OAuth configuration status',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * Get Twitter connection status
  */
 router.get('/twitter/status', async (req: Request, res: Response) => {
@@ -235,31 +260,6 @@ router.get('/twitter/test-search/:coinSymbol/:coinName', async (req: Request, re
     res.status(500).json({
       success: false,
       message: 'Twitter OAuth search failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-/**
- * Check Twitter OAuth configuration status
- */
-router.get('/twitter/status', (req: Request, res: Response) => {
-  try {
-    const isConfigured = twitterOAuthService.isTwitterOAuthConfigured();
-    
-    res.json({
-      success: true,
-      available: isConfigured,
-      message: isConfigured 
-        ? 'Twitter OAuth is configured and available'
-        : 'Twitter OAuth is not configured. Set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET to enable.'
-    });
-  } catch (error) {
-    logger.error('Failed to check Twitter OAuth status:', error);
-    res.status(500).json({
-      success: false,
-      available: false,
-      message: 'Failed to check Twitter OAuth status',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

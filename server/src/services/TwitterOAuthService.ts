@@ -62,9 +62,12 @@ export class TwitterOAuthService {
 
   /**
    * Check if Twitter OAuth is properly configured
+   * This method dynamically checks environment variables
    */
   public isTwitterOAuthConfigured(): boolean {
-    return this.isConfigured;
+    const currentClientId = process.env.TWITTER_CLIENT_ID;
+    const currentClientSecret = process.env.TWITTER_CLIENT_SECRET;
+    return !!(currentClientId && currentClientSecret);
   }
 
   /**
