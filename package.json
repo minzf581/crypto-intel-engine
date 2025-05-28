@@ -1,7 +1,7 @@
 {
   "name": "crypto-intel-engine",
   "version": "1.0.0",
-  "description": "加密货币情报引擎",
+  "description": "Crypto Intelligence Engine",
   "main": "server.js",
   "private": true,
   "scripts": {
@@ -9,11 +9,14 @@
     "server:dev": "cd server && npm run dev",
     "client:dev": "cd client && npm run dev",
     "build": "cd server && npm install && npm run build && cd ../client && npm install && npm run build",
+    "build:prod": "cd server && npm install --omit=dev && cd ../client && npm install --omit=dev",
     "start": "node server.js",
     "postinstall": "npm run install:deps",
     "install:deps": "cd server && npm install && cd ../client && npm install",
+    "install:prod": "cd server && npm install --omit=dev && cd ../client && npm install --omit=dev",
     "clean": "rm -rf server/node_modules client/node_modules node_modules",
-    "reset": "npm run clean && npm install"
+    "reset": "npm run clean && npm install",
+    "audit:fix": "cd server && npm audit fix && cd ../client && npm audit fix"
   },
   "engines": {
     "node": ">=18",

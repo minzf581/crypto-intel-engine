@@ -13,17 +13,17 @@ export default defineConfig(({ mode }) => {
   let apiUrl = env.VITE_API_URL;
   
   if (!apiUrl) {
-    if (isRailway) {
-      // On Railway, use relative path since frontend and backend are on same domain
+    if (isRailway || mode === 'production') {
+      // In Railway/production, backend and frontend are served from same domain
+      // Use relative path for API calls
       apiUrl = '';
-    } else if (mode === 'production') {
-      apiUrl = 'https://crypto-intelligence-engine-production.up.railway.app';
     } else {
+      // Development mode
       apiUrl = 'http://localhost:5001';
     }
   }
 
-  console.log(`Building for ${mode} mode with API URL: ${apiUrl}`);
+  console.log(`Building for ${mode} mode with API URL: ${apiUrl || 'relative path'}`);
 
   return {
     plugins: [react()],
