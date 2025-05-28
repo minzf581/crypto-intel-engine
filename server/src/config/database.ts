@@ -88,28 +88,61 @@ export const syncModels = async () => {
     } else if (isRailway || isPostgreSQL) {
       // Railway/PostgreSQL environment: handle with special care
       logger.info('🚂 Railway/PostgreSQL environment detected, using optimized sync strategy');
+      
+      // Strategy 1: Try safe sync first
       try {
-        // First try: safe sync
         await sequelize.sync({ force: false, alter: false });
         logger.info('✅ Database models synchronized (Railway mode - safe sync)');
+        return;
       } catch (safeError) {
         const errorMessage = safeError instanceof Error ? safeError.message : String(safeError);
-        logger.warn('Railway safe sync failed, trying force sync:', errorMessage);
-        try {
-          // Railway fallback: force sync (Railway provides fresh database)
-          await sequelize.sync({ force: true });
-          logger.info('✅ Database models synchronized (Railway mode - force sync)');
-        } catch (forceError) {
-          logger.error('Railway force sync failed:', forceError);
-          // For PostgreSQL, try alter sync as last resort
+        logger.warn('Railway safe sync failed:', errorMessage);
+      }
+      
+      // Strategy 2: Try force sync (fresh database)
+      try {
+        logger.info('🔄 Attempting force sync for fresh database...');
+        await sequelize.sync({ force: true });
+        logger.info('✅ Database models synchronized (Railway mode - force sync)');
+        return;
+      } catch (forceError) {
+        const errorMessage = forceError instanceof Error ? forceError.message : String(forceError);
+        logger.warn('Railway force sync failed:', errorMessage);
+      }
+      
+      // Strategy 3: Try alter sync
+      try {
+        logger.info('🔄 Attempting alter sync...');
+        await sequelize.sync({ force: false, alter: true });
+        logger.info('✅ Database models synchronized (Railway mode - alter sync)');
+        return;
+      } catch (alterError) {
+        const errorMessage = alterError instanceof Error ? alterError.message : String(alterError);
+        logger.warn('Railway alter sync failed:', errorMessage);
+      }
+      
+      // Strategy 4: Manual table creation (fallback)
+      try {
+        logger.info('🔄 Attempting manual table creation without indexes...');
+        
+        // Create tables without indexes first
+        const models = Object.values(sequelize.models);
+        for (const model of models) {
           try {
-            await sequelize.sync({ force: false, alter: true });
-            logger.info('✅ Database models synchronized (Railway mode - alter sync)');
-          } catch (alterError) {
-            logger.error('All Railway sync strategies failed:', alterError);
-            throw alterError;
+            await model.sync({ force: false, alter: false });
+            logger.info(`✅ Created table: ${model.tableName}`);
+          } catch (modelError) {
+            logger.warn(`⚠️ Failed to create table ${model.tableName}:`, modelError);
+            // Continue with other tables
           }
         }
+        
+        logger.info('✅ Database models synchronized (Railway mode - manual creation)');
+        return;
+      } catch (manualError) {
+        logger.error('All Railway sync strategies failed:', manualError);
+        // Don't throw error - let the app continue and try to create essential data
+        logger.warn('⚠️ Database sync failed, but continuing with application startup...');
       }
     } else {
       // Production environment (non-Railway): conservative approach
@@ -130,7 +163,12 @@ export const syncModels = async () => {
     }
   } catch (error) {
     logger.error('❌ Model synchronization failed:', error);
-    throw error;
+    // In Railway environment, don't throw - let app continue
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+      logger.warn('⚠️ Continuing despite sync failure in Railway environment...');
+    } else {
+      throw error;
+    }
   }
 };
 

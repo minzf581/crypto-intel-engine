@@ -14,6 +14,7 @@ import logger from './utils/logger';
 import { seedData } from './config/seedData';
 import { initializeFirebase } from './config/firebase';
 import { initializeRecommendedAccounts } from './scripts/initializeRecommendedAccounts';
+import { ensureDemoUser } from './scripts/ensureDemoUser';
 import cron from 'node-cron';
 import { VolumeAnalysisService } from './services/VolumeAnalysisService';
 import { NewsAnalysisService } from './services/NewsAnalysisService';
@@ -53,14 +54,29 @@ app.get('/', (req, res) => {
 
 // Detailed health check endpoint - Always return 200 for Railway
 app.get('/health', (req, res) => {
-  // Always return 200 status for Railway health checks
-  res.status(200).json({ 
-    status: 'OK',
+  const uptime = process.uptime();
+  const memoryUsage = process.memoryUsage();
+  
+  const healthStatus = {
+    status: serverReady && servicesReady ? 'healthy' : 'starting',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    env: env.nodeEnv,
-    port: process.env.PORT || env.port || 5001
-  });
+    uptime: uptime,
+    memory: {
+      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+      external: `${Math.round(memoryUsage.external / 1024 / 1024)}MB`
+    },
+    services: {
+      database: servicesReady ? 'connected' : 'connecting',
+      twitter: 'configured',
+      priceMonitoring: servicesReady ? 'active' : 'starting'
+    },
+    ...(initializationError && { error: initializationError })
+  };
+  
+  const statusCode = serverReady && servicesReady ? 200 : 503;
+  res.status(statusCode).json(healthStatus);
 });
 
 // API routes (MUST be before static files)
@@ -245,15 +261,35 @@ const initializeServicesAsync = async () => {
     await syncModels();
     logger.info('✅ Database models synced');
     
+    // CRITICAL: Ensure demo user exists (even if other sync operations failed)
+    logger.info('👤 Ensuring demo user exists...');
+    try {
+      await ensureDemoUser();
+      logger.info('✅ Demo user ensured');
+    } catch (demoUserError) {
+      logger.error('❌ Failed to ensure demo user:', demoUserError);
+      // Continue with other initialization - this is critical for login
+    }
+    
     // Initialize data
     logger.info('📝 Initializing seed data...');
-    await seedData();
-    logger.info('✅ Seed data initialized');
+    try {
+      await seedData();
+      logger.info('✅ Seed data initialized');
+    } catch (seedError) {
+      logger.warn('⚠️ Seed data initialization failed:', seedError);
+      // Continue - demo user is more important
+    }
     
     // Initialize recommended accounts
     logger.info('👥 Initializing recommended accounts...');
-    await initializeRecommendedAccounts();
-    logger.info('✅ Recommended accounts initialized');
+    try {
+      await initializeRecommendedAccounts();
+      logger.info('✅ Recommended accounts initialized');
+    } catch (accountsError) {
+      logger.warn('⚠️ Recommended accounts initialization failed:', accountsError);
+      // Continue - not critical for basic functionality
+    }
     
     // Initialize services
     logger.info('⚙️ Initializing core services...');

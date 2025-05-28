@@ -166,10 +166,11 @@ TwitterPost.init(
       {
         fields: ['impactScore'],
       },
-      {
-        fields: ['relevantCoins'],
-        using: 'gin', // For JSON array search (PostgreSQL)
-      },
+      // Remove problematic GIN index for now - can be added manually later if needed
+      // {
+      //   fields: ['relevantCoins'],
+      //   using: 'gin', // For JSON array search (PostgreSQL)
+      // },
     ],
   }
 );
