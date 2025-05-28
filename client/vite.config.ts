@@ -6,8 +6,16 @@ import { loadEnv } from 'vite';
 // Load environment variables
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  // Detect Railway environment
-  const isRailway = !!(env.RAILWAY_ENVIRONMENT || env.RAILWAY_PROJECT_ID);
+  
+  // Detect Railway environment - check multiple Railway environment variables
+  const isRailway = !!(
+    env.RAILWAY_ENVIRONMENT || 
+    env.RAILWAY_PROJECT_ID || 
+    env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_ENVIRONMENT || 
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID
+  );
   
   // Set default API URL based on environment
   let apiUrl = env.VITE_API_URL;
@@ -24,6 +32,8 @@ export default defineConfig(({ mode }) => {
   }
 
   console.log(`Building for ${mode} mode with API URL: ${apiUrl || 'relative path'}`);
+  console.log(`Railway detected: ${isRailway}`);
+  console.log(`Mode: ${mode}`);
 
   return {
     plugins: [react()],
