@@ -69,16 +69,19 @@ export class TwitterService {
   private static instance: TwitterService;
   private readonly baseUrl = 'https://api.twitter.com/2';
   private readonly bearerToken: string;
+  private readonly isConfigured: boolean;
 
   constructor() {
-    // Require Twitter Bearer Token from environment
+    // Check for Twitter Bearer Token from environment
     this.bearerToken = process.env.TWITTER_BEARER_TOKEN || '';
+    this.isConfigured = !!this.bearerToken;
     
-    if (!this.bearerToken) {
-      throw new Error('Twitter API configuration required. Please set TWITTER_BEARER_TOKEN environment variable. Demo data is not allowed for financial applications.');
+    if (this.isConfigured) {
+      logger.info('Twitter service initialized with real API token');
+    } else {
+      logger.warn('Twitter service initialized without API token - Twitter features will be disabled');
+      logger.info('To enable Twitter features, set TWITTER_BEARER_TOKEN environment variable');
     }
-    
-    logger.info('Twitter service initialized with real API token');
   }
 
   public static getInstance(): TwitterService {
@@ -86,6 +89,16 @@ export class TwitterService {
       TwitterService.instance = new TwitterService();
     }
     return TwitterService.instance;
+  }
+
+  public isTwitterConfigured(): boolean {
+    return this.isConfigured;
+  }
+
+  private validateConfiguration(): void {
+    if (!this.isConfigured) {
+      throw new Error('Twitter API configuration not available. Please set TWITTER_BEARER_TOKEN environment variable to enable Twitter features.');
+    }
   }
 
   /**
