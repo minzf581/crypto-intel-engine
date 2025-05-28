@@ -1,6 +1,9 @@
 # Use Node.js 20 Alpine for smaller image size
 FROM node:20-alpine
 
+# Install curl for health checks
+RUN apk add --no-cache curl
+
 # Set working directory
 WORKDIR /app
 
@@ -30,9 +33,10 @@ EXPOSE 5001
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=5001
+ENV HOST=0.0.0.0
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check with longer timeout
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=5 \
   CMD curl -f http://localhost:5001/health || exit 1
 
 # Start the application
