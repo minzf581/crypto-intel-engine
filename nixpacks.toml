@@ -3,13 +3,16 @@ nixPkgs = ["nodejs_20", "python3"]
 
 [phases.install]
 cmds = [
-  "npm ci --prefer-offline --no-audit"
+  "npm ci --prefer-offline --no-audit",
+  "cd server && npm ci --prefer-offline --no-audit",
+  "cd client && npm ci --prefer-offline --no-audit"
 ]
 
 [phases.build]
 cmds = [
   "npm run build:server",
-  "npm run build:client"
+  "npm run build:client",
+  "npm run verify:build"
 ]
 
 [start]
@@ -17,4 +20,5 @@ cmd = "npm start"
 
 [variables]
 NODE_ENV = "production"
-NPM_CONFIG_PRODUCTION = "false" 
+NPM_CONFIG_PRODUCTION = "false"
+NIXPACKS_NO_CACHE = "1" 

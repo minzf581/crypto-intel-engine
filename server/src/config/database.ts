@@ -2,6 +2,7 @@ import { Sequelize } from 'sequelize';
 import path from 'path';
 import env from './env';
 import logger from '../utils/logger';
+import fs from 'fs';
 
 let sequelize: Sequelize;
 
@@ -18,11 +19,23 @@ if (env.databaseUrl) {
       }
     },
     logging: env.nodeEnv === 'development' ? (msg) => logger.debug(msg) : false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
   });
 } else {
   // Use SQLite (development environment)
   const dbPath = path.resolve(process.cwd(), env.sqliteDbPath || 'data/crypto-intel.sqlite');
   logger.info(`Using SQLite database: ${dbPath}`);
+  
+  // Ensure data directory exists
+  const dataDir = path.dirname(dbPath);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
   
   sequelize = new Sequelize({
     dialect: 'sqlite',
@@ -42,18 +55,57 @@ export const connectDatabase = async () => {
   }
 };
 
-// Sync database models
+// Clean database for fresh start (development only)
+const cleanDatabase = async () => {
+  if (env.nodeEnv === 'development' && !env.databaseUrl) {
+    try {
+      const dbPath = path.resolve(process.cwd(), env.sqliteDbPath || 'data/crypto-intel.sqlite');
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+        logger.info('Cleaned existing SQLite database');
+      }
+    } catch (error) {
+      logger.warn('Failed to clean database:', error);
+    }
+  }
+};
+
+// Sync database models with improved error handling
 export const syncModels = async () => {
   try {
-    // Use force: true in development to recreate tables and avoid constraint conflicts
-    const syncOptions = env.nodeEnv === 'development' ? 
-      { force: true } : 
-      { force: false, alter: true };
+    logger.info('🔄 Starting database synchronization...');
     
-    await sequelize.sync(syncOptions);
-    logger.info('Database models synchronized');
+    if (env.nodeEnv === 'development') {
+      // In development, clean start to avoid constraint conflicts
+      await cleanDatabase();
+      await sequelize.sync({ force: true });
+      logger.info('✅ Database models synchronized (development mode - force recreated)');
+    } else {
+      // In production, try gentle sync first
+      try {
+        await sequelize.sync({ force: false, alter: false });
+        logger.info('✅ Database models synchronized (production mode - safe sync)');
+      } catch (syncError) {
+        logger.warn('Safe sync failed, attempting alter sync:', syncError);
+        try {
+          // If safe sync fails, try alter
+          await sequelize.sync({ force: false, alter: true });
+          logger.info('✅ Database models synchronized (production mode - alter sync)');
+        } catch (alterError) {
+          logger.error('Alter sync also failed:', alterError);
+          // For Railway deployment, create fresh database if all else fails
+          if (process.env.RAILWAY_ENVIRONMENT) {
+            logger.warn('Railway environment detected, attempting force sync as last resort...');
+            await sequelize.sync({ force: true });
+            logger.info('✅ Database models synchronized (Railway mode - force sync)');
+          } else {
+            throw alterError;
+          }
+        }
+      }
+    }
   } catch (error) {
-    logger.error('Model synchronization failed:', error);
+    logger.error('❌ Model synchronization failed:', error);
     throw error;
   }
 };
