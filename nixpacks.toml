@@ -9,6 +9,7 @@ cmds = [
 ]
 
 [phases.build]
+buildCmd = "npm run build"
 cmds = [
   "npm run build:server",
   "npm run build:client",
