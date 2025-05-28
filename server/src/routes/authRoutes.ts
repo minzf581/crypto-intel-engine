@@ -20,6 +20,15 @@ router.post('/login', login);
  */
 router.get('/twitter/login', async (req: Request, res: Response) => {
   try {
+    // Check if Twitter OAuth is configured
+    if (!twitterOAuthService.isTwitterOAuthConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Twitter OAuth is not configured on this server',
+        error: 'Twitter authentication is currently unavailable'
+      });
+    }
+
     const { userId } = req.query; // Optional: link to existing user
     
     const { url, state } = twitterOAuthService.generateAuthUrl(userId as string);
@@ -43,6 +52,12 @@ router.get('/twitter/login', async (req: Request, res: Response) => {
  */
 router.get('/twitter/callback', async (req: Request, res: Response) => {
   try {
+    // Check if Twitter OAuth is configured
+    if (!twitterOAuthService.isTwitterOAuthConfigured()) {
+      logger.error('Twitter OAuth callback received but OAuth is not configured');
+      return res.redirect(`${env.clientUrl}/login?error=twitter_not_configured`);
+    }
+
     const { code, state, error } = req.query;
 
     // Handle OAuth error
@@ -117,6 +132,16 @@ router.get('/twitter/callback', async (req: Request, res: Response) => {
  */
 router.get('/twitter/status', async (req: Request, res: Response) => {
   try {
+    // Check if Twitter OAuth is configured
+    if (!twitterOAuthService.isTwitterOAuthConfigured()) {
+      return res.json({
+        success: true,
+        connected: false,
+        available: false,
+        message: 'Twitter OAuth is not configured on this server'
+      });
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader) {
       return res.status(401).json({
@@ -133,6 +158,7 @@ router.get('/twitter/status', async (req: Request, res: Response) => {
     res.json({
       success: true,
       connected: hasTwitterAccess,
+      available: true,
       twitterUsername: decoded.twitterUsername || null,
       message: 'Twitter connection status retrieved'
     });
@@ -150,6 +176,15 @@ router.get('/twitter/status', async (req: Request, res: Response) => {
  */
 router.get('/twitter/test-search/:coinSymbol/:coinName', async (req: Request, res: Response) => {
   try {
+    // Check if Twitter OAuth is configured
+    if (!twitterOAuthService.isTwitterOAuthConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Twitter OAuth is not configured on this server',
+        error: 'Twitter search functionality is currently unavailable'
+      });
+    }
+
     const { coinSymbol, coinName } = req.params;
     const authHeader = req.headers.authorization;
     
@@ -200,6 +235,31 @@ router.get('/twitter/test-search/:coinSymbol/:coinName', async (req: Request, re
     res.status(500).json({
       success: false,
       message: 'Twitter OAuth search failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Check Twitter OAuth configuration status
+ */
+router.get('/twitter/status', (req: Request, res: Response) => {
+  try {
+    const isConfigured = twitterOAuthService.isTwitterOAuthConfigured();
+    
+    res.json({
+      success: true,
+      available: isConfigured,
+      message: isConfigured 
+        ? 'Twitter OAuth is configured and available'
+        : 'Twitter OAuth is not configured. Set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET to enable.'
+    });
+  } catch (error) {
+    logger.error('Failed to check Twitter OAuth status:', error);
+    res.status(500).json({
+      success: false,
+      available: false,
+      message: 'Failed to check Twitter OAuth status',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

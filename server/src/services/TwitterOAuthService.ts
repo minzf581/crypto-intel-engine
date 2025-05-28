@@ -30,6 +30,7 @@ export class TwitterOAuthService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly baseUrl: string;
+  private readonly isConfigured: boolean;
   private oauthStates = new Map<string, OAuthState>();
 
   constructor() {
@@ -39,11 +40,14 @@ export class TwitterOAuthService {
       ? 'https://yourdomain.com' 
       : 'http://localhost:5001';
 
-    if (!this.clientId || !this.clientSecret) {
-      throw new Error('Twitter OAuth 2.0 configuration required. Please set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET environment variables.');
-    }
+    this.isConfigured = !!(this.clientId && this.clientSecret);
 
-    logger.info('Twitter OAuth 2.0 service initialized');
+    if (!this.isConfigured) {
+      logger.warn('Twitter OAuth 2.0 configuration not found. Twitter authentication features will be disabled.');
+      logger.warn('To enable Twitter OAuth, set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET environment variables.');
+    } else {
+      logger.info('Twitter OAuth 2.0 service initialized');
+    }
     
     // Clean up expired states every hour
     setInterval(() => this.cleanupExpiredStates(), 60 * 60 * 1000);
@@ -57,9 +61,20 @@ export class TwitterOAuthService {
   }
 
   /**
+   * Check if Twitter OAuth is properly configured
+   */
+  public isTwitterOAuthConfigured(): boolean {
+    return this.isConfigured;
+  }
+
+  /**
    * Generate OAuth 2.0 authorization URL with PKCE
    */
   generateAuthUrl(userId?: string): { url: string; state: string } {
+    if (!this.isConfigured) {
+      throw new Error('Twitter OAuth is not configured. Please set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET environment variables.');
+    }
+
     try {
       const client = new TwitterApi({
         clientId: this.clientId,
@@ -98,6 +113,10 @@ export class TwitterOAuthService {
     refreshToken?: string;
     userInfo: TwitterUserInfo;
   }> {
+    if (!this.isConfigured) {
+      throw new Error('Twitter OAuth is not configured. Please set TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET environment variables.');
+    }
+
     try {
       // Validate state
       const storedState = this.oauthStates.get(state);
@@ -165,6 +184,11 @@ export class TwitterOAuthService {
     query: string,
     maxResults: number = 50
   ): Promise<TwitterUserInfo[]> {
+    if (!this.isConfigured) {
+      logger.warn('Twitter OAuth not configured, returning empty search results');
+      return [];
+    }
+
     try {
       const client = new TwitterApi(accessToken);
 

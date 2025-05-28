@@ -67,8 +67,8 @@ if (env.nodeEnv === 'production') {
   if (fs.existsSync(buildPath)) {
     // Serve static files with conditional middleware to avoid conflicts
     app.use((req, res, next) => {
-      // Skip static file serving for API routes and health check
-      if (req.path.startsWith('/api') || req.path === '/health') {
+      // Skip static file serving for API routes, auth routes, and health check
+      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
         return next();
       }
       
@@ -77,10 +77,10 @@ if (env.nodeEnv === 'production') {
     });
     
     // Handle client-side routing - catch-all for frontend routes
-    // CRITICAL: Explicitly exclude /health and /api routes
+    // CRITICAL: Explicitly exclude /health, /api, and /auth routes
     app.get('*', (req, res, next) => {
-      // Skip if it's an API route or health check
-      if (req.path.startsWith('/api') || req.path === '/health') {
+      // Skip if it's an API route, auth route, or health check
+      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
         return next();
       }
       
