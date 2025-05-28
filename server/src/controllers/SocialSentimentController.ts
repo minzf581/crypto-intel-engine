@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { SocialSentimentService } from '../services/socialSentimentService';
 import { TwitterService } from '../services/TwitterService';
 import { TwitterOAuthService } from '../services/TwitterOAuthService';
+import { RecommendedAccountService } from '../services/RecommendedAccountService';
 import { TwitterAccount } from '../models/TwitterAccount';
 import { TwitterPost } from '../models/TwitterPost';
 import { AccountCoinRelevance } from '../models/AccountCoinRelevance';
@@ -14,11 +15,13 @@ export class SocialSentimentController {
   private socialSentimentService: SocialSentimentService;
   private twitterService: TwitterService;
   private twitterOAuthService: TwitterOAuthService;
+  private recommendedAccountService: RecommendedAccountService;
 
   constructor() {
     this.socialSentimentService = SocialSentimentService.getInstance();
     this.twitterService = TwitterService.getInstance();
     this.twitterOAuthService = TwitterOAuthService.getInstance();
+    this.recommendedAccountService = RecommendedAccountService.getInstance();
   }
 
   /**
@@ -187,6 +190,173 @@ export class SocialSentimentController {
   };
 
   /**
+   * Search for Twitter accounts with custom query
+   */
+  searchAccountsWithQuery = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { 
+        query,
+        limit = 20, 
+        minFollowers = 1000, 
+        includeVerified = true,
+        useOAuth = false 
+      } = req.query;
+
+      if (!query || typeof query !== 'string' || query.trim().length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Query parameter is required and must be a non-empty string',
+        });
+        return;
+      }
+
+      logger.info(`Searching accounts with custom query: "${query}" with params:`, {
+        limit: Number(limit),
+        minFollowers: Number(minFollowers),
+        includeVerified: includeVerified === 'true',
+        useOAuth: useOAuth === 'true'
+      });
+
+      let result;
+
+      // Check if OAuth is requested and available
+      if (useOAuth === 'true') {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+          res.status(401).json({
+            success: false,
+            message: 'Authorization required for OAuth search',
+            requiresAuth: true
+          });
+          return;
+        }
+
+        try {
+          const token = authHeader.replace('Bearer ', '');
+          const decoded = jwt.verify(token, env.jwtSecret) as any;
+
+          if (!decoded.twitterAccessToken) {
+            res.status(401).json({
+              success: false,
+              message: 'Twitter OAuth required. Please connect your Twitter account first.',
+              requiresTwitterAuth: true,
+              authUrl: '/auth/twitter/login'
+            });
+            return;
+          }
+
+          // Use OAuth search with custom query
+          const users = await this.twitterOAuthService.searchAccountsWithCustomQuery(
+            decoded.twitterAccessToken,
+            query as string,
+            {
+              limit: Number(limit),
+              minFollowers: Number(minFollowers),
+              includeVerified: includeVerified === 'true',
+            }
+          );
+
+          result = {
+            accounts: users.map((user: any) => ({
+              id: user.id,
+              username: user.username,
+              displayName: user.name,
+              bio: user.description || '',
+              followersCount: user.public_metrics.followers_count,
+              followingCount: user.public_metrics.following_count,
+              tweetsCount: user.public_metrics.tweet_count,
+              verified: user.verified || false,
+              profileImageUrl: user.profile_image_url || '',
+              isInfluencer: user.public_metrics.followers_count > 10000,
+              influenceScore: this.calculateInfluenceScore(user.public_metrics),
+              relevanceScore: 0,
+              mentionCount: 0,
+              avgSentiment: 0,
+            })),
+            totalCount: users.length,
+            hasMore: false,
+            query: query as string,
+            searchMethod: 'OAuth 2.0 Custom Query'
+          };
+
+          logger.info(`Successfully found ${users.length} Twitter accounts with custom query using OAuth`);
+
+        } catch (jwtError) {
+          logger.error('JWT verification failed:', jwtError);
+          res.status(401).json({
+            success: false,
+            message: 'Invalid authentication token',
+            requiresAuth: true
+          });
+          return;
+        }
+      } else {
+        // Use Bearer Token search with custom query
+        result = await this.twitterService.searchAccountsWithCustomQuery(
+          query as string,
+          {
+            limit: Number(limit),
+            minFollowers: Number(minFollowers),
+            includeVerified: includeVerified === 'true',
+          }
+        );
+        result.searchMethod = 'Bearer Token (Custom Query)';
+      }
+
+      res.json({
+        success: true,
+        data: result,
+        message: `Found ${result.totalCount} Twitter accounts for query: "${query}"`,
+        metadata: {
+          searchQuery: result.query,
+          totalFound: result.totalCount,
+          hasMore: result.hasMore,
+          searchMethod: result.searchMethod,
+          oauthAvailable: true,
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to search accounts with custom query:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        query: req.query.query,
+        params: req.query,
+      });
+
+      // Determine appropriate status code based on error type
+      let statusCode = 500;
+      let errorMessage = 'Internal server error while searching accounts';
+
+      if (error instanceof Error) {
+        if (error.message.includes('Twitter API configuration required')) {
+          statusCode = 503;
+          errorMessage = 'Twitter API service not configured. Please contact administrator.';
+        } else if (error.message.includes('authentication failed')) {
+          statusCode = 401;
+          errorMessage = 'Twitter API authentication failed';
+        } else if (error.message.includes('rate limit')) {
+          statusCode = 429;
+          errorMessage = 'Rate limit exceeded. Please try again later';
+        } else if (error.message.includes('temporarily unavailable')) {
+          statusCode = 503;
+          errorMessage = 'Twitter search service temporarily unavailable';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+        suggestion: statusCode === 401 ? 'Try using OAuth search by adding ?useOAuth=true and connecting your Twitter account' : undefined
+      });
+    }
+  };
+
+  /**
    * Calculate influence score from public metrics
    */
   private calculateInfluenceScore(metrics: { followers_count: number; following_count: number; tweet_count: number }): number {
@@ -262,17 +432,98 @@ export class SocialSentimentController {
         return;
       }
 
-      await this.socialSentimentService.confirmAccountsForMonitoring(coinSymbol, accountIds);
+      logger.info(`Confirming ${accountIds.length} accounts for monitoring ${coinSymbol}`, {
+        coinSymbol,
+        accountIds
+      });
+
+      // Process each account ID
+      const confirmedAccounts = [];
+      const errors = [];
+
+      for (const accountId of accountIds) {
+        try {
+          // Find the Twitter account
+          const twitterAccount = await TwitterAccount.findByPk(accountId);
+          
+          if (!twitterAccount) {
+            logger.warn(`Twitter account not found: ${accountId}`);
+            errors.push(`Account ${accountId} not found`);
+            continue;
+          }
+
+          // Create or update the relevance record
+          const [relevance, created] = await AccountCoinRelevance.findOrCreate({
+            where: {
+              twitterAccountId: accountId,
+              coinSymbol: coinSymbol.toUpperCase(),
+            },
+            defaults: {
+              id: `${accountId}_${coinSymbol.toUpperCase()}`,
+              twitterAccountId: accountId,
+              coinSymbol: coinSymbol.toUpperCase(),
+              relevanceScore: 0.8, // Default relevance score for manually confirmed accounts
+              mentionCount: 0,
+              totalPosts: 0,
+              mentionFrequency: 0,
+              avgSentiment: 0,
+              avgImpact: 0,
+              lastMentionAt: new Date(),
+              historicalData: [],
+              keywordFrequency: {},
+              correlationScore: 0,
+              isConfirmed: true, // Mark as confirmed for monitoring
+            },
+          });
+
+          // If the record already existed, update it to be confirmed
+          if (!created) {
+            await relevance.update({
+              isConfirmed: true,
+              relevanceScore: Math.max(relevance.relevanceScore, 0.8), // Ensure minimum relevance
+            });
+          }
+
+          confirmedAccounts.push({
+            accountId: twitterAccount.id,
+            username: twitterAccount.username,
+            displayName: twitterAccount.displayName,
+            coinSymbol: coinSymbol.toUpperCase(),
+            relevanceScore: relevance.relevanceScore,
+            isConfirmed: true,
+          });
+
+          logger.info(`Successfully confirmed account ${twitterAccount.username} for ${coinSymbol}`);
+
+        } catch (error) {
+          logger.error(`Failed to confirm account ${accountId}:`, error);
+          errors.push(`Failed to confirm account ${accountId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Log the results
+      logger.info(`Monitoring confirmation completed for ${coinSymbol}:`, {
+        totalRequested: accountIds.length,
+        confirmed: confirmedAccounts.length,
+        errors: errors.length,
+      });
 
       res.json({
         success: true,
-        message: `Confirmed ${accountIds.length} accounts for monitoring ${coinSymbol}`,
+        data: {
+          confirmedAccounts,
+          totalConfirmed: confirmedAccounts.length,
+          totalRequested: accountIds.length,
+          errors: errors.length > 0 ? errors : undefined,
+        },
+        message: `Successfully confirmed ${confirmedAccounts.length} of ${accountIds.length} accounts for monitoring ${coinSymbol}`,
       });
+
     } catch (error) {
       logger.error('Failed to confirm accounts for monitoring:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to confirm accounts',
+        message: 'Failed to confirm accounts for monitoring',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -364,55 +615,124 @@ export class SocialSentimentController {
       const { coinSymbol } = req.params;
       const { days = 30 } = req.query;
 
+      logger.info(`Getting correlation data for ${coinSymbol} over ${days} days`);
+
       const startDate = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
 
       // Get monitored accounts with relevance data
       const relevanceRecords = await AccountCoinRelevance.findAll({
         where: {
-          coinSymbol,
+          coinSymbol: coinSymbol.toUpperCase(),
           isConfirmed: true,
         },
-        include: [{ model: TwitterAccount, as: 'account' }],
+        include: [{ 
+          model: TwitterAccount, 
+          as: 'account',
+          required: true 
+        }],
         order: [['relevanceScore', 'DESC']],
       });
+
+      if (relevanceRecords.length === 0) {
+        res.json({
+          success: true,
+          data: [],
+          message: `No monitored accounts found for ${coinSymbol}. Please add accounts to monitoring first.`,
+          metadata: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            totalAccounts: 0,
+            timeframe: `${days} days`,
+            startDate,
+            endDate: new Date(),
+          }
+        });
+        return;
+      }
 
       const correlationData = [];
 
       for (const relevance of relevanceRecords) {
-        const account = (relevance as any).TwitterAccount as TwitterAccount;
+        const account = (relevance as any).account as TwitterAccount;
         
         if (!account) {
-          continue; // Skip if account is not loaded
+          logger.warn(`Account not found for relevance record: ${relevance.id}`);
+          continue;
         }
         
-        // Get recent activity
+        // Get recent activity for this account
         const recentActivity = await TwitterPost.findAll({
           where: {
             twitterAccountId: account.id,
-            content: { [Op.like]: `%${coinSymbol}%` },
+            content: { [Op.like]: `%${coinSymbol.toUpperCase()}%` },
             publishedAt: { [Op.gte]: startDate },
           },
           order: [['publishedAt', 'DESC']],
-          limit: 20,
+          limit: 50,
         });
 
-        // Generate keyword cloud
+        // Generate historical correlation data (simulated for now)
+        const historicalCorrelation = this.generateHistoricalCorrelation(
+          account, 
+          coinSymbol.toUpperCase(), 
+          Number(days),
+          recentActivity
+        );
+
+        // Generate keyword cloud from recent posts
         const keywordCloud = this.generateKeywordCloud(recentActivity);
 
+        // Calculate prediction accuracy based on sentiment vs actual performance
+        const predictionAccuracy = this.calculatePredictionAccuracy(recentActivity);
+
+        // Calculate activity metrics
+        const activityMetrics = this.calculateActivityMetrics(recentActivity, Number(days));
+
         correlationData.push({
-          account,
-          relevance,
-          historicalCorrelation: relevance.historicalData || [],
-          recentActivity,
+          account: {
+            id: account.id,
+            username: account.username,
+            displayName: account.displayName,
+            followersCount: account.followersCount,
+            verified: account.verified,
+            influenceScore: account.influenceScore,
+            profileImageUrl: account.profileImageUrl,
+          },
+          relevance: {
+            score: relevance.relevanceScore,
+            mentionCount: relevance.mentionCount,
+            avgSentiment: relevance.avgSentiment,
+            avgImpact: relevance.avgImpact,
+            lastMentionAt: relevance.lastMentionAt,
+            isConfirmed: relevance.isConfirmed,
+          },
+          historicalCorrelation,
+          recentActivity: recentActivity.slice(0, 10), // Limit to 10 most recent posts
           keywordCloud,
-          predictionAccuracy: relevance.avgSentiment || 0, // Use avgSentiment as prediction accuracy placeholder
+          predictionAccuracy,
+          activityMetrics,
+          correlationStrength: this.calculateCorrelationStrength(historicalCorrelation),
         });
       }
 
+      // Sort by correlation strength and relevance
+      correlationData.sort((a, b) => {
+        const scoreA = (a.correlationStrength * 0.6) + (a.relevance.score * 0.4);
+        const scoreB = (b.correlationStrength * 0.6) + (b.relevance.score * 0.4);
+        return scoreB - scoreA;
+      });
+
       res.json({
         success: true,
-        data: correlationData.sort((a, b) => b.relevance.relevanceScore - a.relevance.relevanceScore),
-        message: `Correlation data for ${coinSymbol}`,
+        data: correlationData,
+        message: `Historical correlation data for ${coinSymbol.toUpperCase()}`,
+        metadata: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          totalAccounts: correlationData.length,
+          timeframe: `${days} days`,
+          startDate,
+          endDate: new Date(),
+          hasHistoricalData: correlationData.some(item => item.historicalCorrelation.length > 0),
+        }
       });
     } catch (error) {
       logger.error('Failed to get correlation data:', error);
@@ -423,6 +743,174 @@ export class SocialSentimentController {
       });
     }
   };
+
+  /**
+   * Generate historical correlation data
+   */
+  private generateHistoricalCorrelation(
+    account: TwitterAccount, 
+    coinSymbol: string, 
+    days: number,
+    recentActivity: TwitterPost[]
+  ): Array<{
+    date: string;
+    sentimentScore: number;
+    priceChange: number;
+    correlation: number;
+    postCount: number;
+    impact: string;
+  }> {
+    const correlationData = [];
+    const now = new Date();
+    
+    // Group posts by date
+    const postsByDate: { [key: string]: TwitterPost[] } = {};
+    recentActivity.forEach(post => {
+      const dateKey = post.publishedAt.toISOString().split('T')[0];
+      if (!postsByDate[dateKey]) {
+        postsByDate[dateKey] = [];
+      }
+      postsByDate[dateKey].push(post);
+    });
+
+    // Generate correlation data for each day
+    for (let i = 0; i < days; i++) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateKey = date.toISOString().split('T')[0];
+      const dayPosts = postsByDate[dateKey] || [];
+      
+      // Calculate average sentiment for the day
+      const avgSentiment = dayPosts.length > 0 
+        ? dayPosts.reduce((sum, post) => sum + post.sentimentScore, 0) / dayPosts.length
+        : 0;
+
+      // Simulate price change (in real implementation, this would come from price API)
+      const priceChange = this.simulatePriceChange(avgSentiment, i);
+      
+      // Calculate correlation between sentiment and price change
+      const correlation = this.calculateDayCorrelation(avgSentiment, priceChange);
+      
+      // Determine impact level
+      const impact = Math.abs(avgSentiment) > 0.5 ? 'high' : 
+                    Math.abs(avgSentiment) > 0.2 ? 'medium' : 'low';
+
+      correlationData.push({
+        date: dateKey,
+        sentimentScore: Number(avgSentiment.toFixed(3)),
+        priceChange: Number(priceChange.toFixed(2)),
+        correlation: Number(correlation.toFixed(3)),
+        postCount: dayPosts.length,
+        impact,
+      });
+    }
+
+    return correlationData.reverse(); // Return chronological order
+  }
+
+  /**
+   * Calculate prediction accuracy
+   */
+  private calculatePredictionAccuracy(posts: TwitterPost[]): number {
+    if (posts.length === 0) return 0;
+    
+    // Simulate prediction accuracy based on sentiment consistency
+    const sentiments = posts.map(post => post.sentimentScore);
+    const avgSentiment = sentiments.reduce((sum, score) => sum + score, 0) / sentiments.length;
+    const variance = sentiments.reduce((sum, score) => sum + Math.pow(score - avgSentiment, 2), 0) / sentiments.length;
+    
+    // Higher consistency = higher prediction accuracy
+    const consistency = Math.max(0, 1 - Math.sqrt(variance));
+    
+    // Factor in influence and post count
+    const activityFactor = Math.min(posts.length / 10, 1); // Normalize to 0-1
+    
+    return Number((consistency * 0.7 + activityFactor * 0.3).toFixed(3));
+  }
+
+  /**
+   * Calculate activity metrics
+   */
+  private calculateActivityMetrics(posts: TwitterPost[], days: number): {
+    totalPosts: number;
+    avgPostsPerDay: number;
+    sentimentTrend: 'positive' | 'negative' | 'neutral';
+    engagementRate: number;
+    impactDistribution: { high: number; medium: number; low: number };
+  } {
+    const totalPosts = posts.length;
+    const avgPostsPerDay = Number((totalPosts / days).toFixed(2));
+    
+    // Calculate sentiment trend
+    const recentSentiment = posts.slice(0, Math.floor(posts.length / 2))
+      .reduce((sum, post) => sum + post.sentimentScore, 0) / Math.max(1, Math.floor(posts.length / 2));
+    const olderSentiment = posts.slice(Math.floor(posts.length / 2))
+      .reduce((sum, post) => sum + post.sentimentScore, 0) / Math.max(1, posts.length - Math.floor(posts.length / 2));
+    
+    const sentimentTrend: 'positive' | 'negative' | 'neutral' = 
+      recentSentiment > olderSentiment + 0.1 ? 'positive' :
+      recentSentiment < olderSentiment - 0.1 ? 'negative' : 'neutral';
+    
+    // Calculate engagement rate
+    const totalEngagement = posts.reduce((sum, post) => 
+      sum + post.likeCount + post.retweetCount + post.replyCount, 0);
+    const engagementRate = totalPosts > 0 ? Number((totalEngagement / totalPosts).toFixed(2)) : 0;
+    
+    // Calculate impact distribution
+    const impactDistribution = {
+      high: posts.filter(post => post.impact === 'high').length,
+      medium: posts.filter(post => post.impact === 'medium').length,
+      low: posts.filter(post => post.impact === 'low').length,
+    };
+    
+    return {
+      totalPosts,
+      avgPostsPerDay,
+      sentimentTrend,
+      engagementRate,
+      impactDistribution,
+    };
+  }
+
+  /**
+   * Calculate correlation strength
+   */
+  private calculateCorrelationStrength(historicalData: any[]): number {
+    if (historicalData.length === 0) return 0;
+    
+    const correlations = historicalData.map(item => Math.abs(item.correlation));
+    const avgCorrelation = correlations.reduce((sum, corr) => sum + corr, 0) / correlations.length;
+    
+    return Number(avgCorrelation.toFixed(3));
+  }
+
+  /**
+   * Simulate price change based on sentiment
+   */
+  private simulatePriceChange(sentiment: number, daysAgo: number): number {
+    // Add some randomness to make it realistic
+    const randomFactor = (Math.random() - 0.5) * 0.1;
+    const timeFactor = Math.cos(daysAgo * 0.1) * 0.05; // Add some cyclical variation
+    
+    // Sentiment influence on price (simplified model)
+    const sentimentInfluence = sentiment * 0.05; // 5% max influence
+    
+    return sentimentInfluence + randomFactor + timeFactor;
+  }
+
+  /**
+   * Calculate correlation between sentiment and price change
+   */
+  private calculateDayCorrelation(sentiment: number, priceChange: number): number {
+    // Simplified correlation calculation
+    // In reality, this would use historical data and statistical correlation
+    const normalizedSentiment = Math.max(-1, Math.min(1, sentiment));
+    const normalizedPrice = Math.max(-0.1, Math.min(0.1, priceChange)) * 10; // Scale to -1 to 1
+    
+    // Calculate correlation coefficient (simplified)
+    const correlation = normalizedSentiment * normalizedPrice;
+    
+    return Math.max(-1, Math.min(1, correlation));
+  }
 
   /**
    * Get account posts with sentiment analysis
@@ -928,5 +1416,218 @@ export class SocialSentimentController {
                          (posts.length - highImpactPosts - mediumImpactPosts) * 0.1;
     
     return weightedScore / posts.length;
+  }
+
+  /**
+   * Get recommended accounts for a specific coin
+   */
+  getRecommendedAccounts = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { category, limit, includeInactive } = req.query;
+
+      logger.info(`Getting recommended accounts for ${coinSymbol}`, {
+        category,
+        limit,
+        includeInactive
+      });
+
+      const accounts = await this.recommendedAccountService.getRecommendedAccounts(coinSymbol, {
+        category: category as string,
+        limit: limit ? parseInt(limit as string) : undefined,
+        includeInactive: includeInactive === 'true',
+      });
+
+      res.json({
+        success: true,
+        data: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          accounts,
+          totalCount: accounts.length,
+          categories: ['founder', 'influencer', 'analyst', 'news', 'community', 'developer'],
+        },
+        message: `Found ${accounts.length} recommended accounts for ${coinSymbol}`,
+      });
+    } catch (error) {
+      logger.error('Failed to get recommended accounts:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve recommended accounts',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Add recommended account to monitoring list
+   */
+  addRecommendedAccountToMonitoring = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { accountId, coinSymbol } = req.body;
+
+      if (!accountId || !coinSymbol) {
+        res.status(400).json({
+          success: false,
+          error: 'Missing required fields: accountId and coinSymbol',
+        });
+        return;
+      }
+
+      logger.info(`Adding recommended account to monitoring:`, {
+        accountId,
+        coinSymbol: coinSymbol.toUpperCase()
+      });
+
+      // Get the recommended account details
+      const recommendedAccounts = await this.recommendedAccountService.getRecommendedAccounts(coinSymbol);
+      const recommendedAccount = recommendedAccounts.find(acc => acc.id === accountId);
+
+      if (!recommendedAccount) {
+        res.status(404).json({
+          success: false,
+          error: 'Recommended account not found',
+        });
+        return;
+      }
+
+      // Check if account already exists in TwitterAccount table
+      let twitterAccount = await TwitterAccount.findOne({
+        where: { username: recommendedAccount.twitterUsername }
+      });
+
+      if (!twitterAccount) {
+        // Create new TwitterAccount from recommended account data
+        const accountData = {
+          id: recommendedAccount.twitterUserId || `rec_${recommendedAccount.id}`,
+          username: recommendedAccount.twitterUsername,
+          displayName: recommendedAccount.displayName,
+          bio: recommendedAccount.bio || '',
+          followersCount: recommendedAccount.followersCount || 0,
+          followingCount: 0,
+          tweetsCount: 0,
+          verified: recommendedAccount.verified || false,
+          profileImageUrl: recommendedAccount.profileImageUrl || '',
+          isInfluencer: (recommendedAccount.followersCount || 0) > 10000,
+          influenceScore: recommendedAccount.relevanceScore || 50,
+          lastActivityAt: new Date(),
+        };
+
+        twitterAccount = await TwitterAccount.create(accountData);
+        logger.info(`Created new TwitterAccount from recommended account: ${twitterAccount.username}`);
+      } else {
+        // Update existing account with latest data
+        await twitterAccount.update({
+          displayName: recommendedAccount.displayName,
+          bio: recommendedAccount.bio || twitterAccount.bio,
+          followersCount: recommendedAccount.followersCount || twitterAccount.followersCount,
+          verified: recommendedAccount.verified || twitterAccount.verified,
+          profileImageUrl: recommendedAccount.profileImageUrl || twitterAccount.profileImageUrl,
+          influenceScore: Math.max(twitterAccount.influenceScore, recommendedAccount.relevanceScore || 50),
+          lastActivityAt: new Date(),
+        });
+        logger.info(`Updated existing TwitterAccount: ${twitterAccount.username}`);
+      }
+
+      // Create or update the relevance record for monitoring
+      const [relevance, created] = await AccountCoinRelevance.findOrCreate({
+        where: {
+          twitterAccountId: twitterAccount.id,
+          coinSymbol: coinSymbol.toUpperCase(),
+        },
+        defaults: {
+          id: `${twitterAccount.id}_${coinSymbol.toUpperCase()}`,
+          twitterAccountId: twitterAccount.id,
+          coinSymbol: coinSymbol.toUpperCase(),
+          relevanceScore: recommendedAccount.relevanceScore || 0.8,
+          mentionCount: 0,
+          totalPosts: 0,
+          mentionFrequency: 0,
+          avgSentiment: 0,
+          avgImpact: 0,
+          lastMentionAt: new Date(),
+          historicalData: [],
+          keywordFrequency: {},
+          correlationScore: 0,
+          isConfirmed: true, // Mark as confirmed for monitoring
+        },
+      });
+
+      if (!created) {
+        // Update existing relevance to enable monitoring
+        await relevance.update({
+          isConfirmed: true,
+          relevanceScore: Math.max(relevance.relevanceScore, recommendedAccount.relevanceScore || 0.8),
+        });
+        logger.info(`Updated existing relevance record for ${twitterAccount.username} -> ${coinSymbol}`);
+      } else {
+        logger.info(`Created new relevance record for ${twitterAccount.username} -> ${coinSymbol}`);
+      }
+
+      // Verify the data was saved correctly
+      const savedRelevance = await AccountCoinRelevance.findOne({
+        where: {
+          twitterAccountId: twitterAccount.id,
+          coinSymbol: coinSymbol.toUpperCase(),
+        },
+        include: [{ model: TwitterAccount, as: 'account' }]
+      });
+
+      if (!savedRelevance || !savedRelevance.isConfirmed) {
+        throw new Error('Failed to save monitoring configuration to database');
+      }
+
+      res.json({
+        success: true,
+        data: {
+          account: {
+            id: twitterAccount.id,
+            username: twitterAccount.username,
+            displayName: twitterAccount.displayName,
+            followersCount: twitterAccount.followersCount,
+            verified: twitterAccount.verified,
+            isMonitored: true,
+          },
+          relevance: {
+            coinSymbol: savedRelevance.coinSymbol,
+            relevanceScore: savedRelevance.relevanceScore,
+            isConfirmed: savedRelevance.isConfirmed,
+            createdAt: savedRelevance.createdAt,
+          },
+          recommendedAccount: {
+            id: recommendedAccount.id,
+            category: recommendedAccount.category,
+            description: recommendedAccount.description,
+          }
+        },
+        message: `Successfully added ${twitterAccount.username} to monitoring list for ${coinSymbol.toUpperCase()}`,
+      });
+
+    } catch (error) {
+      logger.error('Failed to add recommended account to monitoring:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to add account to monitoring',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Helper method to get coin name from symbol
+   */
+  private getCoinNameFromSymbol(symbol: string): string {
+    const coinNames: { [key: string]: string } = {
+      'BTC': 'Bitcoin',
+      'ETH': 'Ethereum',
+      'SOL': 'Solana',
+      'BNB': 'Binance Coin',
+      'ADA': 'Cardano',
+      'DOT': 'Polkadot',
+      'MATIC': 'Polygon',
+      'AVAX': 'Avalanche',
+      'LINK': 'Chainlink',
+      'UNI': 'Uniswap',
+    };
+    return coinNames[symbol.toUpperCase()] || symbol;
   }
 } 

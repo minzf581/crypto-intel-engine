@@ -75,7 +75,7 @@ export class TwitterService {
     this.bearerToken = process.env.TWITTER_BEARER_TOKEN || '';
     
     if (!this.bearerToken) {
-      throw new Error('Twitter API configuration required. Please set TWITTER_BEARER_TOKEN environment variable.');
+      throw new Error('Twitter API configuration required. Please set TWITTER_BEARER_TOKEN environment variable. Demo data is not allowed for financial applications.');
     }
     
     logger.info('Twitter service initialized with real API token');
@@ -90,7 +90,7 @@ export class TwitterService {
 
   /**
    * Search for Twitter accounts related to a cryptocurrency
-   * Only returns real data from Twitter API
+   * ONLY returns real data from Twitter API - NO DEMO/MOCK DATA
    */
   async searchAccountsForCoin(
     coinSymbol: string,
@@ -104,21 +104,22 @@ export class TwitterService {
     const { limit = 50, minFollowers = 1000, includeVerified = true } = options;
 
     try {
-      logger.info(`Searching Twitter accounts for ${coinSymbol} (${coinName}) with real API data`, {
+      logger.info(`Searching Twitter accounts for ${coinSymbol} (${coinName}) with REAL API data only`, {
         limit,
         minFollowers,
         includeVerified
       });
 
-      // Check if Twitter API is properly configured
+      // Validate Twitter API configuration
       if (!this.bearerToken) {
-        throw new Error('Twitter API configuration required. Please set TWITTER_BEARER_TOKEN environment variable.');
+        throw new Error('Twitter API Bearer Token is required. Please configure TWITTER_BEARER_TOKEN environment variable. Demo data is prohibited for financial applications.');
       }
 
       // Build search queries for the cryptocurrency
       const queries = this.buildSearchQueries(coinSymbol, coinName);
       const allUsers: TwitterApiUser[] = [];
       let successfulQueries = 0;
+      const queryErrors: string[] = [];
 
       // Execute searches with real Twitter API
       for (const query of queries) {
@@ -126,18 +127,21 @@ export class TwitterService {
           const users = await this.searchUsers(query, Math.ceil(limit / queries.length));
           allUsers.push(...users);
           successfulQueries++;
+          logger.debug(`Query "${query}" returned ${users.length} users`);
         } catch (error) {
-          logger.warn(`Search failed for query "${query}":`, error instanceof Error ? error.message : 'Unknown error');
-          // Continue with other queries instead of failing completely
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          queryErrors.push(`Query "${query}": ${errorMessage}`);
+          logger.warn(`Search failed for query "${query}":`, errorMessage);
         }
       }
 
-      // If no queries succeeded, provide specific error information
+      // If no queries succeeded, throw detailed error
       if (successfulQueries === 0) {
-        logger.error(`All search queries failed for ${coinSymbol}. This may indicate API authentication issues.`);
-        throw new Error(`Unable to search Twitter accounts. Please check API configuration and permissions.`);
+        logger.error(`All Twitter API queries failed for ${coinSymbol}:`, queryErrors);
+        throw new Error(`Twitter API search failed for ${coinSymbol}. Errors: ${queryErrors.join('; ')}. Please check API configuration, rate limits, and permissions.`);
       }
 
+      // If no users found, return empty result with clear message
       if (allUsers.length === 0) {
         logger.warn(`No Twitter accounts found for ${coinSymbol} using real API (${successfulQueries}/${queries.length} queries succeeded)`);
         return {
@@ -145,7 +149,7 @@ export class TwitterService {
           totalCount: 0,
           hasMore: false,
           query: `${coinSymbol} ${coinName}`,
-          searchMethod: 'Bearer Token (Tweet Search)'
+          searchMethod: 'Twitter API v2 (Real Data)'
         };
       }
 
@@ -167,146 +171,142 @@ export class TwitterService {
         sortedUsers.map(user => this.processAndStoreAccount(user, coinSymbol))
       );
 
-      logger.info(`Successfully found ${accounts.length} real Twitter accounts for ${coinSymbol} (${successfulQueries}/${queries.length} queries succeeded)`);
+      logger.info(`Successfully found ${accounts.length} REAL Twitter accounts for ${coinSymbol} (${successfulQueries}/${queries.length} queries succeeded)`);
 
       return {
         accounts,
         totalCount: accounts.length,
         hasMore: filteredUsers.length > limit,
         query: `${coinSymbol} ${coinName}`,
-        searchMethod: 'Bearer Token (Tweet Search)'
+        searchMethod: 'Twitter API v2 (Real Data)'
       };
 
     } catch (error) {
-      logger.error(`Failed to search Twitter accounts for ${coinSymbol}:`, error);
+      logger.error(`Twitter API search failed for ${coinSymbol}:`, error);
       
-      // Check if this is a rate limit error and provide fallback
-      if (error instanceof Error && (
-        error.message.includes('rate limit') || 
-        error.message.includes('429') ||
-        error.message.includes('Too Many Requests')
-      )) {
-        logger.warn(`Rate limit reached for ${coinSymbol}, providing demo data for development`);
-        return this.getFallbackAccountData(coinSymbol, coinName, limit);
+      if (error instanceof Error) {
+        // Provide specific error details without fallback to demo data
+        if (error.message.includes('rate limit') || error.message.includes('429')) {
+          throw new Error(`Twitter API rate limit exceeded for ${coinSymbol}. Please wait before making more requests. Demo data is not permitted for financial applications.`);
+        }
+        
+        if (error.message.includes('authentication') || error.message.includes('401')) {
+          throw new Error(`Twitter API authentication failed. Please check TWITTER_BEARER_TOKEN configuration. Demo data is not permitted for financial applications.`);
+        }
+        
+        if (error.message.includes('403')) {
+          throw new Error(`Twitter API access forbidden. Please check API permissions and endpoints. Demo data is not permitted for financial applications.`);
+        }
       }
       
-      // Check for other API errors that should trigger fallback
-      if (error instanceof Error && (
-        error.message.includes('Twitter API request failed') ||
-        error.message.includes('authentication failed') ||
-        error.message.includes('connection failed')
-      )) {
-        logger.warn(`Twitter API error for ${coinSymbol}, providing demo data for development`);
-        return this.getFallbackAccountData(coinSymbol, coinName, limit);
-      }
-      
-      if (error instanceof Error && error.message.includes('Twitter API configuration required')) {
-        throw error; // Re-throw configuration errors
-      }
-      
-      // For any other error, provide fallback data
-      logger.warn(`Unknown error for ${coinSymbol}, providing demo data for development`);
-      return this.getFallbackAccountData(coinSymbol, coinName, limit);
+      throw new Error(`Twitter API search failed for ${coinSymbol}: ${error instanceof Error ? error.message : 'Unknown error'}. Please check API configuration and network connectivity.`);
     }
   }
 
   /**
-   * Provide fallback demo data when Twitter API is unavailable
-   * This helps with development and testing when rate limits are reached
+   * Search for Twitter accounts with custom query
+   * ONLY returns real data from Twitter API - NO DEMO/MOCK DATA
    */
-  private getFallbackAccountData(coinSymbol: string, coinName: string, limit: number): TwitterSearchResult {
-    const demoAccounts = [
-      {
-        id: 'demo_1',
-        username: 'cryptoanalyst',
-        displayName: 'Crypto Analyst Pro',
-        bio: `Professional ${coinName} analyst and trader. Daily market insights and technical analysis.`,
-        followersCount: 125000,
-        followingCount: 850,
-        tweetsCount: 15420,
-        verified: true,
-        profileImageUrl: '',
-        isInfluencer: true,
-        influenceScore: 85.5,
-        relevanceScore: 92.3,
-        mentionCount: 245,
-        avgSentiment: 0.65
-      },
-      {
-        id: 'demo_2',
-        username: 'blockchaindev',
-        displayName: 'Blockchain Developer',
-        bio: `Building the future with ${coinName}. Smart contracts and DeFi enthusiast.`,
-        followersCount: 89000,
-        followingCount: 1200,
-        tweetsCount: 8950,
-        verified: false,
-        profileImageUrl: '',
-        isInfluencer: true,
-        influenceScore: 78.2,
-        relevanceScore: 88.7,
-        mentionCount: 189,
-        avgSentiment: 0.72
-      },
-      {
-        id: 'demo_3',
-        username: 'cryptonews24',
-        displayName: 'Crypto News 24/7',
-        bio: `Latest ${coinName} news and market updates. Breaking crypto news as it happens.`,
-        followersCount: 67500,
-        followingCount: 450,
-        tweetsCount: 22100,
-        verified: true,
-        profileImageUrl: '',
-        isInfluencer: true,
-        influenceScore: 82.1,
-        relevanceScore: 85.4,
-        mentionCount: 156,
-        avgSentiment: 0.45
-      },
-      {
-        id: 'demo_4',
-        username: 'defitrader',
-        displayName: 'DeFi Trader',
-        bio: `${coinName} trading strategies and DeFi protocols. Risk management expert.`,
-        followersCount: 45200,
-        followingCount: 890,
-        tweetsCount: 6780,
-        verified: false,
-        profileImageUrl: '',
-        isInfluencer: true,
-        influenceScore: 71.8,
-        relevanceScore: 79.2,
-        mentionCount: 134,
-        avgSentiment: 0.58
-      },
-      {
-        id: 'demo_5',
-        username: 'cryptowhale',
-        displayName: 'Crypto Whale Watcher',
-        bio: `Tracking large ${coinName} movements and whale activity. On-chain analysis.`,
-        followersCount: 156000,
-        followingCount: 320,
-        tweetsCount: 4560,
-        verified: true,
-        profileImageUrl: '',
-        isInfluencer: true,
-        influenceScore: 91.3,
-        relevanceScore: 94.1,
-        mentionCount: 298,
-        avgSentiment: 0.38
+  async searchAccountsWithCustomQuery(
+    query: string,
+    options: {
+      limit?: number;
+      minFollowers?: number;
+      includeVerified?: boolean;
+    } = {}
+  ): Promise<TwitterSearchResult> {
+    const { limit = 50, minFollowers = 1000, includeVerified = true } = options;
+
+    try {
+      logger.info(`Searching Twitter accounts with custom query "${query}" using REAL API data only`, {
+        limit,
+        minFollowers,
+        includeVerified
+      });
+
+      // Validate Twitter API configuration
+      if (!this.bearerToken) {
+        throw new Error('Twitter API Bearer Token is required. Please configure TWITTER_BEARER_TOKEN environment variable. Demo data is prohibited for financial applications.');
       }
-    ];
 
-    const limitedAccounts = demoAccounts.slice(0, Math.min(limit, demoAccounts.length));
+      // Search for tweets with the custom query and extract users
+      const tweets = await this.searchTweets(query, limit * 2);
+      
+      if (tweets.length === 0) {
+        logger.info(`No tweets found for query "${query}"`);
+        return {
+          accounts: [],
+          totalCount: 0,
+          hasMore: false,
+          query,
+          searchMethod: 'Twitter API v2 (Real Data - Custom Query)'
+        };
+      }
 
-    return {
-      accounts: limitedAccounts,
-      totalCount: limitedAccounts.length,
-      hasMore: false,
-      query: `${coinSymbol} ${coinName}`,
-      searchMethod: 'Demo Data (Rate Limited)'
-    };
+      // Extract unique user IDs from tweets
+      const userIds = Array.from(new Set(tweets.map(tweet => tweet.author_id).filter(Boolean)));
+      
+      if (userIds.length === 0) {
+        logger.warn(`No user IDs found in tweets for query "${query}"`);
+        return {
+          accounts: [],
+          totalCount: 0,
+          hasMore: false,
+          query,
+          searchMethod: 'Twitter API v2 (Real Data - Custom Query)'
+        };
+      }
+
+      // Get user details for the user IDs
+      const users = await this.getUsersByIds(userIds.slice(0, limit * 2));
+      
+      // Filter users based on criteria
+      const filteredUsers = users.filter(user => {
+        const meetsFollowerThreshold = user.public_metrics.followers_count >= minFollowers;
+        const meetsVerificationCriteria = includeVerified || !user.verified;
+        return meetsFollowerThreshold && meetsVerificationCriteria;
+      });
+
+      // Sort by follower count and limit results
+      const sortedUsers = filteredUsers
+        .sort((a, b) => b.public_metrics.followers_count - a.public_metrics.followers_count)
+        .slice(0, limit);
+
+      // Store accounts in database and get relevance data
+      const accounts = await Promise.all(
+        sortedUsers.map(user => this.processAndStoreAccountForCustomQuery(user, query))
+      );
+
+      logger.info(`Successfully found ${accounts.length} REAL Twitter accounts for custom query "${query}"`);
+
+      return {
+        accounts,
+        totalCount: accounts.length,
+        hasMore: filteredUsers.length > limit,
+        query,
+        searchMethod: 'Twitter API v2 (Real Data - Custom Query)'
+      };
+
+    } catch (error) {
+      logger.error(`Twitter API custom query search failed for "${query}":`, error);
+      
+      if (error instanceof Error) {
+        // Provide specific error details without fallback to demo data
+        if (error.message.includes('rate limit') || error.message.includes('429')) {
+          throw new Error(`Twitter API rate limit exceeded for query "${query}". Please wait before making more requests. Demo data is not permitted for financial applications.`);
+        }
+        
+        if (error.message.includes('authentication') || error.message.includes('401')) {
+          throw new Error(`Twitter API authentication failed. Please check TWITTER_BEARER_TOKEN configuration. Demo data is not permitted for financial applications.`);
+        }
+        
+        if (error.message.includes('403')) {
+          throw new Error(`Twitter API access forbidden. Please check API permissions and endpoints. Demo data is not permitted for financial applications.`);
+        }
+      }
+      
+      throw new Error(`Twitter API custom query search failed for "${query}": ${error instanceof Error ? error.message : 'Unknown error'}. Please check API configuration and network connectivity.`);
+    }
   }
 
   /**
@@ -819,5 +819,183 @@ export class TwitterService {
     });
 
     return count;
+  }
+
+  /**
+   * Process and store account for custom query searches
+   */
+  private async processAndStoreAccountForCustomQuery(user: TwitterApiUser, query: string) {
+    try {
+      // Store the account in the database
+      const [account] = await TwitterAccount.findOrCreate({
+        where: { id: user.id },
+        defaults: {
+          id: user.id,
+          username: user.username,
+          displayName: user.name,
+          bio: user.description || '',
+          followersCount: user.public_metrics.followers_count,
+          followingCount: user.public_metrics.following_count,
+          tweetsCount: user.public_metrics.tweet_count,
+          verified: user.verified || false,
+          profileImageUrl: user.profile_image_url || '',
+          isInfluencer: user.public_metrics.followers_count > 10000,
+          influenceScore: this.calculateInfluenceScore(user),
+          lastActivityAt: new Date(),
+        },
+      });
+
+      // Update existing account if needed
+      if (!account.isNewRecord) {
+        await account.update({
+          displayName: user.name,
+          bio: user.description || '',
+          followersCount: user.public_metrics.followers_count,
+          followingCount: user.public_metrics.following_count,
+          tweetsCount: user.public_metrics.tweet_count,
+          verified: user.verified || false,
+          profileImageUrl: user.profile_image_url || '',
+          influenceScore: this.calculateInfluenceScore(user),
+          lastActivityAt: new Date(),
+        });
+      }
+
+      return {
+        id: account.id,
+        username: account.username,
+        displayName: account.displayName,
+        bio: account.bio,
+        followersCount: account.followersCount,
+        followingCount: account.followingCount,
+        tweetsCount: account.tweetsCount,
+        verified: account.verified,
+        profileImageUrl: account.profileImageUrl,
+        isInfluencer: account.isInfluencer,
+        influenceScore: account.influenceScore,
+        relevanceScore: this.calculateQueryRelevance(user, query),
+        mentionCount: this.countQueryMentions(user.description || '', query),
+        avgSentiment: 0,
+      };
+    } catch (error) {
+      logger.error(`Failed to process and store account ${user.username}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate relevance score for custom query
+   */
+  private calculateQueryRelevance(user: TwitterApiUser, query: string): number {
+    const bio = (user.description || '').toLowerCase();
+    const name = user.name.toLowerCase();
+    const username = user.username.toLowerCase();
+    const queryLower = query.toLowerCase();
+    
+    let score = 0;
+    
+    // Check for exact matches
+    if (bio.includes(queryLower) || name.includes(queryLower) || username.includes(queryLower)) {
+      score += 0.5;
+    }
+    
+    // Check for individual keywords
+    const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+    queryWords.forEach(word => {
+      if (bio.includes(word) || name.includes(word) || username.includes(word)) {
+        score += 0.1;
+      }
+    });
+    
+    // Boost score based on follower count (influence factor)
+    const followerBoost = Math.min(user.public_metrics.followers_count / 100000, 0.3);
+    score += followerBoost;
+    
+    return Math.min(score, 1.0);
+  }
+
+  /**
+   * Count query mentions in text
+   */
+  private countQueryMentions(text: string, query: string): number {
+    const textLower = text.toLowerCase();
+    const queryLower = query.toLowerCase();
+    
+    let count = 0;
+    
+    // Count exact query matches
+    const exactMatches = textLower.split(queryLower).length - 1;
+    count += exactMatches * 2;
+    
+    // Count individual keyword matches
+    const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+    queryWords.forEach(word => {
+      const wordMatches = textLower.split(word).length - 1;
+      count += wordMatches;
+    });
+    
+    return count;
+  }
+
+  /**
+   * Search for tweets using Twitter API v2
+   */
+  private async searchTweets(query: string, maxResults: number = 100): Promise<any[]> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/tweets/search/recent?query=${encodeURIComponent(query)}&max_results=${Math.min(maxResults, 100)}&tweet.fields=author_id,created_at,public_metrics&user.fields=id,username,name,description,public_metrics,verified,profile_image_url`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.bearerToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Twitter API rate limit exceeded');
+        }
+        throw new Error(`Twitter API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      logger.error('Failed to search tweets:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get users by IDs using Twitter API v2
+   */
+  private async getUsersByIds(userIds: string[]): Promise<TwitterApiUser[]> {
+    try {
+      if (userIds.length === 0) return [];
+      
+      const idsParam = userIds.slice(0, 100).join(','); // API limit is 100 users per request
+      const response = await fetch(
+        `${this.baseUrl}/users?ids=${idsParam}&user.fields=id,username,name,description,public_metrics,verified,profile_image_url,created_at`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.bearerToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Twitter API rate limit exceeded');
+        }
+        throw new Error(`Twitter API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      logger.error('Failed to get users by IDs:', error);
+      throw error;
+    }
   }
 } 

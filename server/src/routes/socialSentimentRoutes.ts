@@ -11,6 +11,12 @@ router.get('/search-accounts/:coinSymbol/:coinName',
   socialSentimentController.searchAccountsForCoin
 );
 
+// Search accounts with custom query
+router.get('/search-accounts-query',
+  authenticateToken,
+  socialSentimentController.searchAccountsWithQuery
+);
+
 // Setup monitoring for a cryptocurrency
 router.post('/setup-monitoring/:coinSymbol/:coinName',
   authenticateToken,
@@ -75,6 +81,18 @@ router.get('/influence/:accountId',
 router.get('/monitoring-status/:coinSymbol',
   authenticateToken,
   socialSentimentController.getMonitoringStatus
+);
+
+// Get recommended accounts for a specific coin
+router.get('/recommended-accounts/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getRecommendedAccounts
+);
+
+// Add recommended account to monitoring list
+router.post('/add-recommended-account',
+  authenticateToken,
+  socialSentimentController.addRecommendedAccountToMonitoring
 );
 
 export default router; 

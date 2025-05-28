@@ -1,5 +1,6 @@
 // Social Sentiment Analysis Components
 export { default as SocialSentimentDashboard } from './SocialSentimentDashboard';
+export { default as RecommendedAccountsPanel } from './RecommendedAccountsPanel';
 export { default as AccountCorrelationView } from './AccountCorrelationView';
 export { default as SentimentTrendChart } from './SentimentTrendChart';
 export { default as SentimentAlertsPanel } from './SentimentAlertsPanel';

@@ -9,9 +9,12 @@ import {
   MagnifyingGlassIcon,
   ChevronRightIcon,
   ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon
+  ArrowTrendingDownIcon,
+  StarIcon,
+  AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
+import RecommendedAccountsPanel from './RecommendedAccountsPanel';
 // Twitter OAuth removed - using basic search by default
 
 interface TwitterAccount {
@@ -59,13 +62,21 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   selectedCoin = 'BTC',
   coinName = 'Bitcoin'
 }) => {
-  const [activeTab, setActiveTab] = useState<'search' | 'monitoring' | 'analysis'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'recommended' | 'monitoring' | 'analysis'>('search');
   const [searchResults, setSearchResults] = useState<TwitterAccount[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
   const [sentimentSummary, setSentimentSummary] = useState<SentimentSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [timeframe, setTimeframe] = useState<'1h' | '4h' | '24h' | '7d'>('24h');
   const [searchMethod, setSearchMethod] = useState<string>('Basic Search');
+  const [searchError, setSearchError] = useState<string | null>(null);
+  
+  // Search form state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [minFollowers, setMinFollowers] = useState(1000);
+  const [includeVerified, setIncludeVerified] = useState(true);
+  const [searchLimit, setSearchLimit] = useState(20);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'analysis') {
@@ -73,23 +84,59 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
     }
   }, [activeTab, selectedCoin, timeframe]);
 
+  // Initialize search query with coin name
+  useEffect(() => {
+    if (!searchQuery) {
+      setSearchQuery(`${coinName} ${selectedCoin}`);
+    }
+  }, [selectedCoin, coinName]);
+
   const searchAccounts = async () => {
+    if (!searchQuery.trim()) {
+      alert('Please enter a search query');
+      return;
+    }
+
     setIsLoading(true);
+    setSearchError(null);
+    setSearchResults([]);
+    
     try {
       const searchParams = {
-        limit: 20,
-        minFollowers: 1000,
-        includeVerified: true,
+        query: searchQuery.trim(),
+        limit: searchLimit,
+        minFollowers: minFollowers,
+        includeVerified: includeVerified,
         useOAuth: false // Always use basic search
       };
 
-      const response = await socialSentimentApi.searchAccounts(selectedCoin, coinName, searchParams);
+      const response = await socialSentimentApi.searchAccountsWithQuery(searchQuery.trim(), searchParams);
       setSearchResults(response.data.accounts);
-      setSearchMethod(response.data.searchMethod || 'Basic Search');
+      setSearchMethod(response.data.searchMethod || 'Twitter API v2 (Real Data)');
       
     } catch (error: any) {
       console.error('Failed to search accounts:', error);
-      alert('Search failed. Please check your internet connection and try again.');
+      let errorMessage = 'Search failed. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Check for specific Twitter API configuration errors
+      if (errorMessage.includes('Twitter API Bearer Token is required') || 
+          errorMessage.includes('Twitter API configuration required')) {
+        errorMessage = 'Twitter API not configured. Please contact administrator to set up Twitter API access for real-time data.';
+      } else if (errorMessage.includes('authentication failed')) {
+        errorMessage = 'Twitter API authentication failed. Please contact administrator to verify API credentials.';
+      } else if (errorMessage.includes('rate limit exceeded')) {
+        errorMessage = 'Twitter API rate limit exceeded. Please wait a few minutes before searching again.';
+      } else if (errorMessage.includes('access forbidden')) {
+        errorMessage = 'Twitter API access restricted. Please contact administrator to verify API permissions.';
+      }
+      
+      setSearchError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -108,6 +155,8 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
       await socialSentimentApi.confirmAccounts(selectedCoin, Array.from(selectedAccounts));
       alert(`Successfully setup monitoring for ${selectedAccounts.size} accounts`);
       setActiveTab('monitoring');
+      // Clear selection after successful setup
+      setSelectedAccounts(new Set());
     } catch (error) {
       console.error('Failed to setup monitoring:', error);
       alert('Failed to setup monitoring');
@@ -143,10 +192,10 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Search Accounts for {coinName} ({selectedCoin})
+            Search Twitter Accounts
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
-            Find influential Twitter accounts related to this cryptocurrency
+            Find influential Twitter accounts using custom search terms
           </p>
         </div>
       </div>
@@ -160,51 +209,178 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
               Twitter Search Ready
             </h4>
             <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-              Using Twitter API to find influential accounts related to {coinName}
+              Search for Twitter accounts using custom keywords and filters
             </p>
           </div>
         </div>
       </div>
 
-      {/* Search Controls */}
-      <div className="flex items-center space-x-4">
-        <button
-          onClick={searchAccounts}
-          disabled={isLoading}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
-          {isLoading ? 'Searching...' : 'Search Accounts'}
-        </button>
-      </div>
-
-      {/* Search Method Indicator */}
-      {searchMethod && (
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          Last search method: {searchMethod}
-        </div>
-      )}
-
-      {searchResults.length > 0 && (
+      {/* Search Form */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
         <div className="space-y-4">
-          {/* Demo Data Notice */}
-          {searchMethod === 'Demo Data (Rate Limited)' && (
-            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          {/* Main Search Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Search Query
+            </label>
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Enter keywords (e.g., Bitcoin BTC, Ethereum trading, crypto analyst)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && searchAccounts()}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Use specific keywords related to the cryptocurrency or trading topics you're interested in
+            </p>
+          </div>
+
+          {/* Quick Search Suggestions */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Quick Search Templates
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                `${coinName} ${selectedCoin}`,
+                `${selectedCoin} trading`,
+                `${selectedCoin} analysis`,
+                `${coinName} news`,
+                `crypto ${selectedCoin}`,
+                `${selectedCoin} price`
+              ].map((template) => (
+                <button
+                  key={template}
+                  onClick={() => setSearchQuery(template)}
+                  className="px-3 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                >
+                  {template}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Advanced Options Toggle */}
+          <div>
+            <button
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              <AdjustmentsHorizontalIcon className="h-4 w-4 mr-1" />
+              Advanced Options
+              <ChevronRightIcon className={`h-4 w-4 ml-1 transform transition-transform ${showAdvancedOptions ? 'rotate-90' : ''}`} />
+            </button>
+          </div>
+
+          {/* Advanced Options */}
+          {showAdvancedOptions && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Minimum Followers
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={minFollowers}
+                  onChange={(e) => setMinFollowers(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Results Limit
+                </label>
+                <select
+                  value={searchLimit}
+                  onChange={(e) => setSearchLimit(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value={10}>10 results</option>
+                  <option value={20}>20 results</option>
+                  <option value={50}>50 results</option>
+                  <option value={100}>100 results</option>
+                </select>
+              </div>
               <div className="flex items-center">
-                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mr-2" />
-                <div>
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Demo Data - Rate Limited
-                  </p>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                    Twitter API rate limit reached. Showing demo data for development purposes. 
-                    Real data will be available after the rate limit resets (typically 15 minutes).
-                  </p>
-                </div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={includeVerified}
+                    onChange={(e) => setIncludeVerified(e.target.checked)}
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    Include verified accounts
+                  </span>
+                </label>
               </div>
             </div>
           )}
-          
+
+          {/* Search Button */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={searchAccounts}
+              disabled={isLoading || !searchQuery.trim()}
+              className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
+              {isLoading ? 'Searching...' : 'Search Accounts'}
+            </button>
+            
+            {searchResults.length > 0 && (
+              <button
+                onClick={() => {
+                  setSearchResults([]);
+                  setSelectedAccounts(new Set());
+                }}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                Clear Results
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Search Method Indicator */}
+      {searchMethod && !searchError && searchResults.length > 0 && (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          Data source: {searchMethod}
+        </div>
+      )}
+
+      {/* Error Display */}
+      {searchError && (
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-3 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-medium text-red-900 dark:text-red-100">
+                Search Failed
+              </h4>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                {searchError}
+              </p>
+              {searchError.includes('Twitter API not configured') && (
+                <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                  <p>For security and compliance reasons, this system only uses real Twitter data.</p>
+                  <p>Demo or mock data is prohibited for financial applications.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {searchResults.length > 0 && !searchError && (
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-md font-medium text-gray-900 dark:text-white">
               Found {searchResults.length} accounts
@@ -278,6 +454,18 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
         </div>
       )}
     </div>
+  );
+
+  const renderRecommendedTab = () => (
+    <RecommendedAccountsPanel
+      selectedCoin={selectedCoin}
+      coinName={coinName}
+      onAccountAdded={(account) => {
+        // Handle account added to monitoring
+        console.log('Account added to monitoring:', account);
+        // You could show a success message or update other state here
+      }}
+    />
   );
 
   const renderMonitoringTab = () => (
@@ -452,6 +640,7 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
         <nav className="-mb-px flex space-x-8">
           {[
             { id: 'search', name: 'Search Accounts', icon: MagnifyingGlassIcon },
+            { id: 'recommended', name: 'Recommended', icon: StarIcon },
             { id: 'monitoring', name: 'Monitoring', icon: EyeIcon },
             { id: 'analysis', name: 'Analysis', icon: ChartBarIcon },
           ].map((tab) => (
@@ -473,6 +662,7 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
 
       <div className="py-6">
         {activeTab === 'search' && renderSearchTab()}
+        {activeTab === 'recommended' && renderRecommendedTab()}
         {activeTab === 'monitoring' && renderMonitoringTab()}
         {activeTab === 'analysis' && renderAnalysisTab()}
       </div>

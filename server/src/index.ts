@@ -13,6 +13,7 @@ import { initializeAssociations } from './models';
 import logger from './utils/logger';
 import { seedData } from './config/seedData';
 import { initializeFirebase } from './config/firebase';
+import { initializeRecommendedAccounts } from './scripts/initializeRecommendedAccounts';
 import cron from 'node-cron';
 import { VolumeAnalysisService } from './services/VolumeAnalysisService';
 import { NewsAnalysisService } from './services/NewsAnalysisService';
@@ -195,6 +196,9 @@ const initializeServicesAsync = async () => {
     
     // Initialize data
     await seedData();
+    
+    // Initialize recommended accounts
+    await initializeRecommendedAccounts();
     
     // Initialize services
     logger.info('Initializing services...');

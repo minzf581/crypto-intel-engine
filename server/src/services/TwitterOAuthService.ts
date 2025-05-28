@@ -209,7 +209,7 @@ export class TwitterOAuthService {
   }
 
   /**
-   * Search users using multiple strategies with OAuth
+   * Search accounts for a specific cryptocurrency using OAuth 2.0
    */
   async searchAccountsForCoinWithOAuth(
     accessToken: string,
@@ -224,7 +224,9 @@ export class TwitterOAuthService {
     const { limit = 50, minFollowers = 1000, includeVerified = true } = options;
 
     try {
-      logger.info(`Searching Twitter accounts for ${coinSymbol} with OAuth context`, {
+      const client = new TwitterApi(accessToken);
+      
+      logger.info(`Searching accounts for ${coinSymbol} (${coinName}) with OAuth context`, {
         limit,
         minFollowers,
         includeVerified
@@ -234,14 +236,10 @@ export class TwitterOAuthService {
       const queries = this.buildSearchQueries(coinSymbol, coinName);
       const allUsers: TwitterUserInfo[] = [];
 
-      // Execute searches with OAuth context
+      // Execute searches
       for (const query of queries) {
         try {
-          const users = await this.searchUsersWithOAuth(
-            accessToken,
-            query,
-            Math.ceil(limit / queries.length)
-          );
+          const users = await this.searchUsersWithOAuth(accessToken, query, Math.ceil(limit / queries.length));
           allUsers.push(...users);
         } catch (error) {
           logger.warn(`OAuth search failed for query "${query}":`, error instanceof Error ? error.message : 'Unknown error');
@@ -261,11 +259,58 @@ export class TwitterOAuthService {
         .sort((a, b) => b.public_metrics.followers_count - a.public_metrics.followers_count)
         .slice(0, limit);
 
-      logger.info(`Found ${sortedUsers.length} Twitter accounts for ${coinSymbol} with OAuth`);
-
+      logger.info(`OAuth search found ${sortedUsers.length} accounts for ${coinSymbol}`);
       return sortedUsers;
+
     } catch (error) {
-      logger.error(`Failed to search Twitter accounts for ${coinSymbol} with OAuth:`, error);
+      logger.error(`OAuth search failed for ${coinSymbol}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search accounts with custom query using OAuth 2.0
+   */
+  async searchAccountsWithCustomQuery(
+    accessToken: string,
+    query: string,
+    options: {
+      limit?: number;
+      minFollowers?: number;
+      includeVerified?: boolean;
+    } = {}
+  ): Promise<TwitterUserInfo[]> {
+    const { limit = 50, minFollowers = 1000, includeVerified = true } = options;
+
+    try {
+      const client = new TwitterApi(accessToken);
+      
+      logger.info(`Searching accounts with custom query "${query}" using OAuth context`, {
+        limit,
+        minFollowers,
+        includeVerified
+      });
+
+      // Search for tweets with the custom query
+      const users = await this.searchUsersWithOAuth(accessToken, query, limit * 2);
+
+      // Filter users based on criteria
+      const filteredUsers = users.filter(user => {
+        const meetsFollowerThreshold = user.public_metrics.followers_count >= minFollowers;
+        const meetsVerificationCriteria = includeVerified || !user.verified;
+        return meetsFollowerThreshold && meetsVerificationCriteria;
+      });
+
+      // Sort by follower count and limit results
+      const sortedUsers = filteredUsers
+        .sort((a, b) => b.public_metrics.followers_count - a.public_metrics.followers_count)
+        .slice(0, limit);
+
+      logger.info(`OAuth custom query search found ${sortedUsers.length} accounts for "${query}"`);
+      return sortedUsers;
+
+    } catch (error) {
+      logger.error(`OAuth custom query search failed for "${query}":`, error);
       throw error;
     }
   }

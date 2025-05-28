@@ -6,6 +6,7 @@ import { AlertSetting, initializeAssociations as initAlertSettingAssociations } 
 import { TwitterAccount, initializeAssociations as initTwitterAccountAssociations } from './TwitterAccount';
 import { TwitterPost, initializeAssociations as initTwitterPostAssociations } from './TwitterPost';
 import { AccountCoinRelevance, initializeAssociations as initAccountCoinRelevanceAssociations } from './AccountCoinRelevance';
+import { RecommendedAccount, initializeAssociations as initRecommendedAccountAssociations } from './RecommendedAccount';
 import { VolumeAnalysis } from './VolumeAnalysis';
 import { NewsData } from './NewsData';
 import { NotificationHistory } from './NotificationHistory';
@@ -29,6 +30,7 @@ const initializeAssociations = () => {
   initTwitterAccountAssociations();
   initTwitterPostAssociations();
   initAccountCoinRelevanceAssociations();
+  initRecommendedAccountAssociations();
 };
 
 export { 
@@ -40,6 +42,7 @@ export {
   TwitterAccount,
   TwitterPost,
   AccountCoinRelevance,
+  RecommendedAccount,
   VolumeAnalysis,
   NewsData,
   NotificationHistory,

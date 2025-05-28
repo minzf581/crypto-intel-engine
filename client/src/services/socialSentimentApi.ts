@@ -17,11 +17,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export interface TwitterAccount {
+  id: string;
+  username: string;
+  displayName: string;
+  bio?: string;
+  followersCount: number;
+  isVerified: boolean;
+  profileImageUrl?: string;
+  influenceScore: number;
+  relevanceScore: number;
+}
+
 export interface SearchAccountsOptions {
   limit?: number;
   minFollowers?: number;
   includeVerified?: boolean;
   useOAuth?: boolean;
+  query?: string;
 }
 
 export interface SetupMonitoringOptions {
@@ -44,6 +57,22 @@ export const socialSentimentApi = {
     if (options.useOAuth !== undefined) params.append('useOAuth', options.useOAuth.toString());
 
     const response = await api.get(`/search-accounts/${coinSymbol}/${coinName}?${params}`);
+    return response.data;
+  },
+
+  // Search accounts with custom query
+  searchAccountsWithQuery: async (
+    query: string,
+    options: SearchAccountsOptions = {}
+  ) => {
+    const params = new URLSearchParams();
+    params.append('query', query);
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.minFollowers) params.append('minFollowers', options.minFollowers.toString());
+    if (options.includeVerified !== undefined) params.append('includeVerified', options.includeVerified.toString());
+    if (options.useOAuth !== undefined) params.append('useOAuth', options.useOAuth.toString());
+
+    const response = await api.get(`/search-accounts-query?${params}`);
     return response.data;
   },
 
@@ -130,6 +159,27 @@ export const socialSentimentApi = {
     if (options.days) params.append('days', options.days.toString());
 
     const response = await api.get(`/influence/${accountId}?${params}`);
+    return response.data;
+  },
+
+  // Get recommended accounts for a specific coin
+  getRecommendedAccounts: async (coinSymbol: string, options: { 
+    category?: string; 
+    limit?: number; 
+    includeInactive?: boolean 
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (options.category) params.append('category', options.category);
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.includeInactive !== undefined) params.append('includeInactive', options.includeInactive.toString());
+
+    const response = await api.get(`/recommended-accounts/${coinSymbol}?${params}`);
+    return response.data;
+  },
+
+  // Add recommended account to monitoring list
+  addRecommendedAccountToMonitoring: async (data: { accountId: string; coinSymbol: string }) => {
+    const response = await api.post('/add-recommended-account', data);
     return response.data;
   },
 };
