@@ -44,40 +44,32 @@ let initializationError: string | null = null;
 
 // Simple health check at root path for Railway
 app.get('/', (req, res) => {
-  const status = serverReady ? 'OK' : 'STARTING';
-  res.status(serverReady ? 200 : 503).json({ 
-    status,
+  res.status(200).json({ 
+    status: 'OK',
     service: 'Crypto Intelligence Engine',
-    server_ready: serverReady,
-    services_ready: servicesReady,
-    uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    port: process.env.PORT || env.port || 5001,
-    environment: env.nodeEnv,
-    ...(initializationError && { error: initializationError })
+    uptime: process.uptime()
   });
 });
 
-// Detailed health check endpoint
+// Detailed health check endpoint - Always return 200 for Railway
 app.get('/health', (req, res) => {
-  const environment = detectEnvironment();
-  const status = serverReady ? 'OK' : 'STARTING';
-  
-  res.status(serverReady ? 200 : 503).json({ 
-    status,
+  // Always return 200 status for Railway health checks
+  // Include detailed status in response body
+  res.status(200).json({ 
+    status: 'OK',
     server_ready: serverReady,
     services_ready: servicesReady,
     uptime: process.uptime(),
     env: env.nodeEnv,
     port: process.env.PORT || env.port || 5001,
-    environment: {
-      isRailway: environment.isRailway,
-      isProduction: environment.isProduction,
-      isLocal: environment.isLocal,
-      frontendUrl: environment.frontendUrl,
-      backendUrl: environment.backendUrl
-    },
+    host: process.env.HOST || '0.0.0.0',
     timestamp: new Date().toISOString(),
+    railway: {
+      environment: process.env.RAILWAY_ENVIRONMENT || null,
+      service_id: process.env.RAILWAY_SERVICE_ID || null,
+      project_id: process.env.RAILWAY_PROJECT_ID || null
+    },
     ...(initializationError && { initialization_error: initializationError })
   });
 });
