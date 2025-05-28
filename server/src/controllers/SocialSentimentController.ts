@@ -1262,6 +1262,65 @@ export class SocialSentimentController {
   };
 
   /**
+   * Get monitored accounts for a specific coin
+   */
+  getMonitoredAccounts = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+
+      // Get all confirmed monitored accounts for this coin
+      const monitoredAccounts = await AccountCoinRelevance.findAll({
+        where: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          isConfirmed: true,
+        },
+        include: [{ 
+          model: TwitterAccount, 
+          as: 'account',
+          required: true 
+        }],
+        order: [['relevanceScore', 'DESC']],
+      });
+
+      // Format the response
+      const accountsData = monitoredAccounts.map((relevance: any) => ({
+        id: relevance.account.id,
+        username: relevance.account.username,
+        displayName: relevance.account.displayName,
+        bio: relevance.account.bio,
+        followersCount: relevance.account.followersCount,
+        isVerified: relevance.account.isVerified,
+        profileImageUrl: relevance.account.profileImageUrl,
+        influenceScore: relevance.account.influenceScore,
+        relevanceScore: relevance.relevanceScore,
+        mentionCount: relevance.mentionCount,
+        lastMentionAt: relevance.lastMentionAt,
+        addedAt: relevance.createdAt,
+        isConfirmed: relevance.isConfirmed,
+      }));
+
+      res.json({
+        success: true,
+        data: accountsData,
+        message: `Found ${accountsData.length} monitored accounts for ${coinSymbol.toUpperCase()}`,
+        metadata: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          totalAccounts: accountsData.length,
+          lastUpdated: new Date(),
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to get monitored accounts:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get monitored accounts',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
    * Private helper methods
    */
   private getTimeframeDuration(timeframe: string): number {

@@ -191,9 +191,11 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
       const statusResponse = await socialSentimentApi.getMonitoringStatus(selectedCoin);
       setMonitoringStatus(statusResponse.data);
 
-      // Get correlation data which includes monitored accounts
-      const correlationResponse = await socialSentimentApi.getAccountCorrelation(selectedCoin, 30);
-      setMonitoringAccounts(correlationResponse.data || []);
+      // Get monitored accounts list
+      const accountsResponse = await socialSentimentApi.getMonitoredAccounts(selectedCoin);
+      setMonitoringAccounts(accountsResponse.data || []);
+      
+      console.log(`Loaded ${accountsResponse.data?.length || 0} monitored accounts for ${selectedCoin}`);
     } catch (error) {
       console.error('Failed to load monitoring data:', error);
       setMonitoringStatus(null);

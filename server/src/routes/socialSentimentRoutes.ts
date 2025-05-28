@@ -83,6 +83,12 @@ router.get('/monitoring-status/:coinSymbol',
   socialSentimentController.getMonitoringStatus
 );
 
+// Get monitored accounts list for a coin
+router.get('/monitored-accounts/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getMonitoredAccounts
+);
+
 // Get recommended accounts for a specific coin
 router.get('/recommended-accounts/:coinSymbol',
   authenticateToken,

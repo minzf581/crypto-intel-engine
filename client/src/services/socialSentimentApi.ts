@@ -126,6 +126,12 @@ export const socialSentimentApi = {
     return response.data;
   },
 
+  // Get monitored accounts for a specific coin
+  getMonitoredAccounts: async (coinSymbol: string) => {
+    const response = await api.get(`/monitored-accounts/${coinSymbol}`);
+    return response.data;
+  },
+
   // Get sentiment trend analysis
   getSentimentTrend: async (coinSymbol: string, timeframe: '1h' | '4h' | '24h' | '7d' = '24h') => {
     const response = await api.get(`/trend/${coinSymbol}?timeframe=${timeframe}`);
