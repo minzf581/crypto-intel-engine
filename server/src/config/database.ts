@@ -78,15 +78,16 @@ export const syncModels = async () => {
     // Check if we're in Railway environment
     const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
     const isDevelopment = env.nodeEnv === 'development';
+    const isPostgreSQL = !!env.databaseUrl;
     
-    if (isDevelopment && !isRailway) {
-      // Local development: clean start to avoid constraint conflicts
+    if (isDevelopment && !isRailway && !isPostgreSQL) {
+      // Local development with SQLite: clean start to avoid constraint conflicts
       await cleanDatabase();
       await sequelize.sync({ force: true });
       logger.info('✅ Database models synchronized (development mode - force recreated)');
-    } else if (isRailway) {
-      // Railway environment: handle with special care
-      logger.info('🚂 Railway environment detected, using Railway-optimized sync strategy');
+    } else if (isRailway || isPostgreSQL) {
+      // Railway/PostgreSQL environment: handle with special care
+      logger.info('🚂 Railway/PostgreSQL environment detected, using optimized sync strategy');
       try {
         // First try: safe sync
         await sequelize.sync({ force: false, alter: false });
@@ -100,15 +101,13 @@ export const syncModels = async () => {
           logger.info('✅ Database models synchronized (Railway mode - force sync)');
         } catch (forceError) {
           logger.error('Railway force sync failed:', forceError);
-          // Last resort: try without any constraints
+          // For PostgreSQL, try alter sync as last resort
           try {
-            await sequelize.query('PRAGMA foreign_keys = OFF;');
-            await sequelize.sync({ force: true });
-            await sequelize.query('PRAGMA foreign_keys = ON;');
-            logger.info('✅ Database models synchronized (Railway mode - constraint-free sync)');
-          } catch (finalError) {
-            logger.error('All Railway sync strategies failed:', finalError);
-            throw finalError;
+            await sequelize.sync({ force: false, alter: true });
+            logger.info('✅ Database models synchronized (Railway mode - alter sync)');
+          } catch (alterError) {
+            logger.error('All Railway sync strategies failed:', alterError);
+            throw alterError;
           }
         }
       }
