@@ -12,6 +12,7 @@
     "build:server": "cd server && npm run build",
     "build:client": "cd client && npm run build",
     "start": "node server.js",
+    "start:railway": "./start-railway.sh",
     "verify:build": "node verify-build.js",
     "clean": "rm -rf server/dist client/dist node_modules server/node_modules client/node_modules",
     "health": "curl http://localhost:${PORT:-5001}/health || echo 'Health check failed'"

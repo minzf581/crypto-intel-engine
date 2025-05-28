@@ -35,9 +35,9 @@ ENV NODE_ENV=production
 ENV PORT=5001
 ENV HOST=0.0.0.0
 
-# Health check with longer timeout
-HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=5 \
-  CMD curl -f http://localhost:5001/health || exit 1
+# Health check with proper configuration for Railway
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://0.0.0.0:5001/health || exit 1
 
 # Start the application
 CMD ["npm", "start"] 

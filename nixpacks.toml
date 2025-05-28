@@ -1,22 +1,23 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ['nodejs_20', 'npm-9_x']
 
 [phases.install]
 cmds = [
-  "npm ci --prefer-offline --no-audit --silent",
-  "cd server && npm ci --prefer-offline --no-audit --silent",
-  "cd client && npm ci --prefer-offline --no-audit --silent"
+  'npm ci --prefer-offline --no-audit --silent',
+  'cd server && npm ci --prefer-offline --no-audit --silent',
+  'cd client && npm ci --prefer-offline --no-audit --silent'
 ]
 
 [phases.build]
 cmds = [
-  "cd server && npm run build",
-  "cd client && npm run build"
+  'cd server && npm run build',
+  'cd client && npm run build',
+  'mkdir -p server/data logs'
 ]
 
 [start]
-cmd = "npm start"
+cmd = 'npm start'
 
 [variables]
-NODE_ENV = "production"
-NPM_CONFIG_PRODUCTION = "false" 
+NODE_ENV = 'production'
+HOST = '0.0.0.0' 

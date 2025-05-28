@@ -47,30 +47,19 @@ app.get('/', (req, res) => {
   res.status(200).json({ 
     status: 'OK',
     service: 'Crypto Intelligence Engine',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    timestamp: new Date().toISOString()
   });
 });
 
 // Detailed health check endpoint - Always return 200 for Railway
 app.get('/health', (req, res) => {
   // Always return 200 status for Railway health checks
-  // Include detailed status in response body
   res.status(200).json({ 
     status: 'OK',
-    server_ready: serverReady,
-    services_ready: servicesReady,
+    timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     env: env.nodeEnv,
-    port: process.env.PORT || env.port || 5001,
-    host: process.env.HOST || '0.0.0.0',
-    timestamp: new Date().toISOString(),
-    railway: {
-      environment: process.env.RAILWAY_ENVIRONMENT || null,
-      service_id: process.env.RAILWAY_SERVICE_ID || null,
-      project_id: process.env.RAILWAY_PROJECT_ID || null
-    },
-    ...(initializationError && { initialization_error: initializationError })
+    port: process.env.PORT || env.port || 5001
   });
 });
 
@@ -201,33 +190,26 @@ const initializeServer = async () => {
     const PORT = parseInt(process.env.PORT || env.port?.toString() || '5001', 10);
     const HOST = process.env.HOST || '0.0.0.0'; // Railway requires binding to 0.0.0.0
     
-    // Mark server as ready immediately for Railway health checks
-    serverReady = true;
+    console.log(`🚀 Starting server on ${HOST}:${PORT}`);
     
     // Start server immediately for Railway health checks
     server.listen(PORT, HOST, () => {
-      const address = server.address() as AddressInfo;
-      logger.info(`🚀 Server listening on ${HOST}:${address.port} (${env.nodeEnv} mode)`);
-      logger.info('✅ Server ready for health checks');
+      console.log(`✅ Server listening on ${HOST}:${PORT} (${env.nodeEnv} mode)`);
+      console.log('🔗 Health check available at /health');
       
-      // Log Railway-specific information
-      if (process.env.RAILWAY_ENVIRONMENT) {
-        logger.info('🚂 Railway environment detected');
-        logger.info(`   Service ID: ${process.env.RAILWAY_SERVICE_ID || 'unknown'}`);
-        logger.info(`   Project ID: ${process.env.RAILWAY_PROJECT_ID || 'unknown'}`);
-        logger.info(`   Environment: ${process.env.RAILWAY_ENVIRONMENT || 'unknown'}`);
-      }
+      // Mark server as ready
+      serverReady = true;
       
       // Initialize services in background after server is listening
       setImmediate(() => {
         initializeServicesAsync().catch(error => {
-          logger.error('Background service initialization failed:', error);
+          console.error('Background service initialization failed:', error);
         });
       });
     });
     
   } catch (error: any) {
-    logger.error('Server startup error:', error);
+    console.error('Server startup error:', error);
     process.exit(1);
   }
 };
