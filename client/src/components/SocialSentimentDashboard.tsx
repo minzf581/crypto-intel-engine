@@ -11,7 +11,8 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   StarIcon,
-  AdjustmentsHorizontalIcon
+  AdjustmentsHorizontalIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
 import RecommendedAccountsPanel from './RecommendedAccountsPanel';
@@ -71,6 +72,10 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   const [searchMethod, setSearchMethod] = useState<string>('Basic Search');
   const [searchError, setSearchError] = useState<string | null>(null);
   
+  // Add monitoring state
+  const [monitoringAccounts, setMonitoringAccounts] = useState<any[]>([]);
+  const [monitoringStatus, setMonitoringStatus] = useState<any>(null);
+  
   // Search form state
   const [searchQuery, setSearchQuery] = useState('');
   const [minFollowers, setMinFollowers] = useState(1000);
@@ -81,6 +86,8 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   useEffect(() => {
     if (activeTab === 'analysis') {
       loadSentimentSummary();
+    } else if (activeTab === 'monitoring') {
+      loadMonitoringData();
     }
   }, [activeTab, selectedCoin, timeframe]);
 
@@ -172,6 +179,25 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
       setSentimentSummary(response.data);
     } catch (error) {
       console.error('Failed to load sentiment summary:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadMonitoringData = async () => {
+    setIsLoading(true);
+    try {
+      // Get monitoring status
+      const statusResponse = await socialSentimentApi.getMonitoringStatus(selectedCoin);
+      setMonitoringStatus(statusResponse.data);
+
+      // Get correlation data which includes monitored accounts
+      const correlationResponse = await socialSentimentApi.getAccountCorrelation(selectedCoin, 30);
+      setMonitoringAccounts(correlationResponse.data || []);
+    } catch (error) {
+      console.error('Failed to load monitoring data:', error);
+      setMonitoringStatus(null);
+      setMonitoringAccounts([]);
     } finally {
       setIsLoading(false);
     }
@@ -463,7 +489,14 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
       onAccountAdded={(account) => {
         // Handle account added to monitoring
         console.log('Account added to monitoring:', account);
-        // You could show a success message or update other state here
+        
+        // If we're currently on the monitoring tab, refresh the data
+        if (activeTab === 'monitoring') {
+          loadMonitoringData();
+        }
+        
+        // Show success notification
+        // You could show a toast notification here instead of alert
       }}
     />
   );
@@ -488,7 +521,7 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
                 Active Monitoring
               </p>
               <p className="text-2xl font-bold text-green-600">
-                {selectedAccounts.size}
+                {monitoringAccounts.length}
               </p>
             </div>
           </div>
@@ -502,7 +535,7 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
                 Posts Today
               </p>
               <p className="text-2xl font-bold text-blue-600">
-                {sentimentSummary?.totalPosts || 0}
+                {monitoringStatus?.totalPosts || 0}
               </p>
             </div>
           </div>
@@ -516,27 +549,136 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
                 Alerts
               </p>
               <p className="text-2xl font-bold text-yellow-600">
-                {sentimentSummary?.impactDistribution.high || 0}
+                {monitoringStatus?.alertCount || 0}
               </p>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Monitored Accounts List */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-md font-medium text-gray-900 dark:text-white">
+            Monitored Accounts ({monitoringAccounts.length})
+          </h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Accounts currently being monitored for {coinName} sentiment
+          </p>
+        </div>
+        
+        <div className="p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+          ) : monitoringAccounts.length === 0 ? (
+            <div className="text-center py-8">
+              <EyeIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">
+                No accounts are currently being monitored for {selectedCoin}
+              </p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                Add accounts from the Search or Recommended tabs to start monitoring
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {monitoringAccounts.map((accountData) => (
+                <div
+                  key={accountData.account.id}
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        {accountData.account.profileImageUrl ? (
+                          <img
+                            src={accountData.account.profileImageUrl}
+                            alt={accountData.account.displayName}
+                            className="h-12 w-12 rounded-full"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+                            <UserGroupIcon className="h-6 w-6 text-gray-500" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {accountData.account.displayName}
+                          </h4>
+                          {accountData.account.verified && (
+                            <ShieldCheckIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          )}
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Active
+                          </span>
+                        </div>
+                        
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                          @{accountData.account.username}
+                        </p>
+                        
+                        {accountData.account.bio && (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">
+                            {accountData.account.bio}
+                          </p>
+                        )}
+                        
+                        {/* Monitoring Metrics */}
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                          <span>{accountData.account.followersCount?.toLocaleString() || 0} followers</span>
+                          <span>Relevance: {(accountData.relevance?.relevanceScore * 100 || 0).toFixed(0)}%</span>
+                          <span>Mentions: {accountData.relevance?.mentionCount || 0}</span>
+                          <span>Avg Sentiment: {accountData.relevance?.avgSentiment?.toFixed(2) || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 ml-4">
+                      <div className="flex items-center space-x-2 text-green-600">
+                        <CheckCircleIcon className="h-5 w-5" />
+                        <span className="text-sm font-medium">Monitoring</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent Activity */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
         <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
           Recent Activity
         </h4>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <ClockIcon className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                Monitoring started for {selectedAccounts.size} accounts
-              </span>
+          {monitoringAccounts.length > 0 ? (
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <ClockIcon className="h-5 w-5 text-gray-400" />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Monitoring {monitoringAccounts.length} accounts for {selectedCoin}
+                </span>
+              </div>
+              <span className="text-xs text-gray-500">Active</span>
             </div>
-            <span className="text-xs text-gray-500">Just now</span>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  No monitoring setup for {selectedCoin}
+                </span>
+              </div>
+              <span className="text-xs text-gray-500">Inactive</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

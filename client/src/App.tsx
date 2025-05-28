@@ -16,6 +16,7 @@ import { AssetProvider } from './context/AssetContext';
 import { SignalProvider } from './context/SignalContext';
 import { SocketProvider } from './context/SocketContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { DashboardProvider } from './context/DashboardContext';
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -77,64 +78,66 @@ const App = () => {
   return (
     <AuthProvider>
       <SocketProvider>
-        <AssetProvider>
-          <SignalProvider>
-            <NotificationProvider>
-              <Routes>
-                {/* Auth routes */}
-                <Route path="/" element={<AuthLayout />}>
-                  <Route index element={<Navigate to="/login" replace />} />
+        <DashboardProvider>
+          <AssetProvider>
+            <SignalProvider>
+              <NotificationProvider>
+                <Routes>
+                  {/* Auth routes */}
+                  <Route path="/" element={<AuthLayout />}>
+                    <Route index element={<Navigate to="/login" replace />} />
+                    <Route 
+                      path="login" 
+                      element={
+                        <AuthRoute>
+                          <LoginPage />
+                        </AuthRoute>
+                      } 
+                    />
+                    <Route 
+                      path="register" 
+                      element={
+                        <AuthRoute>
+                          <RegisterPage />
+                        </AuthRoute>
+                      } 
+                    />
+                  </Route>
+
+                  {/* Onboarding route */}
                   <Route 
-                    path="login" 
+                    path="/onboarding" 
                     element={
-                      <AuthRoute>
-                        <LoginPage />
-                      </AuthRoute>
+                      <ProtectedRoute>
+                        <OnboardingPage />
+                      </ProtectedRoute>
                     } 
                   />
+
+                  {/* Dashboard routes */}
                   <Route 
-                    path="register" 
+                    path="/" 
                     element={
-                      <AuthRoute>
-                        <RegisterPage />
-                      </AuthRoute>
-                    } 
-                  />
-                </Route>
+                      <ProtectedRoute>
+                        <DashboardLayout />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route path="dashboard" element={<DashboardPage />} />
+                    <Route path="social-sentiment" element={<SocialSentimentPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </Route>
 
-                {/* Onboarding route */}
-                <Route 
-                  path="/onboarding" 
-                  element={
-                    <ProtectedRoute>
-                      <OnboardingPage />
-                    </ProtectedRoute>
-                  } 
-                />
+                  {/* Test Data Source Status route */}
+                  <Route path="test-data-source-status" element={<TestDataSourceStatus />} />
 
-                {/* Dashboard routes */}
-                <Route 
-                  path="/" 
-                  element={
-                    <ProtectedRoute>
-                      <DashboardLayout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route path="dashboard" element={<DashboardPage />} />
-                  <Route path="social-sentiment" element={<SocialSentimentPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                </Route>
-
-                {/* Test Data Source Status route */}
-                <Route path="test-data-source-status" element={<TestDataSourceStatus />} />
-
-                {/* 404 page */}
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </NotificationProvider>
-          </SignalProvider>
-        </AssetProvider>
+                  {/* 404 page */}
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </NotificationProvider>
+            </SignalProvider>
+          </AssetProvider>
+        </DashboardProvider>
       </SocketProvider>
     </AuthProvider>
   );

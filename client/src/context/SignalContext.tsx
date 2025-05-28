@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
@@ -67,9 +67,8 @@ const DEFAULT_FILTERS: SignalFilter = {
 };
 
 export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { selectedAssets } = useAssets();
-  
   const [signals, setSignals] = useState<Signal[]>([]);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [filters, setFilters] = useState<SignalFilter>(DEFAULT_FILTERS);
@@ -78,21 +77,38 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [socket, setSocket] = useState<Socket | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [signalsInitialized, setSignalsInitialized] = useState(false);
 
-  // Initialize socket connection
+  // Use refs to prevent unnecessary effect triggers
+  const lastSelectedAssetsRef = useRef<string>('');
+  const socketInitializedRef = useRef(false);
+
+  // Memoize selected asset symbols
+  const selectedAssetSymbols = useMemo(() => {
+    if (!selectedAssets || !Array.isArray(selectedAssets)) return [];
+    return selectedAssets.map(asset => asset.symbol).sort();
+  }, [selectedAssets]);
+
+  // Convert to string for comparison
+  const selectedAssetsString = selectedAssetSymbols.join(',');
+
+  // Initialize socket connection only once
   useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('Cannot initialize WebSocket connection: authentication token not found');
+    if (!isAuthenticated || selectedAssetSymbols.length === 0 || socketInitializedRef.current) {
       return;
     }
 
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('Cannot initialize WebSocket: no token');
+      return;
+    }
+
+    socketInitializedRef.current = true;
+
     try {
-      console.log('Initializing WebSocket connection...');
+      console.log('Initializing WebSocket connection for assets:', selectedAssetSymbols);
       const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      console.log('WebSocket connection URL:', socketUrl);
       
       const newSocket = io(socketUrl, {
         withCredentials: true,
@@ -106,31 +122,19 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       newSocket.on('connect', () => {
-        console.log('WebSocket connection successful');
-        
-        // Ensure selectedAssets exists and is an array
-        if (selectedAssets && Array.isArray(selectedAssets) && selectedAssets.length > 0) {
-          // Ensure each asset has symbol property
-          const validAssets = selectedAssets.filter(asset => asset && typeof asset === 'object' && 'symbol' in asset);
-          if (validAssets.length > 0) {
-            const assetSymbols = validAssets.map(asset => asset.symbol);
-            console.log('Subscribing to assets:', assetSymbols);
-            newSocket.emit('subscribe', { assets: assetSymbols });
-          } else {
-            console.warn('Selected assets do not have symbol property:', selectedAssets);
-          }
-        } else {
-          console.log('No assets selected for subscription');
-        }
+        console.log('WebSocket connected successfully');
+        newSocket.emit('subscribe', { assets: selectedAssetSymbols });
       });
 
       newSocket.on('connect_error', (error) => {
         console.error('WebSocket connection error:', error);
         setError(`WebSocket connection error: ${error.message}`);
+        socketInitializedRef.current = false;
       });
 
       newSocket.on('disconnect', () => {
         console.log('WebSocket disconnected');
+        socketInitializedRef.current = false;
       });
 
       newSocket.on('error', (error) => {
@@ -141,11 +145,7 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       newSocket.on('newSignal', (signal) => {
         console.log('Received new signal:', signal);
         setSignals(prev => {
-          // Ensure prev is an array, if not, use empty array
-          if (!Array.isArray(prev)) {
-            console.warn('Signal state is not an array, resetting to:', [signal]);
-            return [signal];
-          }
+          if (!Array.isArray(prev)) return [signal];
           return [signal, ...prev];
         });
       });
@@ -155,18 +155,30 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return () => {
         console.log('Cleaning up WebSocket connection...');
         newSocket.disconnect();
+        socketInitializedRef.current = false;
       };
     } catch (error) {
       console.error('WebSocket initialization error:', error);
       setError('WebSocket initialization error');
+      socketInitializedRef.current = false;
     }
-  }, [isAuthenticated, selectedAssets]);
+  }, [isAuthenticated, selectedAssetsString]); // Use string comparison
 
-  // Fetch initial signals
+  // Fetch initial signals when assets change
   useEffect(() => {
-    if (!isAuthenticated || !selectedAssets || !selectedAssets.length) return;
+    // Only fetch if assets have changed and we're authenticated
+    if (!isAuthenticated || 
+        !selectedAssets || 
+        selectedAssets.length === 0 || 
+        selectedAssetsString === lastSelectedAssetsRef.current) {
+      return;
+    }
+
+    // Update the ref to track current assets
+    lastSelectedAssetsRef.current = selectedAssetsString;
     
     const fetchSignals = async () => {
+      console.log('Fetching signals for assets:', selectedAssetSymbols);
       setIsLoading(true);
       setError(null);
       setPage(1);
@@ -176,41 +188,59 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const assetIds = selectedAssets.map(asset => asset.id).join(',');
         const response = await axios.get(`/api/signals?assets=${assetIds}&page=1`);
         
-        // Fix data structure issue - ensure correct data structure handling
         console.log('Signal API response:', response.data);
         
         if (response.data && response.data.success && response.data.data) {
-          // Extract correct data structure
           const signalData = response.data.data;
           
           if (signalData.signals && Array.isArray(signalData.signals)) {
-            console.log('Received signal data:', signalData.signals.length);
+            console.log('Setting signals:', signalData.signals.length);
             setSignals(signalData.signals);
             setHasMore(signalData.hasMore || false);
           } else {
-            console.warn('Server returned signal data without signals array', signalData);
+            console.warn('No signals array in response');
             setSignals([]);
             setHasMore(false);
           }
         } else {
-          console.warn('Server returned unexpected signal data format', response.data);
+          console.warn('Unexpected response format');
           setSignals([]);
           setHasMore(false);
         }
+        
+        setSignalsInitialized(true);
       } catch (error) {
         console.error('Error fetching signals:', error);
         setError('Failed to load signals. Please try again.');
+        setSignalsInitialized(true);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchSignals();
-  }, [isAuthenticated, selectedAssets]);
+  }, [isAuthenticated, selectedAssetsString]);
 
-  // Load more signals
+  // Reset state when authentication changes
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setSignalsInitialized(false);
+      lastSelectedAssetsRef.current = '';
+      socketInitializedRef.current = false;
+      setSignals([]);
+      setError(null);
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+    }
+  }, [isAuthenticated]);
+
+  // Load more signals function
   const loadMoreSignals = async () => {
-    if (isLoading || !hasMore || !selectedAssets || !selectedAssets.length) return Promise.resolve();
+    if (isLoading || !hasMore || !selectedAssets || !selectedAssets.length) {
+      return Promise.resolve();
+    }
     
     setIsLoading(true);
     const nextPage = page + 1;
@@ -219,27 +249,20 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const assetIds = selectedAssets.map(asset => asset.id).join(',');
       const response = await axios.get(`/api/signals?assets=${assetIds}&page=${nextPage}`);
       
-      // Use the same data processing approach
       if (response.data && response.data.success && response.data.data) {
         const signalData = response.data.data;
         
         if (signalData.signals && Array.isArray(signalData.signals)) {
           setSignals(prev => {
-            // Ensure prev is an array
-            if (!Array.isArray(prev)) {
-              console.warn('When loading more signals, existing signal state is not an array, using newly loaded signals');
-              return signalData.signals;
-            }
+            if (!Array.isArray(prev)) return signalData.signals;
             return [...prev, ...signalData.signals];
           });
           setHasMore(signalData.hasMore || false);
           setPage(nextPage);
         } else {
-          console.warn('When loading more signals, server returned data without signals array', signalData);
           setHasMore(false);
         }
       } else {
-        console.warn('When loading more signals, server returned unexpected data format', response.data);
         setHasMore(false);
       }
       
@@ -258,24 +281,21 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
-  // Reset filters to defaults
+  // Reset filters
   const resetFilters = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
   }, []);
 
   // Apply filters to signals
   const filteredSignals = signals && Array.isArray(signals) ? signals.filter(signal => {
-    // Filter by signal type
     if (filters.types.length && !filters.types.includes(signal.type)) {
       return false;
     }
 
-    // Filter by minimum strength
     if (signal.strength < filters.minStrength) {
       return false;
     }
 
-    // Filter by source
     if (filters.sources.length) {
       const hasMatchingSource = signal.sources.some(source => 
         filters.sources.includes(source.platform)
@@ -285,7 +305,6 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
 
-    // Filter by time range
     if (filters.timeRange !== 'all') {
       const signalDate = new Date(signal.timestamp);
       const now = new Date();
@@ -321,10 +340,9 @@ export const SignalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return true;
   }).sort((a, b) => {
-    // Sort by selected sort method
     if (filters.sortBy === 'latest') {
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    } else { // sort by strength
+    } else {
       return b.strength - a.strength;
     }
   }) : [];

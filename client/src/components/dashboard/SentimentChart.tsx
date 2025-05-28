@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useDashboard } from '../../context/DashboardContext';
 import { ChartBarIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
 
 interface SentimentData {
@@ -18,8 +18,8 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
   symbol, 
   timeRange = '24h' 
 }) => {
+  const { getAssetBySymbol, isLoading, data: dashboardData } = useDashboard();
   const [data, setData] = useState<SentimentData[]>([]);
-  const [loading, setLoading] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [priceChange, setPriceChange] = useState<number | null>(null);
 
@@ -58,40 +58,23 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
     return mockData;
   };
 
-  // Get price data and generate sentiment data
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get('/api/dashboard/data');
-      
-      if (response.data && response.data.success && response.data.data) {
-        const assets = response.data.data.assets;
-        const assetData = assets.find((asset: any) => asset.symbol === symbol);
-        
-        if (assetData && assetData.currentPrice) {
-          setCurrentPrice(assetData.currentPrice);
-          setPriceChange(assetData.priceChange24h);
-          
-          // Generate mock sentiment data
-          const sentimentData = generateMockSentimentData(assetData.currentPrice);
-          setData(sentimentData);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Get price data and generate sentiment data from dashboard context
   useEffect(() => {
-    fetchData();
+    const assetData = getAssetBySymbol(symbol);
     
-    // Update every 5 minutes
-    const interval = setInterval(fetchData, 300000);
-    
-    return () => clearInterval(interval);
-  }, [symbol, timeRange]);
+    if (assetData && assetData.currentPrice) {
+      setCurrentPrice(assetData.currentPrice);
+      setPriceChange(assetData.priceChange24h);
+      
+      // Generate mock sentiment data
+      const sentimentData = generateMockSentimentData(assetData.currentPrice);
+      setData(sentimentData);
+    } else {
+      setCurrentPrice(null);
+      setPriceChange(null);
+      setData([]);
+    }
+  }, [symbol, getAssetBySymbol, timeRange, dashboardData]);
 
   // Calculate price and sentiment correlation
   const calculateCorrelation = (): number => {
@@ -144,7 +127,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
     return 'Extremely Bearish';
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 border border-neutral-200 dark:border-neutral-700">
         <div className="animate-pulse">

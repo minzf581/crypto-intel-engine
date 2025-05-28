@@ -199,6 +199,58 @@ export class VolumeAnalysisService {
   }
 
   /**
+   * Get volume overview statistics
+   */
+  async getVolumeOverview(): Promise<{
+    totalVolume: number;
+    avgVolumeChange: number;
+    spikesDetected: number;
+    activeAssets: number;
+  }> {
+    try {
+      // Get recent volume analyses
+      const recentAnalyses = await VolumeAnalysis.findAll({
+        where: {
+          timestamp: {
+            [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          },
+        },
+        order: [['timestamp', 'DESC']],
+      });
+
+      if (recentAnalyses.length === 0) {
+        return {
+          totalVolume: 0,
+          avgVolumeChange: 0,
+          spikesDetected: 0,
+          activeAssets: 0,
+        };
+      }
+
+      // Calculate overview metrics
+      const totalVolume = recentAnalyses.reduce((sum, analysis) => sum + analysis.volume24h, 0);
+      const avgVolumeChange = recentAnalyses.reduce((sum, analysis) => sum + analysis.volumeChange, 0) / recentAnalyses.length;
+      const spikesDetected = recentAnalyses.filter(analysis => analysis.volumeSpike || analysis.unusualVolumeDetected).length;
+      const activeAssets = new Set(recentAnalyses.map(analysis => analysis.symbol)).size;
+
+      return {
+        totalVolume,
+        avgVolumeChange,
+        spikesDetected,
+        activeAssets,
+      };
+    } catch (error) {
+      logger.error('Failed to get volume overview:', error);
+      return {
+        totalVolume: 0,
+        avgVolumeChange: 0,
+        spikesDetected: 0,
+        activeAssets: 0,
+      };
+    }
+  }
+
+  /**
    * Private methods
    */
   private async fetchVolumeData(symbol: string): Promise<any> {

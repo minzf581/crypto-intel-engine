@@ -50,13 +50,13 @@ export default function EnhancedNotificationCenter() {
       setLoading(true);
       
       // Fetch notification history
-      const historyResponse = await api.get('/notifications-enhanced/history');
+      const historyResponse = await api.get('/api/notifications-enhanced/history');
       if (historyResponse.data.success) {
         setNotifications(historyResponse.data.data);
       }
       
       // Fetch grouped notifications
-      const groupedResponse = await api.get('/notifications-enhanced/grouped');
+      const groupedResponse = await api.get('/api/notifications-enhanced/grouped');
       if (groupedResponse.data.success) {
         setGroupedNotifications(groupedResponse.data.data);
       }

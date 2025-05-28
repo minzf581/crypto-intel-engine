@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
-import axios from 'axios';
+import { useDashboard } from '../../context/DashboardContext';
 
 interface PriceWidgetData {
   symbol: string;
@@ -22,43 +22,24 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
   showIcon = true,
   className = ''
 }) => {
+  const { getAssetBySymbol, isLoading } = useDashboard();
   const [data, setData] = useState<PriceWidgetData | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  // Get price data
-  const fetchPriceData = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get('/api/dashboard/data');
-      
-      if (response.data && response.data.success && response.data.data) {
-        const assets = response.data.data.assets;
-        const assetData = assets.find((asset: any) => asset.symbol === symbol);
-        
-        if (assetData) {
-          setData({
-            symbol: assetData.symbol,
-            currentPrice: assetData.currentPrice,
-            priceChange24h: assetData.priceChange24h,
-            lastUpdated: assetData.lastUpdated
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to get ${symbol} price data:`, error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Get price data from dashboard context
   useEffect(() => {
-    fetchPriceData();
+    const assetData = getAssetBySymbol(symbol);
     
-    // Update every 2 minutes
-    const interval = setInterval(fetchPriceData, 120000);
-    
-    return () => clearInterval(interval);
-  }, [symbol]);
+    if (assetData) {
+      setData({
+        symbol: assetData.symbol,
+        currentPrice: assetData.currentPrice,
+        priceChange24h: assetData.priceChange24h,
+        lastUpdated: assetData.lastUpdated
+      });
+    } else {
+      setData(null);
+    }
+  }, [symbol, getAssetBySymbol]);
 
   // Format price
   const formatPrice = (price: number | null): string => {
@@ -118,7 +99,7 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
 
   const styles = getSizeClasses();
 
-  if (loading && !data) {
+  if (isLoading && !data) {
     return (
       <div className={`inline-flex items-center space-x-1 ${styles.container} ${className}`}>
         <div className="animate-pulse">

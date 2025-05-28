@@ -538,8 +538,9 @@ export class TwitterService {
       score += 15;
     }
     
-    // Cap at 100
-    return Math.min(Math.round(score), 100);
+    // Cap at 100 and normalize to 0.0-1.0 range
+    const normalizedScore = Math.min(Math.round(score), 100) / 100;
+    return Math.max(0.0, Math.min(1.0, normalizedScore));
   }
 
   /**

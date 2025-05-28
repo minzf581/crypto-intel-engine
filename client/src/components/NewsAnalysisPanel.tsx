@@ -48,19 +48,19 @@ export default function NewsAnalysisPanel() {
       setLoading(true);
       
       // Fetch latest news
-      const newsResponse = await api.get('/notifications-enhanced/news');
+      const newsResponse = await api.get('/api/notifications-enhanced/news');
       if (newsResponse.data.success) {
         setNewsData(newsResponse.data.data.slice(0, 10)); // Show top 10 news
       }
       
       // Fetch sentiment trends
-      const trendsResponse = await api.get('/notifications-enhanced/news/sentiment-trends');
+      const trendsResponse = await api.get('/api/notifications-enhanced/news/sentiment-trends');
       if (trendsResponse.data.success) {
         setSentimentTrends(trendsResponse.data.data);
       }
       
       // Fetch portfolio impact
-      const impactResponse = await api.get('/notifications-enhanced/news/portfolio-impact');
+      const impactResponse = await api.get('/api/notifications-enhanced/news/portfolio-impact');
       if (impactResponse.data.success) {
         setPortfolioImpact(impactResponse.data.data);
       }

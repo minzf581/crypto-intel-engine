@@ -7,7 +7,9 @@ import {
   ClockIcon,
   TagIcon,
   EyeIcon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  ExclamationTriangleIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
 
@@ -141,10 +143,38 @@ const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
         </select>
       </div>
 
+      {/* Data Quality Warning */}
+      {correlationData.length > 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Data Analysis Notice
+              </h4>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                Correlation analysis is based on available social media posts and estimated price movements. 
+                For production use, this should be integrated with real-time price data APIs.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="text-gray-500 mt-2">Loading correlation data...</p>
+        </div>
+      ) : correlationData.length === 0 ? (
+        <div className="text-center py-8">
+          <UserGroupIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">
+            No monitored accounts found for {coinSymbol}
+          </p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+            Add accounts to monitoring from the Search or Recommended tabs to see correlation data
+          </p>
         </div>
       ) : (
         <div className="grid gap-4">

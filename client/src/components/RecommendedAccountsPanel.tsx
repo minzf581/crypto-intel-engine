@@ -131,24 +131,33 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
 
   const addToMonitoring = async (account: RecommendedAccount) => {
     try {
-      await socialSentimentApi.addRecommendedAccountToMonitoring({
+      const response = await socialSentimentApi.addRecommendedAccountToMonitoring({
         accountId: account.id,
         coinSymbol: selectedCoin,
       });
 
-      // Update local state
-      setAccounts(prev =>
-        prev.map(acc =>
-          acc.id === account.id
-            ? { ...acc, isMonitored: true, monitoringStatus: 'active' as const }
-            : acc
-        )
-      );
+      if (response.success) {
+        // Update local state
+        setAccounts(prev =>
+          prev.map(acc =>
+            acc.id === account.id
+              ? { ...acc, isMonitored: true, monitoringStatus: 'active' as const }
+              : acc
+          )
+        );
 
-      onAccountAdded?.(account);
+        // Show success message
+        alert(`Successfully added ${account.displayName} to monitoring for ${selectedCoin}`);
+        
+        // Notify parent component
+        onAccountAdded?.(account);
+      } else {
+        throw new Error(response.message || 'Failed to add account to monitoring');
+      }
     } catch (error) {
       console.error('Failed to add account to monitoring:', error);
-      alert('Failed to add account to monitoring. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add account to monitoring. Please try again.';
+      alert(errorMessage);
     }
   };
 

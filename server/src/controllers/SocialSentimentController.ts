@@ -373,8 +373,9 @@ export class SocialSentimentController {
     score += Math.min(followRatio / 10, 20); // Bonus for good follow ratio
     score += Math.min(engagementRate / 100, 10); // Bonus for engagement
     
-    // Cap at 100
-    return Math.min(Math.round(score), 100);
+    // Normalize to 0.0-1.0 range instead of 0-100
+    const normalizedScore = Math.min(Math.round(score), 100) / 100;
+    return Math.max(0.0, Math.min(1.0, normalizedScore));
   }
 
   /**
@@ -644,6 +645,8 @@ export class SocialSentimentController {
             timeframe: `${days} days`,
             startDate,
             endDate: new Date(),
+            dataQuality: 'no_data',
+            warning: 'No accounts are currently being monitored for this cryptocurrency.'
           }
         });
         return;
@@ -670,7 +673,7 @@ export class SocialSentimentController {
           limit: 50,
         });
 
-        // Generate historical correlation data (simulated for now)
+        // Generate historical correlation data based on available posts
         const historicalCorrelation = this.generateHistoricalCorrelation(
           account, 
           coinSymbol.toUpperCase(), 
@@ -696,14 +699,17 @@ export class SocialSentimentController {
             verified: account.verified,
             influenceScore: account.influenceScore,
             profileImageUrl: account.profileImageUrl,
+            bio: account.bio,
           },
           relevance: {
-            score: relevance.relevanceScore,
+            relevanceScore: relevance.relevanceScore,
             mentionCount: relevance.mentionCount,
+            totalPosts: relevance.totalPosts,
             avgSentiment: relevance.avgSentiment,
             avgImpact: relevance.avgImpact,
             lastMentionAt: relevance.lastMentionAt,
             isConfirmed: relevance.isConfirmed,
+            totalMentions: recentActivity.length,
           },
           historicalCorrelation,
           recentActivity: recentActivity.slice(0, 10), // Limit to 10 most recent posts
@@ -716,10 +722,21 @@ export class SocialSentimentController {
 
       // Sort by correlation strength and relevance
       correlationData.sort((a, b) => {
-        const scoreA = (a.correlationStrength * 0.6) + (a.relevance.score * 0.4);
-        const scoreB = (b.correlationStrength * 0.6) + (b.relevance.score * 0.4);
+        const scoreA = (a.correlationStrength * 0.6) + (a.relevance.relevanceScore * 0.4);
+        const scoreB = (b.correlationStrength * 0.6) + (b.relevance.relevanceScore * 0.4);
         return scoreB - scoreA;
       });
+
+      // Determine data quality based on available posts
+      const totalPosts = correlationData.reduce((sum, item) => sum + item.recentActivity.length, 0);
+      const dataQuality = totalPosts > 50 ? 'good' : totalPosts > 20 ? 'limited' : 'insufficient';
+      
+      let warning = '';
+      if (dataQuality === 'insufficient') {
+        warning = 'Limited post data available. Correlation analysis may not be accurate. Consider monitoring accounts with more recent activity.';
+      } else if (dataQuality === 'limited') {
+        warning = 'Moderate post data available. Correlation analysis is based on limited historical data.';
+      }
 
       res.json({
         success: true,
@@ -732,6 +749,10 @@ export class SocialSentimentController {
           startDate,
           endDate: new Date(),
           hasHistoricalData: correlationData.some(item => item.historicalCorrelation.length > 0),
+          dataQuality,
+          warning,
+          totalPosts,
+          note: 'Correlation analysis is based on available social media posts and estimated price movements. For production use, integrate with real-time price data APIs.'
         }
       });
     } catch (error) {
@@ -1508,7 +1529,7 @@ export class SocialSentimentController {
           verified: recommendedAccount.verified || false,
           profileImageUrl: recommendedAccount.profileImageUrl || '',
           isInfluencer: (recommendedAccount.followersCount || 0) > 10000,
-          influenceScore: recommendedAccount.relevanceScore || 50,
+          influenceScore: recommendedAccount.relevanceScore || 0.5,
           lastActivityAt: new Date(),
         };
 
@@ -1522,7 +1543,7 @@ export class SocialSentimentController {
           followersCount: recommendedAccount.followersCount || twitterAccount.followersCount,
           verified: recommendedAccount.verified || twitterAccount.verified,
           profileImageUrl: recommendedAccount.profileImageUrl || twitterAccount.profileImageUrl,
-          influenceScore: Math.max(twitterAccount.influenceScore, recommendedAccount.relevanceScore || 50),
+          influenceScore: Math.max(twitterAccount.influenceScore, recommendedAccount.relevanceScore || 0.5),
           lastActivityAt: new Date(),
         });
         logger.info(`Updated existing TwitterAccount: ${twitterAccount.username}`);

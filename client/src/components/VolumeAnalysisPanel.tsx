@@ -36,7 +36,7 @@ export default function VolumeAnalysisPanel() {
   const fetchVolumeData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/notifications-enhanced/volume-analysis');
+      const response = await api.get('/api/notifications-enhanced/volume-analysis');
       
       if (response.data.success) {
         setVolumeData(response.data.data);

@@ -25,7 +25,7 @@ export default function DataSourceStatus() {
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/analysis/data-sources/status');
+      const response = await api.get('/api/analysis/data-sources/status');
       if (response.data.success) {
         setStatusData(response.data.data);
         setLastRefresh(new Date());

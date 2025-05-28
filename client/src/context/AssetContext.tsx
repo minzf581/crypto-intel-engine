@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
 
@@ -50,12 +50,23 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [availableAssets, setAvailableAssets] = useState<Asset[]>(DEFAULT_ASSETS);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assetsInitialized, setAssetsInitialized] = useState(false);
+
+  // Use ref to track the user ID to prevent unnecessary refetches
+  const lastUserIdRef = useRef<string | null>(null);
 
   // Fetch user's asset preferences when authenticated
   useEffect(() => {
+    // Only fetch if user is authenticated and user ID has changed
+    if (!isAuthenticated || !user?.id || user.id === lastUserIdRef.current) {
+      return;
+    }
+
+    // Update the ref to track current user
+    lastUserIdRef.current = user.id;
+    
     const fetchAssetPreferences = async () => {
-      if (!isAuthenticated) return;
-      
+      console.log('Fetching asset preferences for user:', user.id);
       setIsLoading(true);
       setError(null);
       
@@ -70,6 +81,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           selectedSymbols = user.selectedAssets;
         }
         
+        console.log('User selected assets:', selectedSymbols);
+        
         // Update available assets with selection status
         setAvailableAssets(prevAssets => 
           prevAssets.map(asset => ({
@@ -77,6 +90,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             isSelected: selectedSymbols.includes(asset.symbol)
           }))
         );
+        
+        setAssetsInitialized(true);
       } catch (error) {
         console.error('Error fetching asset preferences:', error);
         // Try to use user data as fallback
@@ -89,41 +104,46 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           );
         }
         setError('Failed to load your asset preferences');
+        setAssetsInitialized(true);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchAssetPreferences();
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id]); // Only depend on authentication status and user ID
+
+  // Reset state when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAssetsInitialized(false);
+      lastUserIdRef.current = null;
+      // Reset to default state
+      setAvailableAssets(DEFAULT_ASSETS);
+      setError(null);
+    }
+  }, [isAuthenticated]);
 
   // Toggle asset selection by symbol
   const toggleAssetSelection = (assetSymbol: string) => {
     setAvailableAssets(prevAssets => {
-      // Count currently selected assets
       const selectedCount = prevAssets.filter(asset => asset.isSelected).length;
-      
-      // Find the asset we're trying to update
       const targetAsset = prevAssets.find(asset => asset.symbol === assetSymbol);
       
       if (!targetAsset) return prevAssets;
       
-      // If we're trying to select a 6th asset, prevent it
       if (!targetAsset.isSelected && selectedCount >= 5) {
         setError('You can select a maximum of 5 assets');
         return prevAssets;
       }
       
-      // If we're trying to deselect when only 3 are selected, prevent it
       if (targetAsset.isSelected && selectedCount <= 3) {
         setError('You must select at least 3 assets');
         return prevAssets;
       }
       
-      // Clear any previous errors
       setError(null);
       
-      // Toggle the selection
       return prevAssets.map(asset => 
         asset.symbol === assetSymbol 
           ? { ...asset, isSelected: !asset.isSelected } 
@@ -160,11 +180,10 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!query.trim()) return [];
     
     try {
-      // Using CoinGecko search API
       const response = await axios.get(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
       
       if (response.data && response.data.coins) {
-        return response.data.coins.slice(0, 10).map((coin: any, index: number) => ({
+        return response.data.coins.slice(0, 10).map((coin: any) => ({
           id: `search-${coin.id}`,
           symbol: coin.symbol.toUpperCase(),
           name: coin.name,
@@ -183,18 +202,15 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Add a new asset to available assets list and save to backend
   const addAssetToAvailable = async (newAsset: Omit<Asset, 'isSelected'>) => {
     try {
-      // Check if asset already exists locally
       const exists = availableAssets.some(asset => asset.symbol === newAsset.symbol);
       if (exists) return;
       
-      // Add asset to backend
       await axios.post('/api/assets', {
         symbol: newAsset.symbol,
         name: newAsset.name,
         logo: newAsset.logo
       });
       
-      // Add to local state
       setAvailableAssets(prevAssets => [
         ...prevAssets, 
         { ...newAsset, isSelected: false }
@@ -202,7 +218,6 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
     } catch (error) {
       console.error('Error adding asset:', error);
-      // If backend fails, still add to local state temporarily
       setAvailableAssets(prevAssets => {
         const exists = prevAssets.some(asset => asset.symbol === newAsset.symbol);
         if (exists) return prevAssets;

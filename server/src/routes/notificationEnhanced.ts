@@ -15,6 +15,7 @@ router.post('/fcm-token', NotificationEnhancedController.registerFCMToken);
 router.post('/test', NotificationEnhancedController.testNotification);
 
 // Volume analysis endpoints
+router.get('/volume-analysis', NotificationEnhancedController.getVolumeAnalysis);
 router.get('/volume/:symbol', NotificationEnhancedController.getVolumeAnalysis);
 router.get('/volume-unusual', NotificationEnhancedController.getUnusualVolumeSymbols);
 router.post('/volume/analyze', NotificationEnhancedController.triggerVolumeAnalysis);

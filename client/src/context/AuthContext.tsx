@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -142,62 +142,75 @@ const DEMO_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRlbW8tdXNlci1
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const navigate = useNavigate();
 
-  // Check for existing auth token on mount
+  // Use ref to prevent multiple simultaneous auth checks
+  const authCheckInProgress = useRef(false);
+
+  // Initialize authentication on mount - only once
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      console.log('Checking authentication status...');
-      setIsLoading(true);
-      const token = localStorage.getItem('token');
+    if (authInitialized || authCheckInProgress.current) return;
+
+    authCheckInProgress.current = true;
+    
+    const initializeAuth = async () => {
+      console.log('Initializing authentication...');
       
-      if (token) {
-        try {
-          console.log('Found token in localStorage, length:', token.length);
-          
-          // Set auth header safely
-          try {
-            if (!axios.defaults.headers) {
-              axios.defaults.headers = {};
-            }
-            if (!axios.defaults.headers.common) {
-              axios.defaults.headers.common = {};
-            }
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          } catch (headerError) {
-            console.warn('Could not set auth header in useEffect:', headerError);
-          }
-          
-          // Get current user info
-          console.log('Getting current user info...');
-          const response = await axios.get('/api/users/me');
-          
-          if (response.data && response.data.data) {
-            const userData = response.data.data;
-            setUser(userData);
-            console.log('Authentication successful, user info:', userData);
-          } else {
-            throw new Error('Invalid user data response');
-          }
-        } catch (error: any) {
-          console.error('Authentication token verification error:', error);
-          localStorage.removeItem('token');
-          try {
-            if (axios.defaults.headers?.common) {
-              delete axios.defaults.headers.common['Authorization'];
-            }
-          } catch (e) {
-            console.warn('Could not clear auth header in useEffect:', e);
-          }
+      try {
+        const token = localStorage.getItem('token');
+        
+        if (!token || token === 'undefined' || token === 'null') {
+          console.log('No valid token found, setting unauthenticated state');
           setUser(null);
+          setIsLoading(false);
+          setAuthInitialized(true);
+          return;
         }
+
+        console.log('Token found, verifying with server...');
+        
+        // Set auth header for this request
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        };
+        
+        const response = await axios.get('/api/users/me', config);
+        
+        if (response.data && response.data.data) {
+          const userData = response.data.data;
+          setUser(userData);
+          console.log('Authentication successful:', userData.email);
+          
+          // Update axios default headers after successful verification
+          if (!axios.defaults.headers) {
+            axios.defaults.headers = {};
+          }
+          if (!axios.defaults.headers.common) {
+            axios.defaults.headers.common = {};
+          }
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        } else {
+          throw new Error('Invalid user data response');
+        }
+      } catch (error: any) {
+        console.error('Authentication initialization failed:', error.message);
+        localStorage.removeItem('token');
+        if (axios.defaults.headers?.common) {
+          delete axios.defaults.headers.common['Authorization'];
+        }
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+        setAuthInitialized(true);
+        authCheckInProgress.current = false;
       }
-      
-      setIsLoading(false);
     };
 
-    checkAuthStatus();
-  }, []);
+    initializeAuth();
+  }, []); // Empty dependency array - run only once
 
   // Login function
   const login = async (email: string, password: string): Promise<User> => {
@@ -206,101 +219,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Clear old auth state
       localStorage.removeItem('token');
-      // Safely clear auth header
-      try {
-        if (axios.defaults.headers?.common) {
-          delete axios.defaults.headers.common['Authorization'];
-        }
-      } catch (e) {
-        console.warn('Could not clear auth header:', e);
+      if (axios.defaults.headers?.common) {
+        delete axios.defaults.headers.common['Authorization'];
       }
       
-      // Send login request
-      console.log('Sending login request...');
       const response = await axios.post('/api/auth/login', { email, password });
       
-      console.log('Login response received:', response.data);
-      
-      // Validate response structure
       if (!response.data || !response.data.success) {
         throw new Error('Login failed: Invalid server response');
       }
       
-      if (!response.data.data) {
-        throw new Error('Login failed: Missing response data');
-      }
-      
       const { user: userData, token } = response.data.data;
       
-      // Validate token and user data
-      if (!token || typeof token !== 'string' || token.trim() === '') {
-        console.error('Server returned invalid token:', token);
-        throw new Error('Server returned invalid token');
+      if (!token || !userData || !userData.id) {
+        throw new Error('Server returned invalid data');
       }
       
-      if (!userData || !userData.id) {
-        console.error('Server returned invalid user data:', userData);
-        throw new Error('Server returned invalid user data');
+      // Save token and update auth header
+      localStorage.setItem('token', token);
+      if (!axios.defaults.headers) {
+        axios.defaults.headers = {};
       }
-      
-      console.log('Received valid token:', { 
-        tokenLength: token.length, 
-        tokenPrefix: token.substring(0, 10) + '...' 
-      });
-      
-      // Save token to localStorage
-      try {
-        localStorage.setItem('token', token);
-        console.log('Token saved to localStorage');
-        
-        // Verify save was successful
-        const savedToken = localStorage.getItem('token');
-        if (!savedToken) {
-          throw new Error('localStorage token save failed');
-        }
-        
-        if (savedToken !== token) {
-          console.error('Saved token does not match original token:', {
-            original: token.substring(0, 10) + '...',
-            saved: savedToken.substring(0, 10) + '...'
-          });
-          throw new Error('Token save inconsistency');
-        }
-      } catch (storageError) {
-        console.error('Error saving token to localStorage:', storageError);
-        throw new Error('Cannot save token: ' + (storageError as Error).message);
+      if (!axios.defaults.headers.common) {
+        axios.defaults.headers.common = {};
       }
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
-      // Set axios default auth header safely
-      try {
-        // Ensure axios.defaults.headers exists
-        if (!axios.defaults.headers) {
-          axios.defaults.headers = {};
-        }
-        if (!axios.defaults.headers.common) {
-          axios.defaults.headers.common = {};
-        }
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        console.log('Set axios global auth header');
-      } catch (headerError) {
-        console.error('Could not set auth header:', headerError);
-        // Continue without setting header - request interceptor will handle it
-      }
-      
-      // Update user state
       setUser(userData);
-      console.log('Login successful, user state updated');
+      console.log('Login successful');
 
       return userData;
     } catch (error: any) {
       console.error('Login error:', error);
       localStorage.removeItem('token');
-      try {
-        if (axios.defaults.headers?.common) {
-          delete axios.defaults.headers.common['Authorization'];
-        }
-      } catch (e) {
-        console.warn('Could not clear auth header on error:', e);
+      if (axios.defaults.headers?.common) {
+        delete axios.defaults.headers.common['Authorization'];
       }
       throw error;
     }
@@ -313,6 +266,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { token, user: userData } = response.data.data;
       
       localStorage.setItem('token', token);
+      if (!axios.defaults.headers) {
+        axios.defaults.headers = {};
+      }
+      if (!axios.defaults.headers.common) {
+        axios.defaults.headers.common = {};
+      }
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
       setUser(userData);
@@ -325,8 +284,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async () => {
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
+    if (axios.defaults.headers?.common) {
+      delete axios.defaults.headers.common['Authorization'];
+    }
     setUser(null);
+    setAuthInitialized(false); // Allow re-initialization after logout
     return Promise.resolve();
   };
 
@@ -337,43 +299,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Fix navigateAfterAuth function to ensure proper auth status check
+  // Navigate after auth function
   const navigateAfterAuth = (path: string) => {
-    console.log(`Preparing to navigate to path: ${path}`);
+    console.log(`Navigating to: ${path}`);
     
     const token = localStorage.getItem('token');
-    
-    // Detailed token check
-    if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
-      console.error('Navigation failed: No valid authentication token');
+    if (!token || !user) {
+      console.error('Navigation failed: No valid authentication');
       return;
     }
     
-    // Use short delay to ensure state is updated
     setTimeout(() => {
-      // Re-verify token exists
-      const currentToken = localStorage.getItem('token');
-      const headerAuth = axios.defaults.headers.common['Authorization'];
-      
-      console.log('Navigation check:', { 
-        path, 
-        hasToken: !!currentToken, 
-        isAuthenticated: !!user,
-        hasAuthHeader: !!headerAuth
-      });
-      
-      if (currentToken && user) {
-        navigate(path, { replace: true });
-      } else {
-        console.error('Navigation failed: Authentication state incomplete');
-      }
-    }, 300);
+      navigate(path, { replace: true });
+    }, 100);
   };
 
   const value = {
     user,
-    isAuthenticated: !!user,
-    isLoading,
+    isAuthenticated: !!user && authInitialized,
+    isLoading: isLoading || !authInitialized,
     login,
     register,
     logout,
