@@ -39,13 +39,37 @@ app.use(cookieParser());
 
 // Health check endpoint - Available immediately (MUST be before static files)
 let serverReady = false;
+let servicesReady = false;
+let initializationError: string | null = null;
+
+// Simple health check at root path for Railway
+app.get('/', (req, res) => {
+  const status = serverReady ? 'OK' : 'STARTING';
+  res.status(serverReady ? 200 : 503).json({ 
+    status,
+    service: 'Crypto Intelligence Engine',
+    server_ready: serverReady,
+    services_ready: servicesReady,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    port: process.env.PORT || env.port || 5001,
+    environment: env.nodeEnv,
+    ...(initializationError && { error: initializationError })
+  });
+});
+
+// Detailed health check endpoint
 app.get('/health', (req, res) => {
   const environment = detectEnvironment();
-  res.json({ 
-    status: serverReady ? 'OK' : 'STARTING',
-    ready: serverReady,
+  const status = serverReady ? 'OK' : 'STARTING';
+  
+  res.status(serverReady ? 200 : 503).json({ 
+    status,
+    server_ready: serverReady,
+    services_ready: servicesReady,
     uptime: process.uptime(),
     env: env.nodeEnv,
+    port: process.env.PORT || env.port || 5001,
     environment: {
       isRailway: environment.isRailway,
       isProduction: environment.isProduction,
@@ -53,7 +77,8 @@ app.get('/health', (req, res) => {
       frontendUrl: environment.frontendUrl,
       backendUrl: environment.backendUrl
     },
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    ...(initializationError && { initialization_error: initializationError })
   });
 });
 
@@ -67,8 +92,8 @@ if (env.nodeEnv === 'production') {
   if (fs.existsSync(buildPath)) {
     // Serve static files with conditional middleware to avoid conflicts
     app.use((req, res, next) => {
-      // Skip static file serving for API routes, auth routes, and health check
-      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
+      // Skip static file serving for API routes, auth routes, health checks, and root health check
+      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health' || req.path === '/') {
         return next();
       }
       
@@ -77,10 +102,10 @@ if (env.nodeEnv === 'production') {
     });
     
     // Handle client-side routing - catch-all for frontend routes
-    // CRITICAL: Explicitly exclude /health, /api, and /auth routes
+    // CRITICAL: Explicitly exclude /health, /api, /auth routes, and root path
     app.get('*', (req, res, next) => {
-      // Skip if it's an API route, auth route, or health check
-      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
+      // Skip if it's an API route, auth route, health check, or root path
+      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health' || req.path === '/') {
         return next();
       }
       
@@ -180,15 +205,25 @@ const initializeEnhancedServices = () => {
 // Server initialization
 const initializeServer = async () => {
   try {
-    // Start server first for Railway health checks
-    const PORT = env.port || 5001;
+    // Get port from Railway environment or fallback
+    const PORT = parseInt(process.env.PORT || env.port?.toString() || '5001', 10);
+    
+    // Mark server as ready immediately for Railway health checks
+    serverReady = true;
+    
+    // Start server immediately for Railway health checks
     server.listen(PORT, () => {
       const address = server.address() as AddressInfo;
-      logger.info(`Server listening on port ${address.port} (${env.nodeEnv} mode)`);
+      logger.info(`🚀 Server listening on port ${address.port} (${env.nodeEnv} mode)`);
+      logger.info('✅ Server ready for health checks');
+      
+      // Initialize services in background after server is listening
+      setImmediate(() => {
+        initializeServicesAsync().catch(error => {
+          logger.error('Background service initialization failed:', error);
+        });
+      });
     });
-    
-    // Then initialize services in background
-    initializeServicesAsync();
     
   } catch (error: any) {
     logger.error('Server startup error:', error);
@@ -199,25 +234,35 @@ const initializeServer = async () => {
 // Async service initialization
 const initializeServicesAsync = async () => {
   try {
-    logger.info('Starting background service initialization...');
+    logger.info('🔄 Starting background service initialization...');
     
     // Connect to database
+    logger.info('📊 Connecting to database...');
     await connectDatabase();
+    logger.info('✅ Database connected');
     
     // Initialize model associations
+    logger.info('🔗 Initializing model associations...');
     initializeAssociations();
+    logger.info('✅ Model associations initialized');
     
     // Sync models
+    logger.info('🔄 Syncing database models...');
     await syncModels();
+    logger.info('✅ Database models synced');
     
     // Initialize data
+    logger.info('📝 Initializing seed data...');
     await seedData();
+    logger.info('✅ Seed data initialized');
     
     // Initialize recommended accounts
+    logger.info('👥 Initializing recommended accounts...');
     await initializeRecommendedAccounts();
+    logger.info('✅ Recommended accounts initialized');
     
     // Initialize services
-    logger.info('Initializing services...');
+    logger.info('⚙️ Initializing core services...');
     
     // Initialize Firebase for push notifications
     initializeFirebase();
@@ -231,12 +276,14 @@ const initializeServicesAsync = async () => {
     // Initialize enhanced services
     initializeEnhancedServices();
     
-    // Mark server as ready
-    serverReady = true;
-    logger.info('All services initialized - Server ready!');
+    // Mark services as ready
+    servicesReady = true;
+    logger.info('🎉 All services initialized - Server fully ready!');
     
   } catch (error: any) {
-    logger.error('Service initialization error:', error);
+    logger.error('❌ Service initialization error:', error);
+    initializationError = error.message || 'Unknown initialization error';
+    
     // Don't exit in production - let health check show error state
     if (env.nodeEnv !== 'production') {
       process.exit(1);

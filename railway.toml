@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 300
+healthcheckInterval = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+startCommand = "npm start"
+
+[env]
+NODE_ENV = "production" 
