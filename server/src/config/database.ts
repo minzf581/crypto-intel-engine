@@ -75,32 +75,55 @@ export const syncModels = async () => {
   try {
     logger.info('🔄 Starting database synchronization...');
     
-    if (env.nodeEnv === 'development') {
-      // In development, clean start to avoid constraint conflicts
+    // Check if we're in Railway environment
+    const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+    const isDevelopment = env.nodeEnv === 'development';
+    
+    if (isDevelopment && !isRailway) {
+      // Local development: clean start to avoid constraint conflicts
       await cleanDatabase();
       await sequelize.sync({ force: true });
       logger.info('✅ Database models synchronized (development mode - force recreated)');
+    } else if (isRailway) {
+      // Railway environment: handle with special care
+      logger.info('🚂 Railway environment detected, using Railway-optimized sync strategy');
+      try {
+        // First try: safe sync
+        await sequelize.sync({ force: false, alter: false });
+        logger.info('✅ Database models synchronized (Railway mode - safe sync)');
+      } catch (safeError) {
+        logger.warn('Railway safe sync failed, trying force sync:', safeError.message);
+        try {
+          // Railway fallback: force sync (Railway provides fresh database)
+          await sequelize.sync({ force: true });
+          logger.info('✅ Database models synchronized (Railway mode - force sync)');
+        } catch (forceError) {
+          logger.error('Railway force sync failed:', forceError);
+          // Last resort: try without any constraints
+          try {
+            await sequelize.query('PRAGMA foreign_keys = OFF;');
+            await sequelize.sync({ force: true });
+            await sequelize.query('PRAGMA foreign_keys = ON;');
+            logger.info('✅ Database models synchronized (Railway mode - constraint-free sync)');
+          } catch (finalError) {
+            logger.error('All Railway sync strategies failed:', finalError);
+            throw finalError;
+          }
+        }
+      }
     } else {
-      // In production, try gentle sync first
+      // Production environment (non-Railway): conservative approach
       try {
         await sequelize.sync({ force: false, alter: false });
         logger.info('✅ Database models synchronized (production mode - safe sync)');
       } catch (syncError) {
-        logger.warn('Safe sync failed, attempting alter sync:', syncError);
+        logger.warn('Production safe sync failed, attempting alter sync:', syncError.message);
         try {
-          // If safe sync fails, try alter
           await sequelize.sync({ force: false, alter: true });
           logger.info('✅ Database models synchronized (production mode - alter sync)');
         } catch (alterError) {
-          logger.error('Alter sync also failed:', alterError);
-          // For Railway deployment, create fresh database if all else fails
-          if (process.env.RAILWAY_ENVIRONMENT) {
-            logger.warn('Railway environment detected, attempting force sync as last resort...');
-            await sequelize.sync({ force: true });
-            logger.info('✅ Database models synchronized (Railway mode - force sync)');
-          } else {
-            throw alterError;
-          }
+          logger.error('Production alter sync failed:', alterError);
+          throw alterError;
         }
       }
     }
