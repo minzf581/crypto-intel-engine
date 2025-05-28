@@ -92,7 +92,8 @@ export const syncModels = async () => {
         await sequelize.sync({ force: false, alter: false });
         logger.info('✅ Database models synchronized (Railway mode - safe sync)');
       } catch (safeError) {
-        logger.warn('Railway safe sync failed, trying force sync:', safeError.message);
+        const errorMessage = safeError instanceof Error ? safeError.message : String(safeError);
+        logger.warn('Railway safe sync failed, trying force sync:', errorMessage);
         try {
           // Railway fallback: force sync (Railway provides fresh database)
           await sequelize.sync({ force: true });
@@ -117,7 +118,8 @@ export const syncModels = async () => {
         await sequelize.sync({ force: false, alter: false });
         logger.info('✅ Database models synchronized (production mode - safe sync)');
       } catch (syncError) {
-        logger.warn('Production safe sync failed, attempting alter sync:', syncError.message);
+        const errorMessage = syncError instanceof Error ? syncError.message : String(syncError);
+        logger.warn('Production safe sync failed, attempting alter sync:', errorMessage);
         try {
           await sequelize.sync({ force: false, alter: true });
           logger.info('✅ Database models synchronized (production mode - alter sync)');
