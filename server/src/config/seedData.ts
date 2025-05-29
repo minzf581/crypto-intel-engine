@@ -120,10 +120,10 @@ export const seedData = async () => {
           assetSymbol: btc.symbol,
           assetName: btc.name,
           assetLogo: btc.logo,
-          type: 'price',
+          type: 'price' as const,
           strength: 75,
           description: 'Bitcoin showing strong bullish momentum with increased institutional adoption',
-          sources: [{ platform: 'price', count: 1 }],
+          sources: [{ platform: 'price' as const, count: 1 }],
           timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
         });
         
@@ -132,10 +132,10 @@ export const seedData = async () => {
           assetSymbol: btc.symbol,
           assetName: btc.name,
           assetLogo: btc.logo,
-          type: 'sentiment',
+          type: 'sentiment' as const,
           strength: 68,
           description: 'Positive sentiment surge on social media following ETF approval news',
-          sources: [{ platform: 'twitter', count: 245 }],
+          sources: [{ platform: 'twitter' as const, count: 245 }],
           timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000) // 4 hours ago
         });
       }
@@ -146,10 +146,10 @@ export const seedData = async () => {
           assetSymbol: eth.symbol,
           assetName: eth.name,
           assetLogo: eth.logo,
-          type: 'narrative',
+          type: 'narrative' as const,
           strength: 82,
           description: 'Ethereum network upgrade showing significant improvements in transaction efficiency',
-          sources: [{ platform: 'reddit', count: 156 }],
+          sources: [{ platform: 'reddit' as const, count: 156 }],
           timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000) // 6 hours ago
         });
         
@@ -158,10 +158,10 @@ export const seedData = async () => {
           assetSymbol: eth.symbol,
           assetName: eth.name,
           assetLogo: eth.logo,
-          type: 'price',
+          type: 'price' as const,
           strength: 71,
           description: 'ETH price breaking key resistance levels with strong volume support',
-          sources: [{ platform: 'price', count: 1 }],
+          sources: [{ platform: 'price' as const, count: 1 }],
           timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000) // 1 hour ago
         });
       }
@@ -172,10 +172,10 @@ export const seedData = async () => {
           assetSymbol: sol.symbol,
           assetName: sol.name,
           assetLogo: sol.logo,
-          type: 'sentiment',
+          type: 'sentiment' as const,
           strength: 79,
           description: 'Solana ecosystem growth driving positive community sentiment',
-          sources: [{ platform: 'twitter', count: 189 }],
+          sources: [{ platform: 'twitter' as const, count: 189 }],
           timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000) // 3 hours ago
         });
       }
@@ -186,10 +186,10 @@ export const seedData = async () => {
           assetSymbol: ada.symbol,
           assetName: ada.name,
           assetLogo: ada.logo,
-          type: 'narrative',
+          type: 'narrative' as const,
           strength: 65,
           description: 'Cardano smart contract adoption increasing with new DeFi protocols',
-          sources: [{ platform: 'reddit', count: 98 }],
+          sources: [{ platform: 'reddit' as const, count: 98 }],
           timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000) // 5 hours ago
         });
       }
