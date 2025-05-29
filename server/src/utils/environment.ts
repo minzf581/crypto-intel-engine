@@ -27,8 +27,10 @@ export function detectEnvironment(): EnvironmentConfig {
     process.env.RAILWAY_DEPLOYMENT_ID
   );
   
-  const isProduction = nodeEnv === 'production';
-  const isLocal = !isRailway && !isProduction;
+  // 修复：本地开发时，即使NODE_ENV=production也应该被视为本地环境
+  const isLocal = !isRailway && (nodeEnv === 'development' || 
+    (nodeEnv === 'production' && (process.cwd().includes('source code') || process.cwd().includes('localhost'))));
+  const isProduction = nodeEnv === 'production' && !isLocal;
   
   let frontendUrl: string;
   let backendUrl: string;
@@ -57,7 +59,7 @@ export function detectEnvironment(): EnvironmentConfig {
     ];
     console.log('🏭 Running in production mode');
   } else {
-    // Local development
+    // Local development - 支持HTTP连接
     frontendUrl = 'http://localhost:3000';
     backendUrl = `http://localhost:${port}`;
     allowedOrigins = [
@@ -135,7 +137,7 @@ export function getCorsConfig() {
         callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: !env.isRailway, // Allow credentials for local development
+    credentials: true, // 允许credentials以支持WebSocket认证
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     optionsSuccessStatus: 200

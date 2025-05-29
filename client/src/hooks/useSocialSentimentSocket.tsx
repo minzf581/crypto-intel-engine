@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { useSocket } from '@/context/SocketContext';
+import { useSocketApi } from '@/context/SocketContext';
 import { toast } from 'react-hot-toast';
 
 interface SocialSentimentAlert {
@@ -48,7 +48,7 @@ export const useSocialSentimentSocket = ({
   onAccountUpdate,
   enableToastNotifications = true,
 }: UseSocialSentimentSocketProps = {}) => {
-  const { socket, connected } = useSocket();
+  const { socket, connected } = useSocketApi();
 
   // Subscribe to social sentiment updates for a specific coin
   const subscribeToCoin = useCallback((coin: string) => {

@@ -30,8 +30,8 @@ export function detectFrontendEnvironment(): FrontendEnvironmentConfig {
   // Check if running locally
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
   
-  // Check if production
-  const isProduction = !isLocal && !isRailway;
+  // Check if production - Railway应该被视为生产环境
+  const isProduction = isRailway || (!isLocal && import.meta.env.PROD);
   
   let apiUrl: string;
   let frontendUrl: string;

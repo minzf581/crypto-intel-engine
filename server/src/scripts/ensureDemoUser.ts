@@ -11,24 +11,31 @@ export async function ensureDemoUser(): Promise<void> {
   try {
     logger.info('🔍 Checking for demo user...');
     
-    // First, ensure the users table exists
+    // Strategy 3: Manual table creation with SQLite-compatible syntax
     try {
+      console.log('⚠️ Attempting manual table creation...');
       await sequelize.query(`
         CREATE TABLE IF NOT EXISTS users (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          name VARCHAR(255) NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password VARCHAR(255) NOT NULL,
-          "hasCompletedOnboarding" BOOLEAN DEFAULT false,
-          "selectedAssets" JSONB DEFAULT '[]'::jsonb,
-          "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          hasCompletedOnboarding INTEGER DEFAULT 0,
+          selectedAssets TEXT DEFAULT '[]',
+          createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+          updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      logger.info('✅ Users table ensured');
-    } catch (tableError) {
-      logger.warn('⚠️ Failed to create users table manually:', tableError);
-      // Continue anyway - table might already exist
+      console.log('✅ Users table created manually');
+    } catch (tableError: any) {
+      console.warn('⚠️ Failed to create users table manually:', tableError.message, {
+        name: tableError.name,
+        parent: tableError.parent,
+        original: tableError.original,
+        sql: tableError.sql,
+        parameters: tableError.parameters,
+        stack: tableError.stack
+      });
     }
     
     // Check if demo user exists

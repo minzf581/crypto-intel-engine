@@ -30,18 +30,27 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     try {
       console.log('Initializing WebSocket connection...');
-      const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      
+      // 获取WebSocket连接URL
+      let socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      
+      // 在Railway环境中，如果API_URL为空或相对路径，使用当前域名
+      if (!socketUrl || socketUrl === '') {
+        socketUrl = window.location.origin;
+      }
+      
       console.log('WebSocket connection URL:', socketUrl);
       
       const newSocket = io(socketUrl, {
         withCredentials: true,
         auth: { token },
-        transports: ['websocket', 'polling'],
+        transports: ['websocket', 'polling'], // 允许降级到polling
         path: '/socket.io',
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 2000,
-        timeout: 20000
+        timeout: 20000,
+        forceNew: true // 强制创建新连接
       });
       
       newSocket.on('connect', () => {
@@ -52,16 +61,32 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       newSocket.on('connect_error', (error) => {
         console.error('WebSocket connection error:', error);
         setConnected(false);
+        
+        // 在Railway环境中，如果WebSocket失败，尝试使用polling
+        if (error.message.includes('websocket') || error.message.includes('transport')) {
+          console.log('Retrying with polling transport only...');
+          newSocket.io.opts.transports = ['polling'];
+        }
       });
       
-      newSocket.on('disconnect', () => {
-        console.log('WebSocket disconnected');
+      newSocket.on('disconnect', (reason) => {
+        console.log('WebSocket disconnected:', reason);
         setConnected(false);
+      });
+      
+      newSocket.on('reconnect', (attemptNumber) => {
+        console.log('WebSocket reconnected after', attemptNumber, 'attempts');
+        setConnected(true);
+      });
+      
+      newSocket.on('reconnect_error', (error) => {
+        console.error('WebSocket reconnection error:', error);
       });
       
       setSocket(newSocket);
     } catch (error) {
       console.error('WebSocket initialization error:', error);
+      setConnected(false);
     }
   };
   
