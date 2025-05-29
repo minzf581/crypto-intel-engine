@@ -28,13 +28,21 @@ if (env.databaseUrl) {
   });
 } else {
   // Use SQLite (development environment)
-  const dbPath = path.resolve(process.cwd(), env.sqliteDbPath || 'data/crypto-intel.sqlite');
+  // Fix path resolution: if we're in server directory, go up one level to find data folder
+  const currentDir = process.cwd();
+  const isInServerDir = currentDir.endsWith('/server') || currentDir.endsWith('\\server');
+  const projectRoot = isInServerDir ? path.dirname(currentDir) : currentDir;
+  const dbPath = path.resolve(projectRoot, env.sqliteDbPath || 'data/crypto-intel.sqlite');
+  
   logger.info(`Using SQLite database: ${dbPath}`);
+  logger.info(`Current working directory: ${currentDir}`);
+  logger.info(`Project root: ${projectRoot}`);
   
   // Ensure data directory exists
   const dataDir = path.dirname(dbPath);
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
+    logger.info(`Created data directory: ${dataDir}`);
   }
   
   sequelize = new Sequelize({
@@ -59,7 +67,12 @@ export const connectDatabase = async () => {
 const cleanDatabase = async () => {
   if (env.nodeEnv === 'development' && !env.databaseUrl) {
     try {
-      const dbPath = path.resolve(process.cwd(), env.sqliteDbPath || 'data/crypto-intel.sqlite');
+      // Fix path resolution for cleanup too
+      const currentDir = process.cwd();
+      const isInServerDir = currentDir.endsWith('/server') || currentDir.endsWith('\\server');
+      const projectRoot = isInServerDir ? path.dirname(currentDir) : currentDir;
+      const dbPath = path.resolve(projectRoot, env.sqliteDbPath || 'data/crypto-intel.sqlite');
+      
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
         logger.info('Cleaned existing SQLite database');
