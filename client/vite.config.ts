@@ -1,77 +1,70 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
-import { loadEnv } from 'vite';
+import path from 'path';
 
-// Load environment variables
+// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // Detect Railway environment
+  const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || 
+                   process.env.RAILWAY_STATIC_URL || 
+                   process.env.RAILWAY_PUBLIC_DOMAIN;
   
-  // Detect Railway environment - check multiple Railway environment variables
-  const isRailway = !!(
-    env.RAILWAY_ENVIRONMENT || 
-    env.RAILWAY_PROJECT_ID || 
-    env.RAILWAY_SERVICE_ID ||
-    process.env.RAILWAY_ENVIRONMENT || 
-    process.env.RAILWAY_PROJECT_ID ||
-    process.env.RAILWAY_SERVICE_ID
-  );
+  console.log(`Building for ${mode} mode with Railway detected: ${isRailway}`);
   
   // Set default API URL based on environment
-  let apiUrl = env.VITE_API_URL;
+  let apiUrl = process.env.VITE_API_URL;
   
   if (!apiUrl) {
     if (isRailway) {
       // In Railway, backend and frontend are served from same domain
-      // Use relative path for API calls
+      // Use empty string for relative API calls
       apiUrl = '';
+      console.log('Building for production mode with API URL: relative path');
     } else if (mode === 'production') {
       // Production mode but not Railway
       apiUrl = 'http://localhost:5001';
+      console.log(`Building for production mode with API URL: ${apiUrl}`);
     } else {
       // Development mode
       apiUrl = 'http://localhost:5001';
+      console.log(`Building for development mode with API URL: ${apiUrl}`);
     }
+  } else {
+    console.log(`Building for ${mode} mode with API URL: ${apiUrl}`);
   }
-
-  console.log(`Building for ${mode} mode with API URL: ${apiUrl || 'relative path'}`);
-  console.log(`Railway detected: ${isRailway}`);
-  console.log(`Mode: ${mode}`);
 
   return {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': resolve(__dirname, './src'),
+        '@': path.resolve(__dirname, './src'),
       },
     },
     define: {
-      // Ensure environment variables are available on the client
       'process.env.VITE_API_URL': JSON.stringify(apiUrl),
+      'process.env.NODE_ENV': JSON.stringify(mode),
+      'process.env.RAILWAY_ENVIRONMENT': JSON.stringify(isRailway ? 'true' : 'false'),
     },
     build: {
       outDir: 'dist',
-      assetsDir: 'assets',
-      emptyOutDir: true,
+      sourcemap: false,
       rollupOptions: {
         output: {
           manualChunks: {
             vendor: ['react', 'react-dom'],
-            utils: ['axios'],
+            router: ['react-router-dom'],
+            icons: ['@heroicons/react'],
           },
         },
       },
     },
-    optimizeDeps: {
-      include: ['react', 'react-dom'],
-    },
     server: {
       port: 3000,
-      open: true,
+      host: true,
     },
-    esbuild: {
-      // Avoid build interruption due to type errors
-      logOverride: { 'this-is-undefined-in-esm': 'silent' }
-    }
+    preview: {
+      port: 3000,
+      host: true,
+    },
   };
 }); 
