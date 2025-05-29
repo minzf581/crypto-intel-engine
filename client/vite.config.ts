@@ -21,10 +21,13 @@ export default defineConfig(({ mode }) => {
   let apiUrl = env.VITE_API_URL;
   
   if (!apiUrl) {
-    if (isRailway || mode === 'production') {
-      // In Railway/production, backend and frontend are served from same domain
+    if (isRailway) {
+      // In Railway, backend and frontend are served from same domain
       // Use relative path for API calls
       apiUrl = '';
+    } else if (mode === 'production') {
+      // Production mode but not Railway
+      apiUrl = 'http://localhost:5001';
     } else {
       // Development mode
       apiUrl = 'http://localhost:5001';

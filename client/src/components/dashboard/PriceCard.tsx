@@ -27,7 +27,7 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
   // 安全的数值格式化函数
   const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
     if (value === null || value === undefined || isNaN(value)) return '--';
-    return value.toFixed(decimals);
+    return Number(value).toFixed(decimals);
   };
 
   // 格式化价格

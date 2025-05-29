@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 
 const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
   if (value === null || value === undefined || isNaN(value)) return '--';
-  return value.toFixed(decimals);
+  return Number(value).toFixed(decimals);
 };
 
 interface SocialSentimentAlert {

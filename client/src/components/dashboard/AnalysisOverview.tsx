@@ -43,7 +43,7 @@ interface AnalysisOverviewProps {
 
 const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
   if (value === null || value === undefined || isNaN(value)) return '--';
-  return value.toFixed(decimals);
+  return Number(value).toFixed(decimals);
 };
 
 const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {

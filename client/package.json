@@ -35,6 +35,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:railway": "RAILWAY_ENVIRONMENT=true vite build --mode production",
     "build:check": "tsc --skipLibCheck && vite build",
     "preview": "vite preview",
     "start": "serve -s dist"
