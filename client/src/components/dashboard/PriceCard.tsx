@@ -26,7 +26,7 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
 
   // 格式化价格
   const formatPrice = (price: number | null): string => {
-    if (price === null) return '--';
+    if (price === null || price === undefined || isNaN(price)) return '--';
     
     if (price < 1) {
       return `$${price.toFixed(6)}`;
@@ -39,7 +39,7 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
 
   // 格式化价格变化
   const formatPriceChange = (change: number | null): string => {
-    if (change === null) return '--';
+    if (change === null || change === undefined || isNaN(change)) return '--';
     return `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
   };
 

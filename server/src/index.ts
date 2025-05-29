@@ -116,8 +116,36 @@ if (env.nodeEnv === 'production') {
 
 // Initialize Socket.IO
 const io = new SocketIOServer(server, {
-  cors: corsOptions,
-  transports: ['websocket', 'polling']
+  cors: {
+    origin: (origin, callback) => {
+      // 在Railway环境中允许前端域名
+      const allowedOrigins = [
+        'https://crypto-front-demo.up.railway.app',
+        'https://crypto-demo.up.railway.app',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:5001'
+      ];
+      
+      // 允许无origin的请求（如移动应用）
+      if (!origin) return callback(null, true);
+      
+      // 检查origin是否在允许列表中
+      if (allowedOrigins.includes(origin) || origin.includes('railway.app')) {
+        callback(null, true);
+      } else {
+        console.warn(`WebSocket CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true, // 向后兼容
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Setup socket handlers

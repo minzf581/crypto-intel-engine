@@ -24,12 +24,33 @@ export const getSignals = async (req: Request, res: Response) => {
     
     // If asset list is specified
     if (assets) {
-      const assetSymbols = (assets as string).split(',');
+      const assetList = (assets as string).split(',');
       
-      if (assetSymbols.length > 0) {
-        whereClause.assetSymbol = {
-          [Op.in]: assetSymbols
-        };
+      if (assetList.length > 0) {
+        // Check if the first item looks like a UUID (asset ID) or symbol
+        const firstItem = assetList[0];
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstItem);
+        
+        if (isUUID) {
+          // If asset IDs are provided, convert to symbols
+          const assetRecords = await Asset.findAll({
+            where: { id: { [Op.in]: assetList } },
+            attributes: ['symbol']
+          });
+          
+          const assetSymbols = assetRecords.map(asset => asset.symbol);
+          
+          if (assetSymbols.length > 0) {
+            whereClause.assetSymbol = {
+              [Op.in]: assetSymbols
+            };
+          }
+        } else {
+          // If symbols are provided directly
+          whereClause.assetSymbol = {
+            [Op.in]: assetList
+          };
+        }
       }
     }
     

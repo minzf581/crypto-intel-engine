@@ -53,14 +53,24 @@ export default function NewsAnalysisPanel() {
         setNewsData(newsResponse.data.data.slice(0, 10)); // Show top 10 news
       }
       
-      // Fetch sentiment trends
-      const trendsResponse = await api.get('/api/notifications-enhanced/news/sentiment-trends');
+      // Fetch sentiment trends - 添加必需的coins参数
+      const defaultCoins = ['BTC', 'ETH', 'SOL', 'ADA'];
+      const trendsResponse = await api.get('/api/notifications-enhanced/news/sentiment-trends', {
+        params: {
+          coins: defaultCoins.join(','),
+          days: 7
+        }
+      });
       if (trendsResponse.data.success) {
         setSentimentTrends(trendsResponse.data.data);
       }
       
-      // Fetch portfolio impact
-      const impactResponse = await api.get('/api/notifications-enhanced/news/portfolio-impact');
+      // Fetch portfolio impact - 添加必需的symbols参数
+      const impactResponse = await api.get('/api/notifications-enhanced/news/portfolio-impact', {
+        params: {
+          symbols: defaultCoins.join(',')
+        }
+      });
       if (impactResponse.data.success) {
         setPortfolioImpact(impactResponse.data.data);
       }
