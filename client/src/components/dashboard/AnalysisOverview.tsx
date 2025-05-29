@@ -41,6 +41,11 @@ interface AnalysisOverviewProps {
   symbols: string[];
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {
   const [analysisData, setAnalysisData] = useState<BackendAnalysisData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -211,7 +216,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                        {(intelligence.sentiment.score * 100).toFixed(0)}
+                        {safeToFixed((intelligence.sentiment.score || 0) * 100, 0)}
                       </div>
                       <div className={`text-sm font-medium capitalize ${getSentimentColor(intelligence.sentiment.trend)}`}>
                         {intelligence.sentiment.trend}
@@ -238,7 +243,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ symbols }) => {
                         {intelligence.recommendation.action}
                       </div>
                       <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                        {(intelligence.recommendation.confidence * 100).toFixed(0)}% confidence
+                        {safeToFixed((intelligence.recommendation.confidence || 0) * 100, 0)}% confidence
                       </div>
                       <div className="text-xs text-neutral-500 dark:text-neutral-400">
                         Recommendation

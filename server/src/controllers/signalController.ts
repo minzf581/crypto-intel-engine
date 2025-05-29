@@ -10,6 +10,8 @@ export const getSignals = async (req: Request, res: Response) => {
     const pageNumber = parseInt(page as string);
     const limitNumber = parseInt(limit as string);
     
+    console.log(`🔍 Signal query - page: ${pageNumber}, limit: ${limitNumber}, assets: ${assets}`);
+    
     // Validate request parameters
     if (isNaN(pageNumber) || pageNumber < 1) {
       return errorResponse(res, 'Invalid page number', 400);
@@ -24,19 +26,25 @@ export const getSignals = async (req: Request, res: Response) => {
     
     // If asset list is specified
     if (assets) {
-      const assetList = (assets as string).split(',');
+      const assetList = (assets as string).split(',').map(a => a.trim());
+      console.log(`📊 Asset list: ${assetList.join(', ')}`);
       
       if (assetList.length > 0) {
         // Check if the first item looks like a UUID (asset ID) or symbol
         const firstItem = assetList[0];
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstItem);
         
+        console.log(`🔍 First item: ${firstItem}, isUUID: ${isUUID}`);
+        
         if (isUUID) {
           // If asset IDs are provided, convert to symbols
+          console.log(`🔄 Converting asset IDs to symbols...`);
           const assetRecords = await Asset.findAll({
             where: { id: { [Op.in]: assetList } },
-            attributes: ['symbol']
+            attributes: ['id', 'symbol']
           });
+          
+          console.log(`📋 Found ${assetRecords.length} assets:`, assetRecords.map(a => `${a.symbol} (${a.id})`));
           
           const assetSymbols = assetRecords.map(asset => asset.symbol);
           
@@ -44,15 +52,23 @@ export const getSignals = async (req: Request, res: Response) => {
             whereClause.assetSymbol = {
               [Op.in]: assetSymbols
             };
+            console.log(`✅ Query by symbols: ${assetSymbols.join(', ')}`);
+          } else {
+            console.log(`⚠️ No assets found for provided IDs`);
           }
         } else {
           // If symbols are provided directly
           whereClause.assetSymbol = {
             [Op.in]: assetList
           };
+          console.log(`✅ Query by symbols directly: ${assetList.join(', ')}`);
         }
       }
+    } else {
+      console.log(`📊 No asset filter - querying all signals`);
     }
+    
+    console.log(`🔍 Final where clause:`, JSON.stringify(whereClause, null, 2));
     
     // Calculate pagination
     const offset = (pageNumber - 1) * limitNumber;
@@ -65,6 +81,8 @@ export const getSignals = async (req: Request, res: Response) => {
       limit: limitNumber
     });
     
+    console.log(`📊 Found ${count} total signals, returning ${signals.length} signals`);
+    
     // Calculate if there is more data
     const hasMore = offset + signals.length < count;
     
@@ -76,6 +94,7 @@ export const getSignals = async (req: Request, res: Response) => {
       hasMore
     });
   } catch (error) {
+    console.error('❌ Signal query error:', error);
     return errorResponse(res, 'Failed to get signal list', 500, error);
   }
 };

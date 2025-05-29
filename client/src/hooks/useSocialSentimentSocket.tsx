@@ -2,6 +2,11 @@ import { useEffect, useCallback } from 'react';
 import { useSocketApi } from '@/context/SocketContext';
 import { toast } from 'react-hot-toast';
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 interface SocialSentimentAlert {
   id: string;
   accountUsername: string;
@@ -102,7 +107,7 @@ export const useSocialSentimentSocket = ({
                   {sentimentEmoji} @{alert.accountUsername}: {alert.content.slice(0, 60)}...
                 </p>
                 <p className="mt-1 text-xs text-gray-400">
-                  Score: {alert.sentimentScore.toFixed(2)} | Impact: {alert.impact}
+                  Score: {safeToFixed(alert.sentimentScore, 2)} | Impact: {alert.impact}
                 </p>
               </div>
             </div>

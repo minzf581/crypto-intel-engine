@@ -284,17 +284,52 @@ export class NotificationEnhancedController {
       const symbols = req.query.symbols as string;
 
       if (!symbols) {
-        return res.status(400).json({ error: 'Symbols parameter is required' });
+        return res.status(400).json({ 
+          success: false,
+          error: 'Symbols parameter is required' 
+        });
       }
 
-      const symbolList = symbols.split(',');
-      const newsService = NewsAnalysisService.getInstance();
-      const impact = await newsService.getPortfolioNewsImpact(symbolList);
+      const symbolList = symbols.split(',').map(s => s.trim().toUpperCase());
+      console.log(`📰 Analyzing portfolio news impact for: ${symbolList.join(', ')}`);
 
-      res.json(impact);
+      try {
+        const newsService = NewsAnalysisService.getInstance();
+        const impact = await newsService.getPortfolioNewsImpact(symbolList);
+
+        res.json({
+          success: true,
+          data: impact
+        });
+      } catch (serviceError) {
+        console.error('NewsAnalysisService error:', serviceError);
+        
+        // 返回默认数据而不是错误
+        const defaultImpact = symbolList.reduce((acc, symbol) => {
+          acc[symbol] = {
+            symbol,
+            impactScore: 0,
+            newsCount: 0,
+            sentimentScore: 0,
+            keyTopics: [],
+            recentNews: []
+          };
+          return acc;
+        }, {} as Record<string, any>);
+
+        res.json({
+          success: true,
+          data: defaultImpact,
+          message: 'Using default data - news analysis service unavailable'
+        });
+      }
     } catch (error) {
       logger.error('Failed to get portfolio news impact:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ 
+        success: false,
+        error: 'Internal server error',
+        message: 'Portfolio news impact analysis temporarily unavailable'
+      });
     }
   }
 

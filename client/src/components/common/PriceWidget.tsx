@@ -41,14 +41,20 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
     }
   }, [symbol, getAssetBySymbol]);
 
+  // 安全的数值格式化函数
+  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return value.toFixed(decimals);
+  };
+
   // Format price
   const formatPrice = (price: number | null): string => {
     if (price === null || price === undefined || isNaN(price)) return '--';
     
     if (price < 1) {
-      return `$${price.toFixed(6)}`;
+      return `$${safeToFixed(price, 6)}`;
     } else if (price < 100) {
-      return `$${price.toFixed(2)}`;
+      return `$${safeToFixed(price, 2)}`;
     } else {
       return `$${price.toLocaleString()}`;
     }
@@ -57,7 +63,7 @@ const PriceWidget: React.FC<PriceWidgetProps> = ({
   // Format price change
   const formatPriceChange = (change: number | null): string => {
     if (change === null || change === undefined || isNaN(change)) return '--';
-    return `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+    return `${change >= 0 ? '+' : ''}${safeToFixed(change, 2)}%`;
   };
 
   // Determine price change direction

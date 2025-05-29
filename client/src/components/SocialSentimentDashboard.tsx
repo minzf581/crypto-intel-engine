@@ -59,6 +59,11 @@ interface SocialSentimentDashboardProps {
   coinName?: string;
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   selectedCoin = 'BTC',
   coinName = 'Bitcoin'
@@ -471,8 +476,8 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
                     )}
                     <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                       <span>{account.followersCount.toLocaleString()} followers</span>
-                      <span>Influence: {account.influenceScore.toFixed(2)}</span>
-                      <span>Relevance: {account.relevanceScore.toFixed(2)}</span>
+                      <span>Influence: {safeToFixed(account.influenceScore, 2)}</span>
+                      <span>Relevance: {safeToFixed(account.relevanceScore, 2)}</span>
                     </div>
                   </div>
                 </div>
@@ -633,9 +638,9 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
                         {/* Monitoring Metrics */}
                         <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
                           <span>{accountData.account.followersCount?.toLocaleString() || 0} followers</span>
-                          <span>Relevance: {(accountData.relevance?.relevanceScore * 100 || 0).toFixed(0)}%</span>
+                          <span>Relevance: {safeToFixed((accountData.relevance?.relevanceScore || 0) * 100, 0)}%</span>
                           <span>Mentions: {accountData.relevance?.mentionCount || 0}</span>
-                          <span>Avg Sentiment: {accountData.relevance?.avgSentiment?.toFixed(2) || 'N/A'}</span>
+                          <span>Avg Sentiment: {safeToFixed(accountData.relevance?.avgSentiment, 2) || 'N/A'}</span>
                         </div>
                       </div>
                     </div>
@@ -727,7 +732,7 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
                 sentimentSummary.avgSentimentScore > 0 ? 'text-green-600' : 
                 sentimentSummary.avgSentimentScore < 0 ? 'text-red-600' : 'text-gray-600'
               }`}>
-                {sentimentSummary.avgSentimentScore.toFixed(2)}
+                {safeToFixed(sentimentSummary.avgSentimentScore, 2)}
               </p>
             </div>
           </div>

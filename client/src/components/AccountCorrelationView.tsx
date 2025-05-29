@@ -79,6 +79,11 @@ interface AccountCorrelationViewProps {
   coinName: string;
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
   coinSymbol,
   coinName
@@ -217,7 +222,7 @@ const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
                       <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                         <span>{data.account.followersCount.toLocaleString()} followers</span>
                         <span>{data.relevance.totalMentions} mentions</span>
-                        <span>Accuracy: {(data.predictionAccuracy * 100).toFixed(1)}%</span>
+                        <span>Accuracy: {safeToFixed((data.predictionAccuracy || 0) * 100, 1)}%</span>
                       </div>
                     </div>
                   </div>
@@ -226,7 +231,7 @@ const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
                       {formatCorrelationLabel(avgCorrelation)}
                     </span>
                     <span className={`text-lg font-bold ${getCorrelationColor(avgCorrelation)}`}>
-                      {(avgCorrelation * 100).toFixed(1)}%
+                      {safeToFixed((avgCorrelation || 0) * 100, 1)}%
                     </span>
                     <ArrowRightIcon className="h-4 w-4 text-gray-400" />
                   </div>
@@ -296,7 +301,7 @@ const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Correlation</p>
                 <p className={`text-2xl font-bold ${getCorrelationColor(avgCorrelation)}`}>
-                  {(avgCorrelation * 100).toFixed(1)}%
+                  {safeToFixed((avgCorrelation || 0) * 100, 1)}%
                 </p>
               </div>
             </div>
@@ -320,7 +325,7 @@ const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Accuracy</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {(selectedAccount.predictionAccuracy * 100).toFixed(1)}%
+                  {safeToFixed((selectedAccount.predictionAccuracy || 0) * 100, 1)}%
                 </p>
               </div>
             </div>
@@ -335,7 +340,7 @@ const AccountCorrelationView: React.FC<AccountCorrelationViewProps> = ({
                   selectedAccount.relevance.avgSentiment > 0 ? 'text-green-600' : 
                   selectedAccount.relevance.avgSentiment < 0 ? 'text-red-600' : 'text-gray-600'
                 }`}>
-                  {selectedAccount.relevance.avgSentiment.toFixed(2)}
+                  {safeToFixed(selectedAccount.relevance.avgSentiment, 2)}
                 </p>
               </div>
             </div>

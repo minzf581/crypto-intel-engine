@@ -24,14 +24,20 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
     lastUpdated
   } = priceData;
 
+  // 安全的数值格式化函数
+  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return value.toFixed(decimals);
+  };
+
   // 格式化价格
   const formatPrice = (price: number | null): string => {
     if (price === null || price === undefined || isNaN(price)) return '--';
     
     if (price < 1) {
-      return `$${price.toFixed(6)}`;
+      return `$${safeToFixed(price, 6)}`;
     } else if (price < 100) {
-      return `$${price.toFixed(2)}`;
+      return `$${safeToFixed(price, 2)}`;
     } else {
       return `$${price.toLocaleString()}`;
     }
@@ -40,7 +46,7 @@ const PriceCard: React.FC<PriceCardProps> = ({ priceData }) => {
   // 格式化价格变化
   const formatPriceChange = (change: number | null): string => {
     if (change === null || change === undefined || isNaN(change)) return '--';
-    return `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+    return `${change >= 0 ? '+' : ''}${safeToFixed(change, 2)}%`;
   };
 
   // 判断价格变化方向

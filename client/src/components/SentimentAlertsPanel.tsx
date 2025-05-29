@@ -28,6 +28,11 @@ interface SentimentAlertsPanelProps {
   coinName: string;
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const SentimentAlertsPanel: React.FC<SentimentAlertsPanelProps> = ({
   coinSymbol,
   coinName,
@@ -255,7 +260,7 @@ const SentimentAlertsPanel: React.FC<SentimentAlertsPanelProps> = ({
                         @{alert.accountUsername}
                       </span>
                       <span className={`text-sm font-medium ${getSentimentColor(alert.sentiment, alert.sentimentScore)}`}>
-                        {alert.sentiment} ({alert.sentimentScore.toFixed(2)})
+                        {alert.sentiment} ({safeToFixed(alert.sentimentScore, 2)})
                       </span>
                     </div>
                     

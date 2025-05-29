@@ -55,6 +55,11 @@ const categoryIcons = {
   developer: '💻',
 };
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
   selectedCoin,
   coinName,
@@ -326,7 +331,7 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
                       {/* Metrics */}
                       <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
                         <span>{account.followersCount.toLocaleString()} followers</span>
-                        <span>Relevance: {(account.relevanceScore * 100).toFixed(0)}%</span>
+                        <span>Relevance: {safeToFixed((account.relevanceScore || 0) * 100, 0)}%</span>
                         <div className="flex items-center space-x-1">
                           <span>Priority:</span>
                           <div className="flex space-x-0.5">

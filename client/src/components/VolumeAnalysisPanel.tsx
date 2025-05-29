@@ -144,15 +144,23 @@ export default function VolumeAnalysisPanel() {
     return () => clearInterval(interval);
   }, []);
 
-  const formatVolume = (volume: number) => {
+  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return value.toFixed(decimals);
+  };
+
+  const formatVolume = (volume: number | null | undefined): string => {
+    if (volume === null || volume === undefined || isNaN(volume)) return '--';
+    
     if (volume >= 1e9) {
-      return `$${(volume / 1e9).toFixed(2)}B`;
+      return `$${safeToFixed(volume / 1e9, 2)}B`;
     } else if (volume >= 1e6) {
-      return `$${(volume / 1e6).toFixed(2)}M`;
+      return `$${safeToFixed(volume / 1e6, 2)}M`;
     } else if (volume >= 1e3) {
-      return `$${(volume / 1e3).toFixed(2)}K`;
+      return `$${safeToFixed(volume / 1e3, 2)}K`;
+    } else {
+      return `$${safeToFixed(volume, 2)}`;
     }
-    return `$${volume.toFixed(2)}`;
   };
 
   const getSignificanceColor = (significance: string) => {
@@ -201,7 +209,7 @@ export default function VolumeAnalysisPanel() {
             <div className="bg-green-50 p-4 rounded-lg">
               <div className="text-sm text-green-600 font-medium">Avg Change</div>
               <div className="text-lg font-bold text-green-900">
-                +{volumeData.overview.avgVolumeChange.toFixed(1)}%
+                +{safeToFixed(volumeData.overview.avgVolumeChange, 1)}%
               </div>
             </div>
             <div className="bg-red-50 p-4 rounded-lg">
@@ -245,7 +253,7 @@ export default function VolumeAnalysisPanel() {
                         asset.trend === 'up' ? 'text-green-600' :
                         asset.trend === 'down' ? 'text-red-600' : 'text-gray-600'
                       }`}>
-                        {asset.volumeChange >= 0 ? '+' : ''}{asset.volumeChange.toFixed(1)}%
+                        {asset.volumeChange >= 0 ? '+' : ''}{safeToFixed(asset.volumeChange, 1)}%
                       </span>
                     </div>
                     <span className={`text-xs px-2 py-1 rounded ${getSignificanceColor(asset.significance)}`}>

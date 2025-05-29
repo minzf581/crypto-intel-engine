@@ -36,6 +36,11 @@ interface PortfolioImpact {
   keyTopics: string[];
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 export default function NewsAnalysisPanel() {
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
   const [sentimentTrends, setSentimentTrends] = useState<SentimentTrend[]>([]);
@@ -235,7 +240,7 @@ export default function NewsAnalysisPanel() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Impact Score</span>
-                    <span className="font-medium">{(portfolioImpact.impactScore * 100).toFixed(0)}%</span>
+                    <span className="font-medium">{safeToFixed((portfolioImpact.impactScore || 0) * 100, 0)}%</span>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -277,9 +282,9 @@ export default function NewsAnalysisPanel() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-medium">Score: {trend.score.toFixed(2)}</div>
+                    <div className="text-sm font-medium">Score: {safeToFixed(trend.score, 2)}</div>
                     <div className={`text-xs ${trend.change24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {trend.change24h >= 0 ? '+' : ''}{trend.change24h.toFixed(1)}% (24h)
+                      {trend.change24h >= 0 ? '+' : ''}{safeToFixed(trend.change24h, 1)}% (24h)
                     </div>
                   </div>
                 </div>

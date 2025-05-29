@@ -24,6 +24,11 @@ interface SentimentTrendChartProps {
   onTimeframeChange: (timeframe: '1h' | '4h' | '24h' | '7d') => void;
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const SentimentTrendChart: React.FC<SentimentTrendChartProps> = ({
   coinSymbol,
   coinName,
@@ -124,7 +129,7 @@ const SentimentTrendChart: React.FC<SentimentTrendChartProps> = ({
                             : 'bg-red-500'
                         }`}
                         style={{ height: `${sentimentHeight}%` }}
-                        title={`Sentiment: ${sentimentScore.toFixed(2)}`}
+                        title={`Sentiment: ${safeToFixed(sentimentScore, 2)}`}
                       />
                     )}
                   </div>
@@ -147,9 +152,9 @@ const SentimentTrendChart: React.FC<SentimentTrendChartProps> = ({
           
           {/* Y-axis labels */}
           <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>+{maxSentiment.toFixed(1)}</span>
+            <span>+{safeToFixed(maxSentiment, 1)}</span>
             <span>0</span>
-            <span>-{maxSentiment.toFixed(1)}</span>
+            <span>-{safeToFixed(maxSentiment, 1)}</span>
           </div>
         </div>
 
@@ -234,7 +239,7 @@ const SentimentTrendChart: React.FC<SentimentTrendChartProps> = ({
                   trendData.momentum > 0 ? 'text-green-600' : 
                   trendData.momentum < 0 ? 'text-red-600' : 'text-gray-600'
                 }`}>
-                  {trendData.momentum > 0 ? '+' : ''}{trendData.momentum.toFixed(3)}
+                  {trendData.momentum > 0 ? '+' : ''}{safeToFixed(trendData.momentum, 3)}
                 </p>
               </div>
             </div>
