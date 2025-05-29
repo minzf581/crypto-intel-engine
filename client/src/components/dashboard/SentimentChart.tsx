@@ -246,7 +246,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
                   />
                 </div>
                 <div className="text-xs text-neutral-600 dark:text-neutral-400 w-8">
-                  {point.sentiment.toFixed(0)}
+                  {safeToFixed(point.sentiment, 0)}
                 </div>
               </div>
             );

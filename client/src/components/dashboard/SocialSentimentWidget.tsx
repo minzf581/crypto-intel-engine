@@ -38,6 +38,11 @@ interface SocialSentimentWidgetProps {
   coinName?: string;
 }
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
   selectedCoin = 'BTC',
   coinName = 'Bitcoin',
@@ -111,12 +116,6 @@ const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
   };
 
   const sentimentTrend = getSentimentTrend();
-
-  // 安全的数值格式化函数
-  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
-    if (value === null || value === undefined || isNaN(value)) return '--';
-    return value.toFixed(decimals);
-  };
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 border border-neutral-200 dark:border-neutral-700">
@@ -195,7 +194,7 @@ const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
                   ? 'text-red-600' 
                   : 'text-gray-600'
               }`}>
-                {sentimentData?.avgSentimentScore?.toFixed(2) || '0.00'}
+                {safeToFixed(sentimentData?.avgSentimentScore, 2) || '0.00'}
               </p>
             </div>
           </div>

@@ -157,4 +157,61 @@ export function logEnvironmentInfo() {
   console.log(`   Allowed Origins:`, env.allowedOrigins);
   console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
   console.log(`   PORT: ${process.env.PORT || '5001'}`);
-} 
+}
+
+export const getEnvironmentConfig = () => {
+  const isRailway = process.env.RAILWAY_ENVIRONMENT_NAME !== undefined;
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const port = process.env.PORT || '5001';
+  
+  // 确定运行环境
+  const isProduction = nodeEnv === 'production' && isRailway;
+  const isDevelopment = nodeEnv === 'development' || !isRailway;
+  
+  console.log(`🏠 Environment detection: NODE_ENV=${nodeEnv}, RAILWAY=${isRailway}, isDev=${isDevelopment}, isProd=${isProduction}`);
+
+  if (isProduction) {
+    console.log('🏭 Running in production mode');
+    return {
+      environment: 'Production',
+      frontendUrl: 'https://crypto-demo.up.railway.app',
+      backendUrl: 'https://crypto-demo.up.railway.app',
+      allowedOrigins: [
+        'https://crypto-demo.up.railway.app',
+        /^https:\/\/.*\.up\.railway\.app$/,
+        /^https:\/\/.*\.railway\.app$/
+      ],
+      nodeEnv: 'production',
+      port,
+      corsCredentials: true,
+      socketPath: '/socket.io/'
+    };
+  } else {
+    console.log('🏠 Running locally');
+    return {
+      environment: 'Local Development',
+      frontendUrl: 'http://localhost:3000',
+      backendUrl: 'http://localhost:5001',
+      allowedOrigins: [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://localhost:3004',
+        'http://localhost:5001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+        'http://127.0.0.1:3002',
+        'http://127.0.0.1:3003',
+        'http://127.0.0.1:3004',
+        'http://127.0.0.1:5001',
+        /^http:\/\/localhost:\d+$/,
+        /^http:\/\/127\.0\.0\.1:\d+$/
+      ],
+      nodeEnv: 'development',
+      port,
+      corsCredentials: true,
+      socketPath: '/socket.io/'
+    };
+  }
+}; 

@@ -12,6 +12,11 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { formatDistanceToNow, format } from 'date-fns';
 import toast from 'react-hot-toast';
 
+const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  return value.toFixed(decimals);
+};
+
 export const VolumeAnalysisDashboard: React.FC = () => {
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
   const [volumeData, setVolumeData] = useState<{
@@ -62,12 +67,6 @@ export const VolumeAnalysisDashboard: React.FC = () => {
       console.error('Failed to trigger analysis:', error);
       toast.error('Failed to trigger analysis');
     }
-  };
-
-  // 安全的数值格式化函数
-  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
-    if (value === null || value === undefined || isNaN(value)) return '--';
-    return value.toFixed(decimals);
   };
 
   // Format volume with safe checking
