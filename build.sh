@@ -10,6 +10,14 @@ cd "$SCRIPT_DIR"
 
 echo "📁 Working directory: $(pwd)"
 
+# Check if this is a Railway build
+if [ "$RAILWAY_ENVIRONMENT" = "true" ] || [ -n "$RAILWAY_PROJECT_ID" ] || [ -n "$RAILWAY_SERVICE_ID" ]; then
+    echo "🚂 Building for Railway environment"
+    export RAILWAY_ENVIRONMENT=true
+else
+    echo "🏠 Building for local environment"
+fi
+
 # Build server
 echo "🔧 Building server..."
 cd server
@@ -19,7 +27,13 @@ echo "✅ Server build completed"
 # Build client
 echo "🔧 Building client..."
 cd ../client
-npm run build
+if [ "$RAILWAY_ENVIRONMENT" = "true" ]; then
+    echo "🚂 Building client for Railway with relative API paths"
+    RAILWAY_ENVIRONMENT=true npm run build
+else
+    echo "🏠 Building client for local development"
+    npm run build
+fi
 echo "✅ Client build completed"
 
 # Return to root
