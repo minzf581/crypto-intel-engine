@@ -118,6 +118,8 @@ if (env.nodeEnv === 'production') {
 const io = new SocketIOServer(server, {
   cors: {
     origin: (origin, callback) => {
+      console.log(`🔍 WebSocket CORS check for origin: ${origin}`);
+      
       // 在Railway环境中允许前端域名
       const allowedOrigins = [
         'https://crypto-front-demo.up.railway.app',
@@ -128,13 +130,18 @@ const io = new SocketIOServer(server, {
       ];
       
       // 允许无origin的请求（如移动应用）
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log('✅ WebSocket CORS: Allowing request with no origin');
+        return callback(null, true);
+      }
       
       // 检查origin是否在允许列表中
       if (allowedOrigins.includes(origin) || origin.includes('railway.app')) {
+        console.log(`✅ WebSocket CORS: Allowed origin: ${origin}`);
         callback(null, true);
       } else {
-        console.warn(`WebSocket CORS blocked origin: ${origin}`);
+        console.warn(`❌ WebSocket CORS: Blocked origin: ${origin}`);
+        console.log('   Allowed origins:', allowedOrigins);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -142,10 +149,12 @@ const io = new SocketIOServer(server, {
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization']
   },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true, // 向后兼容
+  transports: ['websocket', 'polling'], // 允许降级到polling
+  allowEIO3: true, // 兼容性设置
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  upgradeTimeout: 30000,
+  maxHttpBufferSize: 1e6
 });
 
 // Setup socket handlers

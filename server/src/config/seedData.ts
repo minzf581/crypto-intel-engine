@@ -1,4 +1,4 @@
-import { Asset, User } from '../models';
+import { Asset, User, Signal } from '../models';
 import logger from '../utils/logger';
 
 // Default asset data with CoinGecko IDs
@@ -99,12 +99,13 @@ export const seedData = async () => {
       }
     }
     
-    // Create initial signals if none exist
-    const { Signal } = await import('../models');
+    // Create initial signals for demonstration
     const signalCount = await Signal.count();
+    console.log(`📊 Current signal count: ${signalCount}`);
     
-    if (signalCount === 0) {
-      logger.info('Creating initial signals...');
+    if (signalCount < 10) {
+      console.log('🔄 Creating initial signals...');
+      const initialSignals: any[] = [];
       
       // Get assets for signal creation
       const btc = await Asset.findOne({ where: { symbol: 'BTC' } });
@@ -112,9 +113,10 @@ export const seedData = async () => {
       const sol = await Asset.findOne({ where: { symbol: 'SOL' } });
       const ada = await Asset.findOne({ where: { symbol: 'ADA' } });
       
-      const initialSignals = [];
+      console.log(`📊 Found assets: BTC=${!!btc}, ETH=${!!eth}, SOL=${!!sol}, ADA=${!!ada}`);
       
       if (btc) {
+        console.log('🔄 Creating BTC signals...');
         initialSignals.push({
           assetId: btc.id,
           assetSymbol: btc.symbol,
@@ -141,16 +143,17 @@ export const seedData = async () => {
       }
       
       if (eth) {
+        console.log('🔄 Creating ETH signals...');
         initialSignals.push({
           assetId: eth.id,
           assetSymbol: eth.symbol,
           assetName: eth.name,
           assetLogo: eth.logo,
-          type: 'narrative' as const,
+          type: 'sentiment' as const,
           strength: 82,
-          description: 'Ethereum network upgrade showing significant improvements in transaction efficiency',
-          sources: [{ platform: 'reddit' as const, count: 156 }],
-          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000) // 6 hours ago
+          description: 'Ethereum network activity surging with upcoming upgrade anticipation',
+          sources: [{ platform: 'twitter' as const, count: 156 }],
+          timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000) // 1 hour ago
         });
         
         initialSignals.push({
@@ -158,45 +161,50 @@ export const seedData = async () => {
           assetSymbol: eth.symbol,
           assetName: eth.name,
           assetLogo: eth.logo,
-          type: 'price' as const,
+          type: 'technical' as const,
           strength: 71,
-          description: 'ETH price breaking key resistance levels with strong volume support',
+          description: 'ETH breaking key resistance levels with strong volume confirmation',
           sources: [{ platform: 'price' as const, count: 1 }],
-          timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000) // 1 hour ago
+          timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000) // 3 hours ago
         });
       }
       
       if (sol) {
+        console.log('🔄 Creating SOL signals...');
         initialSignals.push({
           assetId: sol.id,
           assetSymbol: sol.symbol,
           assetName: sol.name,
           assetLogo: sol.logo,
-          type: 'sentiment' as const,
-          strength: 79,
-          description: 'Solana ecosystem growth driving positive community sentiment',
-          sources: [{ platform: 'twitter' as const, count: 189 }],
-          timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000) // 3 hours ago
+          type: 'news' as const,
+          strength: 78,
+          description: 'Solana ecosystem growth accelerating with new DeFi protocols launching',
+          sources: [{ platform: 'news' as const, count: 12 }],
+          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000) // 4 hours ago
         });
       }
       
       if (ada) {
+        console.log('🔄 Creating ADA signals...');
         initialSignals.push({
           assetId: ada.id,
           assetSymbol: ada.symbol,
           assetName: ada.name,
           assetLogo: ada.logo,
-          type: 'narrative' as const,
+          type: 'sentiment' as const,
           strength: 65,
-          description: 'Cardano smart contract adoption increasing with new DeFi protocols',
-          sources: [{ platform: 'reddit' as const, count: 98 }],
+          description: 'Cardano community sentiment improving following development updates',
+          sources: [{ platform: 'twitter' as const, count: 89 }],
           timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000) // 5 hours ago
         });
       }
       
       if (initialSignals.length > 0) {
+        console.log(`🔄 Inserting ${initialSignals.length} initial signals...`);
         await Signal.bulkCreate(initialSignals);
-        logger.info(`Created ${initialSignals.length} initial signals`);
+        console.log(`✅ Created ${initialSignals.length} initial signals`);
+      } else {
+        console.log('⚠️ No assets found for signal creation');
       }
     }
     

@@ -64,15 +64,25 @@ export const VolumeAnalysisDashboard: React.FC = () => {
     }
   };
 
-  const formatVolume = (volume: number) => {
+  // 安全的数值格式化函数
+  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return value.toFixed(decimals);
+  };
+
+  // Format volume with safe checking
+  const formatVolume = (volume: number | null | undefined): string => {
+    if (volume === null || volume === undefined || isNaN(volume)) return '--';
+    
     if (volume >= 1e9) {
-      return `$${(volume / 1e9).toFixed(2)}B`;
+      return `$${safeToFixed(volume / 1e9, 2)}B`;
     } else if (volume >= 1e6) {
-      return `$${(volume / 1e6).toFixed(2)}M`;
+      return `$${safeToFixed(volume / 1e6, 2)}M`;
     } else if (volume >= 1e3) {
-      return `$${(volume / 1e3).toFixed(2)}K`;
+      return `$${safeToFixed(volume / 1e3, 2)}K`;
+    } else {
+      return `$${safeToFixed(volume, 2)}`;
     }
-    return `$${volume.toFixed(2)}`;
   };
 
   const getAnomalyColor = (confidence: number) => {
@@ -268,13 +278,13 @@ export const VolumeAnalysisDashboard: React.FC = () => {
                         ) : (
                           <ArrowTrendingDownIcon className="w-4 h-4" />
                         )}
-                        <span>{item.volumeChange.toFixed(2)}%</span>
+                        <span>{safeToFixed(item.volumeChange, 2)}%</span>
                       </span>
                     </div>
                     
                     <div className="flex justify-between">
                       <span className="text-gray-600">Ratio:</span>
-                      <span className="font-medium">{item.volumeRatio.toFixed(2)}x</span>
+                      <span className="font-medium">{safeToFixed(item.volumeRatio, 2)}x</span>
                     </div>
                     
                     <div className="text-xs text-gray-500">

@@ -221,17 +221,58 @@ export class NotificationEnhancedController {
       const days = parseInt(req.query.days as string) || 7;
 
       if (!coins) {
-        return res.status(400).json({ error: 'Coins parameter is required' });
+        return res.status(400).json({ 
+          success: false,
+          error: 'Coins parameter is required' 
+        });
       }
 
-      const coinList = coins.split(',');
-      const newsService = NewsAnalysisService.getInstance();
-      const trends = await newsService.analyzeSentimentTrends(coinList, days);
+      const coinList = coins.split(',').map(coin => coin.trim().toUpperCase());
+      console.log(`📊 Analyzing sentiment trends for coins: ${coinList.join(', ')} over ${days} days`);
 
-      res.json(trends);
+      try {
+        const newsService = NewsAnalysisService.getInstance();
+        const trends = await newsService.analyzeSentimentTrends(coinList, days);
+
+        // 确保返回正确的格式
+        const formattedTrends = Object.keys(trends).map(coin => ({
+          coin,
+          data: trends[coin] || [],
+          score: trends[coin]?.length > 0 ? 
+            trends[coin][trends[coin].length - 1]?.sentimentScore || 0 : 0,
+          change24h: trends[coin]?.length >= 2 ? 
+            ((trends[coin][trends[coin].length - 1]?.sentimentScore || 0) - 
+             (trends[coin][trends[coin].length - 2]?.sentimentScore || 0)) * 100 : 0
+        }));
+
+        res.json({
+          success: true,
+          data: formattedTrends
+        });
+      } catch (serviceError) {
+        console.error('NewsAnalysisService error:', serviceError);
+        
+        // 返回默认数据而不是错误
+        const defaultTrends = coinList.map(coin => ({
+          coin,
+          data: [],
+          score: 0,
+          change24h: 0
+        }));
+
+        res.json({
+          success: true,
+          data: defaultTrends,
+          message: 'Using default data - news analysis service unavailable'
+        });
+      }
     } catch (error) {
       logger.error('Failed to get sentiment trends:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ 
+        success: false,
+        error: 'Internal server error',
+        message: 'Sentiment trends analysis temporarily unavailable'
+      });
     }
   }
 

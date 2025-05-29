@@ -47,6 +47,7 @@ const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [alertCount, setAlertCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   // WebSocket integration for real-time updates
   const { connected } = useSocialSentimentSocket({
@@ -86,6 +87,7 @@ const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to load sentiment data:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
       // Set to null to show no data state instead of fake data
       setSentimentData(null);
     } finally {
@@ -110,42 +112,45 @@ const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
 
   const sentimentTrend = getSentimentTrend();
 
+  // 安全的数值格式化函数
+  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return value.toFixed(decimals);
+  };
+
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-      {/* Header */}
+    <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 border border-neutral-200 dark:border-neutral-700">
       <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+          Social Sentiment
+        </h3>
         <div className="flex items-center space-x-2">
-          <ChatBubbleLeftRightIcon className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Social Sentiment
-          </h3>
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">Live</span>
         </div>
-        <button
-          onClick={() => navigate('/social-sentiment')}
-          className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          <span>View Details</span>
-          <ArrowRightIcon className="h-4 w-4" />
-        </button>
       </div>
 
-      {/* Loading State */}
-      {isLoading && !sentimentData ? (
+      {isLoading ? (
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      ) : !sentimentData ? (
-        <div className="flex flex-col items-center justify-center h-32">
-          <ChatBubbleLeftRightIcon className="h-8 w-8 text-gray-400 mb-2" />
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-            No sentiment data available
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
-            Social sentiment monitoring is currently inactive for {selectedCoin}
-          </p>
+      ) : error ? (
+        <div className="text-center py-8">
+          <p className="text-red-600 dark:text-red-400 mb-2">Failed to load sentiment data</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">{error}</p>
         </div>
       ) : (
-        <>
+        <div className="space-y-4">
+          {/* Overall Sentiment Score */}
+          <div className="text-center">
+            <div className="text-3xl font-bold text-neutral-900 dark:text-neutral-100 mb-1">
+              {safeToFixed(sentimentData?.avgSentimentScore, 2)}
+            </div>
+            <div className="text-sm text-neutral-500 dark:text-neutral-400">
+              Average Sentiment Score
+            </div>
+          </div>
+
           {/* Main Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="text-center">
@@ -272,7 +277,7 @@ const SocialSentimentWidget: React.FC<SocialSentimentWidgetProps> = ({
               <span>Monitoring active</span>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

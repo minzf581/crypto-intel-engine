@@ -127,6 +127,18 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
     return 'Extremely Bearish';
   };
 
+  // 安全的数值格式化函数
+  const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return value.toFixed(decimals);
+  };
+
+  // 安全的百分比格式化函数
+  const safePercentage = (value: number | null | undefined, decimals: number = 2): string => {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`;
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 border border-neutral-200 dark:border-neutral-700">
@@ -171,7 +183,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
         <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-4">
           <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Current Sentiment</div>
           <div className={`text-xl font-bold ${getSentimentColor(currentSentiment)}`}>
-            {currentSentiment.toFixed(0)} / 100
+            {safeToFixed(currentSentiment)}
           </div>
           <div className="text-sm text-neutral-600 dark:text-neutral-300">
             {getSentimentLabel(currentSentiment)}
@@ -181,11 +193,11 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
         <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-4">
           <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Current Price</div>
           <div className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
-            ${currentPrice?.toLocaleString() || '--'}
+            ${safeToFixed(currentPrice)}
           </div>
           {priceChange !== null && (
             <div className={`text-sm ${priceChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}% (24h)
+              {safePercentage(priceChange)} (24h)
             </div>
           )}
         </div>
@@ -196,7 +208,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
             Math.abs(correlation) > 0.6 ? 'text-green-600' : 
             Math.abs(correlation) > 0.3 ? 'text-yellow-600' : 'text-red-600'
           }`}>
-            {(correlation * 100).toFixed(0)}%
+            {safeToFixed(correlation * 100)}%
           </div>
           <div className="text-sm text-neutral-600 dark:text-neutral-300">
             {Math.abs(correlation) > 0.6 ? 'Strong Correlation' : 
