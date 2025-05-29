@@ -77,7 +77,15 @@ class NewsSentimentService {
    */
   private async fetchRealNewsArticles(symbol: string): Promise<Partial<NewsArticle>[]> {
     try {
+      // Check if NewsAPI key is configured
+      if (!this.newsApiKey) {
+        logger.warn(`NewsAPI key not configured. Please set NEWS_API_KEY environment variable for news analysis.`);
+        return [];
+      }
+
       const query = this.buildNewsSearchQuery(symbol);
+      logger.info(`Fetching news for ${symbol} using NewsAPI`);
+      
       const response = await axios.get('https://newsapi.org/v2/everything', {
         params: {
           q: query,
@@ -85,8 +93,14 @@ class NewsSentimentService {
           sortBy: 'publishedAt',
           pageSize: 20,
           apiKey: this.newsApiKey
-        }
+        },
+        timeout: 10000 // 10 second timeout
       });
+
+      if (!response.data.articles) {
+        logger.warn(`No articles returned from NewsAPI for ${symbol}`);
+        return [];
+      }
 
       return response.data.articles.map((article: any) => ({
         title: article.title,
@@ -96,7 +110,19 @@ class NewsSentimentService {
         publishedAt: new Date(article.publishedAt)
       }));
     } catch (error) {
-      logger.error(`Failed to fetch news articles for ${symbol}:`, error);
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          logger.warn(`NewsAPI authentication failed for ${symbol}. Please check NEWS_API_KEY configuration.`);
+        } else if (error.response?.status === 429) {
+          logger.warn(`NewsAPI rate limit exceeded for ${symbol}. Please try again later.`);
+        } else if (error.code === 'ECONNABORTED') {
+          logger.warn(`NewsAPI request timeout for ${symbol}. Service may be slow.`);
+        } else {
+          logger.warn(`NewsAPI request failed for ${symbol}: ${error.message}`);
+        }
+      } else {
+        logger.error(`Failed to fetch news articles for ${symbol}:`, error);
+      }
       return [];
     }
   }

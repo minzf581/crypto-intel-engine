@@ -38,17 +38,34 @@ if (env.databaseUrl) {
   logger.info(`Current working directory: ${currentDir}`);
   logger.info(`Project root: ${projectRoot}`);
   
-  // Ensure data directory exists
+  // Ensure data directory exists with proper permissions
   const dataDir = path.dirname(dbPath);
   if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+    fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
     logger.info(`Created data directory: ${dataDir}`);
+  }
+  
+  // Check if we can write to the directory
+  try {
+    const testFile = path.join(dataDir, '.write-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    logger.info('✅ Data directory write permission verified');
+  } catch (error) {
+    logger.error('❌ Cannot write to data directory:', error);
+    throw new Error(`Data directory is not writable: ${dataDir}`);
   }
   
   sequelize = new Sequelize({
     dialect: 'sqlite',
     storage: dbPath,
     logging: env.nodeEnv === 'development' ? (msg) => logger.debug(msg) : false,
+    pool: {
+      max: 1, // SQLite only supports one connection
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
   });
 }
 
@@ -94,10 +111,87 @@ export const syncModels = async () => {
     const isPostgreSQL = !!env.databaseUrl;
     
     if (isDevelopment && !isRailway && !isPostgreSQL) {
-      // Local development with SQLite: clean start to avoid constraint conflicts
-      await cleanDatabase();
-      await sequelize.sync({ force: true });
-      logger.info('✅ Database models synchronized (development mode - force recreated)');
+      // Local development with SQLite: handle with special care
+      logger.info('🔧 Local SQLite development mode detected');
+      
+      // Strategy 1: Try to clean and recreate if there are I/O issues
+      try {
+        await sequelize.sync({ force: false, alter: false });
+        logger.info('✅ Database models synchronized (development mode - safe sync)');
+        return;
+      } catch (safeError) {
+        const errorMessage = safeError instanceof Error ? safeError.message : String(safeError);
+        logger.warn('SQLite safe sync failed:', errorMessage);
+        
+        // If it's an I/O error, try to clean and recreate
+        if (errorMessage.includes('SQLITE_IOERR') || errorMessage.includes('disk I/O error')) {
+          logger.info('🔄 Detected SQLite I/O error, attempting database cleanup...');
+          await cleanDatabase();
+        }
+      }
+      
+      // Strategy 2: Try force sync after cleanup
+      try {
+        logger.info('🔄 Attempting force sync after cleanup...');
+        await sequelize.sync({ force: true });
+        logger.info('✅ Database models synchronized (development mode - force sync after cleanup)');
+        return;
+      } catch (forceError) {
+        const errorMessage = forceError instanceof Error ? forceError.message : String(forceError);
+        logger.error('SQLite force sync failed:', errorMessage);
+        
+        // Strategy 3: Try with a different database file name
+        if (errorMessage.includes('SQLITE_IOERR') || errorMessage.includes('disk I/O error')) {
+          logger.info('🔄 Attempting with backup database file...');
+          try {
+            // Create a new database instance with a different file name
+            const currentDir = process.cwd();
+            const isInServerDir = currentDir.endsWith('/server') || currentDir.endsWith('\\server');
+            const projectRoot = isInServerDir ? path.dirname(currentDir) : currentDir;
+            const backupDbPath = path.resolve(projectRoot, 'data/crypto-intel-backup.sqlite');
+            
+            // Clean up any existing backup
+            if (fs.existsSync(backupDbPath)) {
+              fs.unlinkSync(backupDbPath);
+            }
+            
+            const backupSequelize = new Sequelize({
+              dialect: 'sqlite',
+              storage: backupDbPath,
+              logging: false,
+              dialectOptions: {
+                mode: 0o755,
+                busyTimeout: 30000,
+              },
+              pool: {
+                max: 1,
+                min: 0,
+                acquire: 30000,
+                idle: 10000
+              }
+            });
+            
+            await backupSequelize.sync({ force: true });
+            await backupSequelize.close();
+            
+            // If backup works, replace the main database
+            const mainDbPath = path.resolve(projectRoot, env.sqliteDbPath || 'data/crypto-intel.sqlite');
+            if (fs.existsSync(mainDbPath)) {
+              fs.unlinkSync(mainDbPath);
+            }
+            fs.renameSync(backupDbPath, mainDbPath);
+            
+            // Reconnect with the main database
+            await sequelize.sync({ force: false });
+            logger.info('✅ Database models synchronized (development mode - backup strategy)');
+            return;
+          } catch (backupError) {
+            logger.error('Backup strategy failed:', backupError);
+          }
+        }
+        
+        throw forceError;
+      }
     } else if (isRailway || isPostgreSQL) {
       // Railway/PostgreSQL environment: handle with special care
       logger.info('🚂 Railway/PostgreSQL environment detected, using optimized sync strategy');
