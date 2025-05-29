@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { detectFrontendEnvironment } from '../utils/environment';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -31,15 +32,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       console.log('Initializing WebSocket connection...');
       
-      // 获取WebSocket连接URL
-      let socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      
-      // 在Railway环境中，如果API_URL为空或相对路径，使用当前域名
-      if (!socketUrl || socketUrl === '') {
-        socketUrl = window.location.origin;
-      }
+      // 使用环境检测函数获取正确的API URL
+      const env = detectFrontendEnvironment();
+      const socketUrl = env.apiUrl;
       
       console.log('WebSocket connection URL:', socketUrl);
+      console.log('Environment detected:', {
+        isLocal: env.isLocal,
+        isRailway: env.isRailway,
+        isProduction: env.isProduction
+      });
       
       const newSocket = io(socketUrl, {
         withCredentials: true,

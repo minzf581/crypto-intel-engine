@@ -136,7 +136,7 @@ const SentimentChart: React.FC<SentimentChartProps> = ({
   // 安全的百分比格式化函数
   const safePercentage = (value: number | null | undefined, decimals: number = 2): string => {
     if (value === null || value === undefined || isNaN(value)) return '--';
-    return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`;
+    return `${value >= 0 ? '+' : ''}${safeToFixed(value, decimals)}%`;
   };
 
   if (isLoading) {
