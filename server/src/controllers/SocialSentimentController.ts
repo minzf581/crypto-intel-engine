@@ -13,18 +13,21 @@ import logger from '../utils/logger';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
 import env from '../config/env';
+import { TwitterDataCollectionService } from '../services/TwitterDataCollectionService';
 
 export class SocialSentimentController {
   private socialSentimentService: SocialSentimentService;
   private twitterService: TwitterService;
   private twitterOAuthService: TwitterOAuthService;
   private recommendedAccountService: RecommendedAccountService;
+  private dataCollectionService: TwitterDataCollectionService;
 
   constructor() {
     this.socialSentimentService = SocialSentimentService.getInstance();
     this.twitterService = TwitterService.getInstance();
     this.twitterOAuthService = TwitterOAuthService.getInstance();
     this.recommendedAccountService = RecommendedAccountService.getInstance();
+    this.dataCollectionService = TwitterDataCollectionService.getInstance();
   }
 
   /**
@@ -3209,6 +3212,303 @@ export class SocialSentimentController {
           totalCount: 0,
           message: 'Internal server error'
         }
+      });
+    }
+  };
+
+  /**
+   * Manually trigger data collection for a specific coin
+   */
+  triggerDataCollection = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+
+      if (!coinSymbol) {
+        res.status(400).json({
+          success: false,
+          message: 'Coin symbol is required'
+        });
+        return;
+      }
+
+      logger.info(`Manual data collection triggered for ${coinSymbol} by user`);
+
+      // Check Twitter API configuration first
+      if (!this.twitterService.isTwitterConfigured()) {
+        res.status(503).json({
+          success: false,
+          message: 'Twitter API is not configured. Please contact administrator.',
+          data: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            accountsProcessed: 0,
+            postsCollected: 0,
+            errors: ['Twitter API credentials not available'],
+            timestamp: new Date().toISOString()
+          }
+        });
+        return;
+      }
+
+      // Check current rate limit status
+      const rateLimitStatus = this.twitterService.getDetailedRateLimitStatus();
+      const hasEmergencyLimits = Object.values(rateLimitStatus.rateLimits).some(
+        (status: any) => status.status === 'emergency'
+      );
+
+      if (hasEmergencyLimits) {
+        const emergencyEndpoints = Object.entries(rateLimitStatus.rateLimits)
+          .filter(([_, status]: [string, any]) => status.status === 'emergency')
+          .map(([endpoint, status]: [string, any]) => `${endpoint} (${status.remaining}/${status.limit})`);
+
+        res.status(429).json({
+          success: false,
+          message: 'Twitter API rate limits are critically low. Please wait before trying again.',
+          data: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            accountsProcessed: 0,
+            postsCollected: 0,
+            errors: [`Rate limit emergency: ${emergencyEndpoints.join(', ')}`],
+            timestamp: new Date().toISOString(),
+            rateLimitStatus: rateLimitStatus.rateLimits,
+            recommendations: [
+              'Wait for rate limits to reset (typically 15 minutes)',
+              'Try again with fewer accounts',
+              'Consider using automatic data collection with longer intervals'
+            ]
+          }
+        });
+        return;
+      }
+
+      // Test API connectivity before proceeding
+      try {
+        const testResult = await this.twitterService.testConnection();
+        if (!testResult.success) {
+          res.status(503).json({
+            success: false,
+            message: 'Twitter API is currently unavailable. Please try again later.',
+            data: {
+              coinSymbol: coinSymbol.toUpperCase(),
+              accountsProcessed: 0,
+              postsCollected: 0,
+              errors: [testResult.message || 'API connection failed'],
+              timestamp: new Date().toISOString()
+            }
+          });
+          return;
+        }
+      } catch (testError) {
+        res.status(503).json({
+          success: false,
+          message: 'Failed to verify Twitter API connectivity.',
+          data: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            accountsProcessed: 0,
+            postsCollected: 0,
+            errors: ['API connectivity test failed'],
+            timestamp: new Date().toISOString()
+          }
+        });
+        return;
+      }
+
+      // Proceed with data collection
+      const result = await this.dataCollectionService.collectDataForSpecificCoin(coinSymbol.toUpperCase());
+
+      // Check if rate limits were hit during collection
+      const hasRateLimitErrors = result.errors.some(error => 
+        error.includes('429') || error.includes('rate limit') || error.includes('Too Many Requests')
+      );
+
+      if (hasRateLimitErrors) {
+        res.status(429).json({
+          success: false,
+          data: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            accountsProcessed: result.accountsProcessed,
+            postsCollected: result.postsCollected,
+            errors: result.errors,
+            timestamp: new Date().toISOString(),
+            rateLimitStatus: this.twitterService.getDetailedRateLimitStatus().rateLimits
+          },
+          message: `Data collection partially completed for ${coinSymbol} but hit rate limits. Processed ${result.accountsProcessed} accounts and collected ${result.postsCollected} posts before limits were reached.`
+        });
+        return;
+      }
+
+      res.json({
+        success: result.success,
+        data: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          accountsProcessed: result.accountsProcessed,
+          postsCollected: result.postsCollected,
+          errors: result.errors,
+          timestamp: new Date().toISOString(),
+          rateLimitStatus: this.twitterService.getDetailedRateLimitStatus().rateLimits
+        },
+        message: result.success 
+          ? `Data collection completed for ${coinSymbol}. Processed ${result.accountsProcessed} accounts and collected ${result.postsCollected} posts.`
+          : `Data collection failed for ${coinSymbol}. ${result.errors.join('; ')}`
+      });
+    } catch (error) {
+      logger.error('Failed to trigger data collection:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to trigger data collection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get data collection status and statistics
+   */
+  getDataCollectionStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const status = await this.dataCollectionService.getCollectionStatus();
+
+      res.json({
+        success: true,
+        data: {
+          ...status,
+          recommendations: this.generateDataCollectionRecommendations(status)
+        },
+        message: 'Data collection status retrieved successfully'
+      });
+    } catch (error) {
+      logger.error('Failed to get data collection status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get data collection status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Start automatic data collection
+   */
+  startDataCollection = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { intervalMinutes = 30 } = req.body;
+
+      if (intervalMinutes < 5 || intervalMinutes > 1440) {
+        res.status(400).json({
+          success: false,
+          message: 'Interval must be between 5 and 1440 minutes'
+        });
+        return;
+      }
+
+      this.dataCollectionService.startDataCollection(intervalMinutes);
+
+      res.json({
+        success: true,
+        data: {
+          intervalMinutes,
+          startedAt: new Date().toISOString()
+        },
+        message: `Automatic data collection started with ${intervalMinutes} minute intervals`
+      });
+    } catch (error) {
+      logger.error('Failed to start data collection:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to start data collection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Stop automatic data collection
+   */
+  stopDataCollection = async (req: Request, res: Response): Promise<void> => {
+    try {
+      this.dataCollectionService.stopDataCollection();
+
+      res.json({
+        success: true,
+        data: {
+          stoppedAt: new Date().toISOString()
+        },
+        message: 'Automatic data collection stopped'
+      });
+    } catch (error) {
+      logger.error('Failed to stop data collection:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to stop data collection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Generate recommendations based on data collection status
+   */
+  private generateDataCollectionRecommendations(status: any): string[] {
+    const recommendations: string[] = [];
+
+    if (!status.isRunning) {
+      recommendations.push('💡 Consider starting automatic data collection to keep sentiment analysis up-to-date');
+    }
+
+    if (status.totalPosts === 0) {
+      recommendations.push('📊 No tweet data available. Try triggering manual data collection for your monitored coins');
+    } else if (status.totalPosts < 100) {
+      recommendations.push('📈 Limited tweet data available. Consider adding more monitored accounts or running data collection more frequently');
+    }
+
+    if (status.lastCollection) {
+      const hoursSinceLastCollection = (Date.now() - new Date(status.lastCollection).getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLastCollection > 24) {
+        recommendations.push('⏰ Last data collection was more than 24 hours ago. Consider running manual collection');
+      }
+    }
+
+    const totalCoins = Object.keys(status.coinBreakdown).length;
+    if (totalCoins === 0) {
+      recommendations.push('🎯 No monitored coins found. Set up monitoring for cryptocurrencies you want to analyze');
+    } else if (totalCoins < 3) {
+      recommendations.push('🚀 Consider monitoring more cryptocurrencies for broader market sentiment analysis');
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push('✅ Data collection is running smoothly. All systems are operational');
+    }
+
+    return recommendations;
+  }
+
+  /**
+   * Test data collection without authentication (for debugging)
+   */
+  testDataCollection = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      
+      logger.info(`🧪 Testing data collection for ${coinSymbol}`);
+      
+      const result = await this.dataCollectionService.collectDataForSpecificCoin(coinSymbol.toUpperCase());
+      
+      res.json({
+        success: true,
+        data: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          accountsProcessed: result.accountsProcessed,
+          postsCollected: result.postsCollected,
+          errors: result.errors,
+          timestamp: new Date().toISOString()
+        },
+        message: `Test data collection completed for ${coinSymbol.toUpperCase()}. Processed ${result.accountsProcessed} accounts and collected ${result.postsCollected} posts.`
+      });
+    } catch (error) {
+      logger.error('Failed to test data collection:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to test data collection',
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   };

@@ -119,10 +119,23 @@ router.post('/reset-twitter-rate-limit',
   socialSentimentController.resetTwitterRateLimit
 );
 
-// Get real-time tweets from monitored accounts
-router.post('/real-time-tweets/:coinSymbol',
+// === DATA COLLECTION ROUTES ===
+
+// Manual data collection for specific coin
+router.post('/collect-data/:coinSymbol',
   authenticateToken,
-  socialSentimentController.getRealTimeTweets
+  socialSentimentController.triggerDataCollection
+);
+
+// Data collection status
+router.get('/data-collection-status',
+  authenticateToken,
+  socialSentimentController.getDataCollectionStatus
+);
+
+// Test data collection without authentication (for testing purposes)
+router.post('/test-collect-data/:coinSymbol',
+  socialSentimentController.testDataCollection
 );
 
 // === NEW ENHANCED FEATURES ROUTES ===

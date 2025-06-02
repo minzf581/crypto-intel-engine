@@ -4,6 +4,7 @@ import EnhancedSocialSentimentDashboard from '@/components/EnhancedSocialSentime
 import AccountCorrelationView from '@/components/AccountCorrelationView';
 import SentimentTrendChart from '@/components/SentimentTrendChart';
 import SentimentAlertsPanel from '@/components/SentimentAlertsPanel';
+import TwitterApiStatus from '@/components/TwitterApiStatus';
 import { useSocialSentimentSocket } from '@/hooks/useSocialSentimentSocket';
 import {
   ChartBarIcon,
@@ -350,6 +351,15 @@ const SocialSentimentPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Twitter API Status */}
+      <TwitterApiStatus 
+        className="mb-4"
+        showDetails={true}
+        onRefresh={() => {
+          // Optionally refresh other components when API status is refreshed
+        }}
+      />
 
       {/* Enhanced Features Notice */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

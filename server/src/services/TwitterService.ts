@@ -347,18 +347,24 @@ export class TwitterService {
   private static instance: TwitterService;
   private readonly baseUrl = 'https://api.twitter.com/2';
   private readonly bearerToken: string;
+  private readonly apiKey: string;
+  private readonly apiSecret: string;
   private readonly isConfigured: boolean;
   private readonly rateLimitManager = new RateLimitManager();
 
   constructor() {
     this.bearerToken = process.env.TWITTER_BEARER_TOKEN || '';
-    this.isConfigured = !!this.bearerToken;
+    this.apiKey = process.env.TWITTER_API_KEY || '';
+    this.apiSecret = process.env.TWITTER_API_SECRET || '';
+    this.isConfigured = !!(this.bearerToken || (this.apiKey && this.apiSecret));
     
     if (this.isConfigured) {
       logger.info('Twitter service initialized with real API token');
     } else {
-      logger.warn('Twitter service initialized without API token - some features will be limited');
+      logger.warn('Twitter API not configured - some features will be limited');
     }
+    
+    this.validateConfiguration();
     
     // Start cache cleanup interval (every 10 minutes)
     setInterval(() => {
@@ -374,7 +380,7 @@ export class TwitterService {
   }
 
   public isTwitterConfigured(): boolean {
-    return this.isConfigured;
+    return !!(this.bearerToken || (this.apiKey && this.apiSecret));
   }
 
   private validateConfiguration(): void {
@@ -1885,5 +1891,37 @@ export class TwitterService {
       averageResponseTime: 0, // Would need additional tracking
       recommendedActions: actions
     };
+  }
+
+  /**
+   * Get user ID by username
+   */
+  async getUserIdByUsername(username: string): Promise<string | null> {
+    try {
+      if (!this.bearerToken) {
+        logger.error('Twitter API not configured');
+        return null;
+      }
+
+      const response = await axios.get(`${this.baseUrl}/users/by/username/${username}`, {
+        headers: {
+          'Authorization': `Bearer ${this.bearerToken}`,
+        },
+        params: {
+          'user.fields': 'id,username'
+        },
+      });
+
+      if (response.data && response.data.data) {
+        logger.debug(`Found Twitter user ID for ${username}: ${response.data.data.id}`);
+        return response.data.data.id;
+      }
+
+      logger.warn(`No Twitter user found for username: ${username}`);
+      return null;
+    } catch (error) {
+      logger.error(`Failed to get user ID for username ${username}:`, error);
+      return null;
+    }
   }
 } 

@@ -25,7 +25,8 @@ import {
   PlusIcon,
   TrashIcon,
   EllipsisHorizontalIcon,
-  FunnelIcon
+  FunnelIcon,
+  ArrowPathRoundedSquareIcon
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
 import { 
@@ -108,6 +109,16 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
   const [popularAccounts, setPopularAccounts] = useState<PopularAccount[]>([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
 
+  // Data collection state
+  const [dataCollectionStatus, setDataCollectionStatus] = useState<any>(null);
+  const [isCollectingData, setIsCollectingData] = useState(false);
+  const [collectionResult, setCollectionResult] = useState<any>(null);
+
+  // Add tweets list state for analysis page
+  const [tweetsList, setTweetsList] = useState<any[]>([]);
+  const [isLoadingTweets, setIsLoadingTweets] = useState(false);
+  const [tweetsError, setTweetsError] = useState<string | null>(null);
+
   useEffect(() => {
     // Check authentication status
     const token = localStorage.getItem('token');
@@ -115,6 +126,7 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
     
     if (activeTab === 'analysis') {
       loadSentimentSummary();
+      loadTweetsList();
     } else if (activeTab === 'monitoring') {
       loadMonitoringData();
     }
@@ -314,6 +326,26 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
     }
   };
 
+  const loadTweetsList = async () => {
+    setIsLoadingTweets(true);
+    setTweetsError(null);
+    try {
+      // Get tweets that mention the selected coin
+      const response = await socialSentimentApi.getCoinSentimentSummary(selectedCoin, timeframe);
+      if (response.success && response.data.significantPosts) {
+        setTweetsList(response.data.significantPosts);
+      } else {
+        setTweetsList([]);
+      }
+    } catch (error: any) {
+      console.error('Failed to load tweets list:', error);
+      setTweetsError(error.response?.data?.message || 'Failed to load tweets');
+      setTweetsList([]);
+    } finally {
+      setIsLoadingTweets(false);
+    }
+  };
+
   const loadMonitoringData = async () => {
     if (!isAuthenticated) {
       console.log('User not authenticated, skipping monitoring data load');
@@ -408,6 +440,43 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
       newSelection.add(accountId);
     }
     setSelectedAccounts(newSelection);
+  };
+
+  const loadDataCollectionStatus = async () => {
+    try {
+      const response = await socialSentimentApi.getDataCollectionStatus();
+      if (response.success) {
+        setDataCollectionStatus(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load data collection status:', error);
+    }
+  };
+
+  const triggerDataCollection = async () => {
+    setIsCollectingData(true);
+    setCollectionResult(null);
+    
+    try {
+      const response = await socialSentimentApi.triggerDataCollection(selectedCoin);
+      setCollectionResult(response);
+      
+      if (response.success) {
+        // Refresh sentiment summary and data collection status after successful collection
+        setTimeout(() => {
+          loadSentimentSummary();
+          loadDataCollectionStatus();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to trigger data collection:', error);
+      setCollectionResult({
+        success: false,
+        message: 'Failed to trigger data collection. Please try again.'
+      });
+    } finally {
+      setIsCollectingData(false);
+    }
   };
 
   const renderSearchTab = () => (
@@ -763,28 +832,184 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
 
   const renderAnalysisTab = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header with timeframe selector and data collection controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Sentiment Analysis for {coinName} ({selectedCoin})
           </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            Historical correlation and sentiment trends with enhanced explanations
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Real-time sentiment analysis from monitored Twitter accounts
           </p>
         </div>
-        <select
-          value={timeframe}
-          onChange={(e) => setTimeframe(e.target.value as '1h' | '4h' | '24h' | '7d')}
-          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="1h">Last Hour</option>
-          <option value="4h">Last 4 Hours</option>
-          <option value="24h">Last 24 Hours</option>
-          <option value="7d">Last 7 Days</option>
-        </select>
+        
+        <div className="flex items-center space-x-4">
+          {/* Timeframe Selector */}
+          <select
+            value={timeframe}
+            onChange={(e) => setTimeframe(e.target.value as '1h' | '4h' | '24h' | '7d')}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+          >
+            <option value="1h">Last Hour</option>
+            <option value="4h">Last 4 Hours</option>
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d">Last 7 Days</option>
+          </select>
+
+          {/* Data Collection Button */}
+          <button
+            onClick={triggerDataCollection}
+            disabled={isCollectingData || !isAuthenticated}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCollectingData ? (
+              <>
+                <ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+                Collecting...
+              </>
+            ) : (
+              <>
+                <ArrowPathIcon className="h-4 w-4 mr-2" />
+                Collect Data
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Sentiment Score Explanation */}
+      {/* Data Collection Status */}
+      {dataCollectionStatus && (
+        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+              Data Collection Status
+            </h4>
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+              dataCollectionStatus.isRunning 
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+            }`}>
+              {dataCollectionStatus.isRunning ? 'Running' : 'Stopped'}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">Total Accounts:</span>
+              <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                {dataCollectionStatus.totalAccounts}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">Total Posts:</span>
+              <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                {dataCollectionStatus.totalPosts}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">Last Collection:</span>
+              <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                {dataCollectionStatus.lastCollection 
+                  ? new Date(dataCollectionStatus.lastCollection).toLocaleString()
+                  : 'Never'
+                }
+              </span>
+            </div>
+          </div>
+
+          {dataCollectionStatus.coinBreakdown && dataCollectionStatus.coinBreakdown[selectedCoin] && (
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+              <div className="text-sm">
+                <span className="text-gray-500 dark:text-gray-400">For {selectedCoin}:</span>
+                <span className="ml-2 text-gray-900 dark:text-white">
+                  {dataCollectionStatus.coinBreakdown[selectedCoin].accounts} accounts, {dataCollectionStatus.coinBreakdown[selectedCoin].posts} posts
+                </span>
+              </div>
+            </div>
+          )}
+
+          {dataCollectionStatus.recommendations && dataCollectionStatus.recommendations.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+              <div className="text-sm space-y-1">
+                {dataCollectionStatus.recommendations.map((rec: string, index: number) => (
+                  <div key={index} className="text-gray-600 dark:text-gray-400">
+                    {rec}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Collection Result */}
+      {collectionResult && (
+        <div className={`border rounded-lg p-4 ${
+          collectionResult.success 
+            ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+            : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+        }`}>
+          <div className="flex items-start">
+            {collectionResult.success ? (
+              <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-3 flex-shrink-0 mt-0.5" />
+            ) : (
+              <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-3 flex-shrink-0 mt-0.5" />
+            )}
+            <div>
+              <h4 className={`text-sm font-medium ${
+                collectionResult.success 
+                  ? 'text-green-900 dark:text-green-100'
+                  : 'text-red-900 dark:text-red-100'
+              }`}>
+                {collectionResult.success ? 'Data Collection Successful' : 'Data Collection Failed'}
+              </h4>
+              <div className={`text-sm mt-1 ${
+                collectionResult.success 
+                  ? 'text-green-700 dark:text-green-300'
+                  : 'text-red-700 dark:text-red-300'
+              }`}>
+                <p>{collectionResult.message}</p>
+                {collectionResult.success && collectionResult.data && (
+                  <div className="mt-2 space-y-1">
+                    <p>• Processed {collectionResult.data.accountsProcessed} accounts</p>
+                    <p>• Collected {collectionResult.data.postsCollected} new posts</p>
+                    {collectionResult.data.errors && collectionResult.data.errors.length > 0 && (
+                      <p>• {collectionResult.data.errors.length} errors occurred</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Data Warning */}
+      {sentimentSummary && sentimentSummary.totalPosts === 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-3 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                No Tweet Data Available
+              </h4>
+              <div className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                <p>There are no tweets available for analysis. This could be because:</p>
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>No accounts are being monitored for {selectedCoin}</li>
+                  <li>Data collection hasn't been run recently</li>
+                  <li>Twitter API rate limits are preventing data collection</li>
+                </ul>
+                <p className="mt-2">
+                  Try clicking the "Collect Data" button above to gather recent tweets from monitored accounts.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sentiment Score Information */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div className="flex items-start">
           <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
@@ -807,7 +1032,8 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
         </div>
       </div>
 
-      {sentimentSummary && (
+      {/* Sentiment Analysis Results */}
+      {sentimentSummary && sentimentSummary.totalPosts > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
             <div className="text-center">
@@ -853,6 +1079,7 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
         </div>
       )}
 
+      {/* Trending Keywords */}
       {sentimentSummary?.trendingKeywords && sentimentSummary.trendingKeywords.length > 0 && (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
@@ -876,6 +1103,135 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
           </div>
         </div>
       )}
+
+      {/* Recent Tweets */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-md font-medium text-gray-900 dark:text-white">
+            Recent Tweets ({tweetsList.length})
+          </h4>
+          <button
+            onClick={loadTweetsList}
+            disabled={isLoadingTweets}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            <ArrowPathIcon className={`h-4 w-4 mr-2 ${isLoadingTweets ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+
+        {isLoadingTweets ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading tweets...</span>
+          </div>
+        ) : tweetsError ? (
+          <div className="text-center py-8">
+            <ExclamationTriangleIcon className="mx-auto h-8 w-8 text-red-400" />
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">{tweetsError}</p>
+            <button
+              onClick={loadTweetsList}
+              className="mt-3 inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : tweetsList.length === 0 ? (
+          <div className="text-center py-8">
+            <ChatBubbleLeftIcon className="mx-auto h-8 w-8 text-gray-400" />
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              No tweets found for {selectedCoin} in the selected timeframe
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Try collecting data or changing the timeframe
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {tweetsList.slice(0, 10).map((tweet, index) => (
+              <div key={tweet.id || index} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <img
+                    src={tweet.account?.profileImageUrl || '/default-avatar.png'}
+                    alt={tweet.account?.displayName || 'Unknown'}
+                    className="h-10 w-10 rounded-full"
+                    onError={(e) => {
+                      const target = e.currentTarget as HTMLImageElement;
+                      if (target.src !== '/default-avatar.png') {
+                        target.src = '/default-avatar.png';
+                      }
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h5 className="text-sm font-medium text-gray-900 dark:text-white">
+                        {tweet.account?.displayName || 'Unknown User'}
+                      </h5>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        @{tweet.account?.username || 'unknown'}
+                      </span>
+                      <span className="text-sm text-gray-400">•</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {new Date(tweet.publishedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    
+                    <p className="text-sm text-gray-900 dark:text-white mb-3 leading-relaxed">
+                      {tweet.content}
+                    </p>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          tweet.sentiment === 'positive' 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                            : tweet.sentiment === 'negative'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {tweet.sentiment} ({tweet.sentimentScore?.toFixed(2) || 'N/A'})
+                        </span>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          tweet.impact === 'high' 
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300'
+                            : tweet.impact === 'medium'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {tweet.impact} impact
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center space-x-1">
+                          <HeartIcon className="h-4 w-4" />
+                          <span>{tweet.likeCount || 0}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <ArrowPathRoundedSquareIcon className="h-4 w-4" />
+                          <span>{tweet.retweetCount || 0}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <ChatBubbleLeftIcon className="h-4 w-4" />
+                          <span>{tweet.replyCount || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {tweetsList.length > 10 && (
+              <div className="text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing 10 of {tweetsList.length} tweets
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 

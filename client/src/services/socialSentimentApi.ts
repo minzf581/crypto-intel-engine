@@ -356,6 +356,34 @@ export const socialSentimentApi = {
       responseType: 'blob'
     });
     return response.data;
+  },
+
+  // === DATA COLLECTION METHODS ===
+
+  // Trigger manual data collection for a specific coin
+  triggerDataCollection: async (coinSymbol: string) => {
+    const response = await api.post(`/collect-data/${coinSymbol}`);
+    return response.data;
+  },
+
+  // Get data collection status and statistics
+  getDataCollectionStatus: async () => {
+    const response = await api.get('/data-collection-status');
+    return response.data;
+  },
+
+  // Start automatic data collection
+  startDataCollection: async (intervalMinutes: number = 30) => {
+    const response = await api.post('/start-data-collection', {
+      intervalMinutes
+    });
+    return response.data;
+  },
+
+  // Stop automatic data collection
+  stopDataCollection: async () => {
+    const response = await api.post('/stop-data-collection');
+    return response.data;
   }
 };
 
