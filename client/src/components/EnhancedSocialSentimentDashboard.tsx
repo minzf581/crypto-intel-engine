@@ -318,11 +318,25 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
   const loadMonitoringData = async () => {
     setIsLoading(true);
     try {
+      console.log('Loading monitoring data for coin:', selectedCoin);
+      
       const statusResponse = await socialSentimentApi.getMonitoringStatus(selectedCoin);
+      console.log('Monitoring status response:', statusResponse);
       setMonitoringStatus(statusResponse.data);
 
       const accountsResponse = await socialSentimentApi.getMonitoredAccounts(selectedCoin);
-      setMonitoringAccounts(accountsResponse.data || []);
+      console.log('Monitored accounts response:', accountsResponse);
+      
+      // 后端返回的是扁平的账户对象数组，不是嵌套结构
+      const accounts = Array.isArray(accountsResponse.data) ? accountsResponse.data : [];
+      const validAccounts = accounts.filter(account => 
+        account && 
+        typeof account === 'object' && 
+        (account.id || account.username)
+      );
+      
+      console.log(`Filtered ${validAccounts.length} valid accounts from ${accounts.length} total`);
+      setMonitoringAccounts(validAccounts);
     } catch (error) {
       console.error('Failed to load monitoring data:', error);
       setMonitoringStatus(null);
@@ -842,30 +856,41 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {monitoringAccounts.map((accountData) => (
-            <div key={accountData.account.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          {monitoringAccounts
+            .filter(account => account && (account.id || account.username)) // 过滤掉无效的数据
+            .map((account) => (
+            <div key={account.id || account.username} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <img
-                  src={accountData.account.profileImageUrl || '/default-avatar.png'}
-                  alt={accountData.account.displayName}
+                  src={account.profileImageUrl || '/default-avatar.png'}
+                  alt={account.displayName || account.username || 'Account'}
                   className="h-10 w-10 rounded-full"
+                  onError={(e) => {
+                    // 如果图片加载失败，使用默认头像
+                    e.currentTarget.src = '/default-avatar.png';
+                  }}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
                     <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {accountData.account.displayName}
+                      {account.displayName || account.username || 'Unknown Account'}
                     </h4>
-                    {accountData.account.verified && (
+                    {account.isVerified && (
                       <ShieldCheckIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
                     )}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    @{accountData.account.username}
+                    @{account.username || 'unknown'}
                   </p>
                   <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>{accountData.account.followersCount?.toLocaleString() || 0} followers</span>
-                    <span>Sentiment: {safeToFixed(accountData.relevance?.avgSentiment, 2) || 'N/A'}</span>
+                    <span>{(account.followersCount || 0).toLocaleString()} followers</span>
+                    <span>Relevance: {safeToFixed(account.relevanceScore, 2) || 'N/A'}</span>
                   </div>
+                  {account.addedAt && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Added: {new Date(account.addedAt).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
