@@ -7,7 +7,7 @@ import { env, connectDatabase, syncModels } from './config';
 import routes from './routes';
 import { setupSocketHandlers } from './services/socket';
 import { initializeSignalGenerator } from './services/signalGenerator';
-import { initializePriceMonitor } from './services/priceService';
+import priceService from './services/priceService';
 import notificationService from './services/notificationService';
 import { initializeAssociations } from './models';
 import logger from './utils/logger';
@@ -338,7 +338,7 @@ const initializeServicesAsync = async () => {
     initializeSignalGenerator();
     
     // Initialize price monitoring service (real data)
-    initializePriceMonitor();
+    priceService.initialize();
     
     // Initialize enhanced services
     initializeEnhancedServices();

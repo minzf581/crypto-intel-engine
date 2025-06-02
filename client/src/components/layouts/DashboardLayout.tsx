@@ -10,6 +10,7 @@ import {
   ArrowRightOnRectangleIcon,
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
+  ServerIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { useAssets } from '@/context/AssetContext';
@@ -127,6 +128,22 @@ const DashboardLayout = () => {
                               Settings
                             </NavLink>
                           </li>
+                          <li>
+                            <NavLink
+                              to="/system-status"
+                              className={({ isActive }) =>
+                                `group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold ${
+                                  isActive
+                                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                                    : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                                }`
+                              }
+                              onClick={() => setSidebarOpen(false)}
+                            >
+                              <ServerIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                              System Status
+                            </NavLink>
+                          </li>
                         </ul>
                       </li>
                       <li>
@@ -198,6 +215,21 @@ const DashboardLayout = () => {
                     >
                       <Cog6ToothIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
                       Settings
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to="/system-status"
+                      className={({ isActive }) =>
+                        `group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold ${
+                          isActive
+                            ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                            : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                        }`
+                      }
+                    >
+                      <ServerIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                      System Status
                     </NavLink>
                   </li>
                 </ul>

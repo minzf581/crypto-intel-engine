@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend API Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { margin: 5px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Frontend API Debug Tool</h1>
+    
+    <div>
+        <button onclick="testLogin()">1. Test Login</button>
+        <button onclick="testRecommendedAccounts()">2. Test Recommended Accounts</button>
+        <button onclick="testAddToMonitoring()">3. Test Add to Monitoring</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        let authToken = null;
+        
+        function addResult(message, isSuccess = true) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${isSuccess ? 'success' : 'error'}`;
+            resultDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+        
+        async function testLogin() {
+            try {
+                const response = await fetch('http://localhost:5001/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: `debug${Date.now()}@example.com`,
+                        password: 'password123',
+                        name: 'Debug User'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.data.token;
+                    addResult(`✅ Login successful! Token: ${authToken.substring(0, 20)}...`);
+                } else {
+                    addResult(`❌ Login failed: ${data.message}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ Login error: ${error.message}`, false);
+            }
+        }
+        
+        async function testRecommendedAccounts() {
+            if (!authToken) {
+                addResult('❌ Please login first!', false);
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/social-sentiment/recommended-accounts/BTC', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addResult(`✅ Found ${data.data.accounts.length} recommended accounts for BTC`);
+                    if (data.data.accounts.length > 0) {
+                        window.testAccount = data.data.accounts[0];
+                        addResult(`   First account: @${window.testAccount.twitterUsername} (ID: ${window.testAccount.id})`);
+                    }
+                } else {
+                    addResult(`❌ Failed to get recommended accounts: ${data.message}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ Recommended accounts error: ${error.message}`, false);
+            }
+        }
+        
+        async function testAddToMonitoring() {
+            if (!authToken) {
+                addResult('❌ Please login first!', false);
+                return;
+            }
+            
+            if (!window.testAccount) {
+                addResult('❌ Please get recommended accounts first!', false);
+                return;
+            }
+            
+            try {
+                const requestBody = {
+                    accountId: window.testAccount.id,
+                    coinSymbol: 'BTC'
+                };
+                
+                addResult(`📤 Sending request: ${JSON.stringify(requestBody)}`);
+                
+                const response = await fetch('http://localhost:5001/api/social-sentiment/add-recommended-account', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                addResult(`📥 Response status: ${response.status}`);
+                addResult(`📥 Response data: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.success) {
+                    addResult(`✅ Successfully added @${data.data.account.username} to monitoring!`);
+                } else {
+                    addResult(`❌ Failed to add to monitoring: ${data.message || data.error}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ Add to monitoring error: ${error.message}`, false);
+            }
+        }
+    </script>
+</body>
+</html> 

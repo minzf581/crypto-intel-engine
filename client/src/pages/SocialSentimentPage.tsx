@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAssets } from '@/context/AssetContext';
-import SocialSentimentDashboard from '@/components/SocialSentimentDashboard';
+import EnhancedSocialSentimentDashboard from '@/components/EnhancedSocialSentimentDashboard';
 import AccountCorrelationView from '@/components/AccountCorrelationView';
 import SentimentTrendChart from '@/components/SentimentTrendChart';
 import SentimentAlertsPanel from '@/components/SentimentAlertsPanel';
@@ -11,6 +11,8 @@ import {
   ArrowTrendingUpIcon,
   ExclamationTriangleIcon,
   CogIcon,
+  MagnifyingGlassIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
 type TabType = 'dashboard' | 'correlation' | 'trends' | 'alerts' | 'settings';
@@ -43,9 +45,9 @@ const SocialSentimentPage: React.FC = () => {
   const tabs = [
     {
       id: 'dashboard' as TabType,
-      name: 'Social Dashboard',
-      icon: ChartBarIcon,
-      description: 'Account search, monitoring setup, and analysis overview',
+      name: 'Enhanced Search',
+      icon: MagnifyingGlassIcon,
+      description: 'Advanced account search with pagination, filters, categories, and bulk import',
     },
     {
       id: 'correlation' as TabType,
@@ -64,6 +66,7 @@ const SocialSentimentPage: React.FC = () => {
       name: 'Sentiment Alerts',
       icon: ExclamationTriangleIcon,
       description: 'Real-time alerts for significant sentiment changes',
+      badge: newAlertsCount > 0 ? newAlertsCount : undefined,
     },
     {
       id: 'settings' as TabType,
@@ -77,7 +80,7 @@ const SocialSentimentPage: React.FC = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <SocialSentimentDashboard
+          <EnhancedSocialSentimentDashboard
             selectedCoin={selectedCoin}
             coinName={coinName}
           />
@@ -103,6 +106,7 @@ const SocialSentimentPage: React.FC = () => {
           <SentimentAlertsPanel
             coinSymbol={selectedCoin}
             coinName={coinName}
+            onAlertRead={() => setNewAlertsCount(0)}
           />
         );
       case 'settings':
@@ -115,7 +119,7 @@ const SocialSentimentPage: React.FC = () => {
   const renderSettingsTab = () => (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
       <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-        Social Sentiment Monitoring Settings
+        Enhanced Social Sentiment Settings
       </h3>
       
       <div className="space-y-6">
@@ -137,6 +141,9 @@ const SocialSentimentPage: React.FC = () => {
                 defaultValue="0.8"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Trigger critical alerts when sentiment exceeds this threshold
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -150,95 +157,141 @@ const SocialSentimentPage: React.FC = () => {
                 defaultValue="0.6"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Trigger warning alerts when sentiment exceeds this threshold
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Minimum Engagement
+                Volume Threshold
               </label>
               <input
                 type="number"
-                min="0"
-                step="100"
-                defaultValue="1000"
+                min="1"
+                step="1"
+                defaultValue="100"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Minimum number of posts required to trigger alerts
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Monitoring Frequency */}
+        {/* Search Preferences */}
         <div>
           <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
-            Monitoring Frequency
+            Search Preferences
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Post Check Interval (minutes)
+                Default Results Per Page
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                <option value="1">1 minute</option>
-                <option value="2" selected>2 minutes</option>
-                <option value="5">5 minutes</option>
-                <option value="10">10 minutes</option>
+              <select
+                defaultValue="20"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="10">10 results</option>
+                <option value="20">20 results</option>
+                <option value="50">50 results</option>
+                <option value="100">100 results</option>
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Max Accounts per Coin
+                Auto-save Search History
               </label>
-              <input
-                type="number"
-                min="5"
-                max="100"
-                defaultValue="20"
+              <select
+                defaultValue="enabled"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Monitoring Settings */}
+        <div>
+          <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+            Monitoring Settings
+          </h4>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Real-time Updates
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Enable real-time sentiment updates via WebSocket
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                defaultChecked
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Email Notifications
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Receive email alerts for critical sentiment changes
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                defaultChecked
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Browser Notifications
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Show browser notifications for alerts
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                defaultChecked
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
             </div>
           </div>
         </div>
 
-        {/* Notification Preferences */}
+        {/* Data Management */}
         <div>
           <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
-            Notification Preferences
+            Data Management
           </h4>
-          <div className="space-y-3">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                defaultChecked
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                Enable email notifications for critical alerts
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                defaultChecked
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                Enable browser push notifications
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                Enable SMS notifications for critical alerts
-              </span>
-            </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+              Export Search History
+            </button>
+            <button className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+              Clear Search History
+            </button>
+            <button className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+              Export Monitoring Data
+            </button>
+            <button className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+              Reset All Settings
+            </button>
           </div>
         </div>
 
         {/* Save Button */}
         <div className="flex justify-end">
-          <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
             Save Settings
           </button>
         </div>
@@ -253,16 +306,24 @@ const SocialSentimentPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Social Sentiment Analysis
+              Enhanced Social Sentiment Analysis
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Monitor and analyze social media sentiment for cryptocurrency markets
+              Advanced monitoring and analysis of social media sentiment with enhanced search capabilities
             </p>
           </div>
           
-          {/* Coin Selector */}
-          {selectedAssets.length > 0 && (
-            <div className="flex items-center space-x-4">
+          {/* Connection Status */}
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {connected ? 'Live Updates' : 'Disconnected'}
+              </span>
+            </div>
+            
+            {/* Coin Selector */}
+            {selectedAssets.length > 0 && (
               <div className="flex items-center space-x-2">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Analyzing:
@@ -285,8 +346,32 @@ const SocialSentimentPage: React.FC = () => {
                   ))}
                 </select>
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Enhanced Features Notice */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex items-start">
+          <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              Enhanced Features Available
+            </h4>
+            <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+              <p>This enhanced version includes:</p>
+              <ul className="list-disc list-inside mt-1 space-y-1">
+                <li>Paginated search results with up to 100 accounts per search</li>
+                <li>Advanced filtering by account categories and engagement metrics</li>
+                <li>Search history and saved searches for quick access</li>
+                <li>Popular searches and trending accounts discovery</li>
+                <li>Bulk import via CSV upload or text paste</li>
+                <li>Recent tweet previews with engagement metrics</li>
+                <li>Enhanced sentiment score explanations and tooltips</li>
+              </ul>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -298,7 +383,7 @@ const SocialSentimentPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
@@ -306,6 +391,11 @@ const SocialSentimentPage: React.FC = () => {
               >
                 <tab.icon className="h-5 w-5 mr-2" />
                 {tab.name}
+                {tab.badge && (
+                  <span className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300 py-0.5 px-2 rounded-full text-xs font-medium">
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             ))}
           </nav>

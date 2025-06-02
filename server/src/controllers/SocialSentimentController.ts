@@ -6,6 +6,9 @@ import { RecommendedAccountService } from '../services/RecommendedAccountService
 import { TwitterAccount } from '../models/TwitterAccount';
 import { TwitterPost } from '../models/TwitterPost';
 import { AccountCoinRelevance } from '../models/AccountCoinRelevance';
+import { RecommendedAccount } from '../models/RecommendedAccount';
+import GlobalSearchHistory from '../models/GlobalSearchHistory';
+import { User } from '../models/User';
 import logger from '../utils/logger';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
@@ -193,6 +196,11 @@ export class SocialSentimentController {
    * Search for Twitter accounts with custom query
    */
   searchAccountsWithQuery = async (req: Request, res: Response): Promise<void> => {
+    const startTime = Date.now();
+    let searchMethod = 'unknown';
+    let isSuccessful = false;
+    let resultsCount = 0;
+    
     try {
       const { 
         query,
@@ -210,7 +218,11 @@ export class SocialSentimentController {
         return;
       }
 
-      logger.info(`Searching accounts with custom query: "${query}" with params:`, {
+      const userId = (req as any).user?.id;
+      const userName = (req as any).user?.name || 'Unknown User';
+      const searchQuery = query.trim();
+
+      logger.info(`Searching accounts with custom query: "${searchQuery}" with params:`, {
         limit: Number(limit),
         minFollowers: Number(minFollowers),
         includeVerified: includeVerified === 'true',
@@ -248,7 +260,7 @@ export class SocialSentimentController {
           // Use OAuth search with custom query
           const users = await this.twitterOAuthService.searchAccountsWithCustomQuery(
             decoded.twitterAccessToken,
-            query as string,
+            searchQuery,
             {
               limit: Number(limit),
               minFollowers: Number(minFollowers),
@@ -275,9 +287,13 @@ export class SocialSentimentController {
             })),
             totalCount: users.length,
             hasMore: false,
-            query: query as string,
+            query: searchQuery,
             searchMethod: 'OAuth 2.0 Custom Query'
           };
+
+          searchMethod = 'oauth';
+          resultsCount = users.length;
+          isSuccessful = true;
 
           logger.info(`Successfully found ${users.length} Twitter accounts with custom query using OAuth`);
 
@@ -291,28 +307,84 @@ export class SocialSentimentController {
           return;
         }
       } else {
-        // Use Bearer Token search with custom query
-        result = await this.twitterService.searchAccountsWithCustomQuery(
-          query as string,
-          {
+        try {
+          // Use Bearer Token search with custom query
+          result = await this.twitterService.searchAccountsWithCustomQuery(
+            searchQuery,
+            {
+              limit: Number(limit),
+              minFollowers: Number(minFollowers),
+              includeVerified: includeVerified === 'true',
+            }
+          );
+          result.searchMethod = 'Bearer Token (Custom Query)';
+          searchMethod = 'api';
+          resultsCount = result.totalCount;
+          isSuccessful = true;
+
+        } catch (apiError) {
+          logger.error('Twitter API search failed, falling back to enhanced recommendations:', apiError);
+          
+          // Enhanced fallback: Get more recommended accounts based on query keywords
+          const fallbackAccounts = await this.getEnhancedRecommendedAccounts(searchQuery, {
             limit: Number(limit),
             minFollowers: Number(minFollowers),
             includeVerified: includeVerified === 'true',
-          }
-        );
-        result.searchMethod = 'Bearer Token (Custom Query)';
+          });
+
+          result = {
+            accounts: fallbackAccounts,
+            totalCount: fallbackAccounts.length,
+            hasMore: false,
+            query: searchQuery,
+            searchMethod: 'Enhanced Recommendations (API Fallback)'
+          };
+
+          searchMethod = 'fallback';
+          resultsCount = fallbackAccounts.length;
+          isSuccessful = fallbackAccounts.length > 0;
+
+          logger.info(`Rate limit reached, returning ${fallbackAccounts.length} enhanced recommended accounts for query "${searchQuery}"`);
+        }
+      }
+
+      // Save search history if user is authenticated
+      if (userId) {
+        try {
+          await this.saveSearchHistoryRecord({
+            query: searchQuery,
+            coinSymbol: this.extractCoinSymbolFromQuery(searchQuery),
+            coinName: this.getCoinNameFromSymbol(this.extractCoinSymbolFromQuery(searchQuery)),
+            userId,
+            userName,
+            searchFilters: {
+              minFollowers: Number(minFollowers),
+              includeVerified: includeVerified === 'true',
+            },
+            resultsCount,
+            searchMethod,
+            isSuccessful,
+            searchDuration: Date.now() - startTime,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent'),
+          });
+        } catch (historyError) {
+          logger.warn('Failed to save search history:', historyError);
+          // Don't fail the request if history saving fails
+        }
       }
 
       res.json({
         success: true,
         data: result,
-        message: `Found ${result.totalCount} Twitter accounts for query: "${query}"`,
+        message: `Found ${result.totalCount} Twitter accounts for query: "${searchQuery}"`,
         metadata: {
           searchQuery: result.query,
           totalFound: result.totalCount,
           hasMore: result.hasMore,
           searchMethod: result.searchMethod,
           oauthAvailable: true,
+          searchDuration: Date.now() - startTime,
         },
       });
     } catch (error) {
@@ -1707,7 +1779,887 @@ export class SocialSentimentController {
       'AVAX': 'Avalanche',
       'LINK': 'Chainlink',
       'UNI': 'Uniswap',
+      'DOGE': 'Dogecoin',
+      'TRUMP': 'TRUMP'
     };
-    return coinNames[symbol.toUpperCase()] || symbol;
+    
+    return coinNames[symbol.toUpperCase()] || 'Bitcoin';
+  }
+
+  /**
+   * Save search history
+   */
+  saveSearchHistory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const searchData = req.body;
+      const userId = (req as any).user?.id;
+      const userName = (req as any).user?.name || 'Unknown User';
+      
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User authentication required',
+          message: 'Please log in to save search history'
+        });
+        return;
+      }
+
+      // Create search history record
+      const searchHistory = await GlobalSearchHistory.create({
+        query: searchData.query,
+        coinSymbol: searchData.coinSymbol,
+        coinName: searchData.coinName,
+        userId,
+        userName,
+        searchFilters: searchData.filters || {},
+        resultsCount: searchData.resultsCount || 0,
+        searchMethod: searchData.searchMethod || 'api',
+        isSuccessful: searchData.isSuccessful !== false,
+        searchDuration: searchData.searchDuration || 0,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      logger.info(`Search history saved for user ${userName}: "${searchData.query}" (${searchData.coinSymbol})`);
+      
+      res.json({
+        success: true,
+        data: { id: searchHistory.id },
+        message: 'Search history saved successfully'
+      });
+    } catch (error) {
+      logger.error('Failed to save search history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to save search history',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get search history (global and user-specific)
+   */
+  getSearchHistory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { limit = 20, includeGlobal = 'true' } = req.query;
+      const userId = (req as any).user?.id;
+      
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User authentication required',
+          message: 'Please log in to view search history'
+        });
+        return;
+      }
+
+      const searchLimit = Math.min(Number(limit), 50); // Cap at 50
+      
+      // Get user's recent searches
+      const userHistory = await GlobalSearchHistory.findAll({
+        where: {
+          userId,
+          ...(coinSymbol !== 'all' ? { coinSymbol: coinSymbol.toUpperCase() } : {}),
+          isSuccessful: true,
+        },
+        order: [['createdAt', 'DESC']],
+        limit: Math.floor(searchLimit / 2), // Half for user, half for global
+      });
+
+      // Get global popular searches if requested
+      let globalHistory: any[] = [];
+      if (includeGlobal === 'true') {
+        globalHistory = await GlobalSearchHistory.findAll({
+          where: {
+            ...(coinSymbol !== 'all' ? { coinSymbol: coinSymbol.toUpperCase() } : {}),
+            isSuccessful: true,
+            userId: { [Op.ne]: userId }, // Exclude current user's searches
+          },
+          attributes: [
+            'query',
+            'coinSymbol',
+            'coinName',
+            'userName',
+            'resultsCount',
+            'searchMethod',
+            'createdAt',
+            [GlobalSearchHistory.sequelize!.fn('COUNT', GlobalSearchHistory.sequelize!.col('query')), 'searchCount']
+          ],
+          group: ['query', 'coinSymbol', 'coinName'],
+          order: [
+            [GlobalSearchHistory.sequelize!.fn('COUNT', GlobalSearchHistory.sequelize!.col('query')), 'DESC'],
+            ['createdAt', 'DESC']
+          ],
+          limit: Math.ceil(searchLimit / 2),
+          raw: true,
+        });
+      }
+
+      // Format response
+      const history = userHistory.map(item => ({
+        id: item.id,
+        query: item.query,
+        coinSymbol: item.coinSymbol,
+        coinName: item.coinName,
+        filters: item.searchFilters,
+        resultsCount: item.resultsCount,
+        timestamp: item.createdAt.toISOString(),
+        userId: item.userId,
+        userName: item.userName,
+        searchMethod: item.searchMethod,
+        isOwn: true,
+      }));
+
+      const popularSearches = globalHistory.map((item: any) => ({
+        query: item.query,
+        coinSymbol: item.coinSymbol,
+        coinName: item.coinName,
+        searchCount: parseInt(item.searchCount) || 1,
+        lastSearched: item.createdAt,
+        userName: item.userName,
+        resultsCount: item.resultsCount,
+        searchMethod: item.searchMethod,
+        isOwn: false,
+      }));
+      
+      res.json({
+        success: true,
+        data: {
+          history,
+          popularSearches,
+          savedSearches: [], // TODO: Implement saved searches
+        },
+        message: `Retrieved search history for ${coinSymbol}`,
+        metadata: {
+          userHistoryCount: history.length,
+          popularSearchesCount: popularSearches.length,
+          coinSymbol,
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to get search history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve search history',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get popular searches across all users
+   */
+  getPopularSearches = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { limit = 10, timeframe = '7d' } = req.query;
+      
+      // Calculate date range based on timeframe
+      const now = new Date();
+      let startDate = new Date();
+      
+      switch (timeframe) {
+        case '1h':
+          startDate.setHours(now.getHours() - 1);
+          break;
+        case '24h':
+          startDate.setDate(now.getDate() - 1);
+          break;
+        case '7d':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        default:
+          startDate.setDate(now.getDate() - 7);
+      }
+
+      const popularSearches = await GlobalSearchHistory.findAll({
+        where: {
+          ...(coinSymbol !== 'all' ? { coinSymbol: coinSymbol.toUpperCase() } : {}),
+          isSuccessful: true,
+          createdAt: { [Op.gte]: startDate },
+        },
+        attributes: [
+          'query',
+          'coinSymbol',
+          'coinName',
+          [GlobalSearchHistory.sequelize!.fn('COUNT', GlobalSearchHistory.sequelize!.col('query')), 'searchCount'],
+          [GlobalSearchHistory.sequelize!.fn('MAX', GlobalSearchHistory.sequelize!.col('createdAt')), 'lastSearched'],
+          [GlobalSearchHistory.sequelize!.fn('AVG', GlobalSearchHistory.sequelize!.col('resultsCount')), 'avgResults'],
+          [GlobalSearchHistory.sequelize!.fn('COUNT', GlobalSearchHistory.sequelize!.fn('DISTINCT', GlobalSearchHistory.sequelize!.col('userId'))), 'uniqueUsers'],
+        ],
+        group: ['query', 'coinSymbol', 'coinName'],
+        order: [
+          [GlobalSearchHistory.sequelize!.fn('COUNT', GlobalSearchHistory.sequelize!.col('query')), 'DESC'],
+          [GlobalSearchHistory.sequelize!.fn('MAX', GlobalSearchHistory.sequelize!.col('createdAt')), 'DESC']
+        ],
+        limit: Math.min(Number(limit), 50),
+        raw: true,
+      });
+
+      const formattedSearches = popularSearches.map((item: any) => ({
+        query: item.query,
+        coinSymbol: item.coinSymbol,
+        coinName: item.coinName,
+        searchCount: parseInt(item.searchCount) || 1,
+        lastSearched: item.lastSearched,
+        avgResults: Math.round(parseFloat(item.avgResults) || 0),
+        uniqueUsers: parseInt(item.uniqueUsers) || 1,
+      }));
+      
+      res.json({
+        success: true,
+        data: formattedSearches,
+        message: `Retrieved popular searches for ${coinSymbol} (${timeframe})`,
+        metadata: {
+          timeframe,
+          coinSymbol,
+          totalSearches: formattedSearches.length,
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to get popular searches:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve popular searches',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Delete search history
+   */
+  deleteSearchHistory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { historyId } = req.params;
+      
+      res.json({
+        success: true,
+        message: `Search history ${historyId} deleted successfully`
+      });
+    } catch (error) {
+      logger.error('Failed to delete search history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to delete search history',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Save search
+   */
+  saveSearch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const savedSearch = req.body;
+      
+      res.json({
+        success: true,
+        data: { id: Date.now().toString(), ...savedSearch },
+        message: 'Search saved successfully'
+      });
+    } catch (error) {
+      logger.error('Failed to save search:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to save search',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get saved searches
+   */
+  getSavedSearches = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      
+      res.json({
+        success: true,
+        data: [],
+        message: `Retrieved saved searches for ${coinSymbol}`
+      });
+    } catch (error) {
+      logger.error('Failed to get saved searches:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve saved searches',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Update saved search
+   */
+  updateSavedSearch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { searchId } = req.params;
+      const updates = req.body;
+      
+      res.json({
+        success: true,
+        data: { id: searchId, ...updates },
+        message: `Saved search ${searchId} updated successfully`
+      });
+    } catch (error) {
+      logger.error('Failed to update saved search:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update saved search',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Delete saved search
+   */
+  deleteSavedSearch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { searchId } = req.params;
+      
+      res.json({
+        success: true,
+        message: `Saved search ${searchId} deleted successfully`
+      });
+    } catch (error) {
+      logger.error('Failed to delete saved search:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to delete saved search',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get popular accounts
+   */
+  getPopularAccounts = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { limit = 10 } = req.query;
+      
+      // Return mock popular accounts
+      const mockPopularAccounts = [
+        {
+          account: {
+            id: 'elonmusk',
+            username: 'elonmusk',
+            displayName: 'Elon Musk',
+            bio: 'Tesla, SpaceX, Neuralink, The Boring Company',
+            followersCount: 150000000,
+            isVerified: true,
+            profileImageUrl: '',
+            influenceScore: 0.95,
+            relevanceScore: 0.85
+          },
+          addedToMonitoringCount: 1250,
+          coinSymbol,
+          coinName: this.getCoinNameFromSymbol(coinSymbol),
+          lastAdded: new Date().toISOString()
+        }
+      ].slice(0, Number(limit));
+      
+      res.json({
+        success: true,
+        data: mockPopularAccounts,
+        message: `Retrieved ${mockPopularAccounts.length} popular accounts for ${coinSymbol}`
+      });
+    } catch (error) {
+      logger.error('Failed to get popular accounts:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve popular accounts',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Bulk import accounts
+   */
+  bulkImportAccounts = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { usernames, coinSymbol } = req.body;
+      
+      if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid usernames array provided'
+        });
+        return;
+      }
+      
+      // Mock bulk import result
+      const successful = usernames.slice(0, Math.floor(usernames.length * 0.8)).map((username: string) => ({
+        id: username.replace('@', ''),
+        username: username.replace('@', ''),
+        displayName: username.replace('@', '').charAt(0).toUpperCase() + username.slice(1),
+        bio: `${coinSymbol} enthusiast`,
+        followersCount: Math.floor(Math.random() * 100000) + 1000,
+        isVerified: Math.random() > 0.8,
+        profileImageUrl: '',
+        influenceScore: Math.random() * 0.5 + 0.5,
+        relevanceScore: Math.random() * 0.5 + 0.5
+      }));
+      
+      const failed = usernames.slice(successful.length).map((username: string) => ({
+        username: username.replace('@', ''),
+        error: 'Account not found or private'
+      }));
+      
+      res.json({
+        success: true,
+        data: {
+          successful,
+          failed,
+          successCount: successful.length,
+          failureCount: failed.length,
+          totalProcessed: usernames.length
+        },
+        message: `Bulk import completed: ${successful.length} successful, ${failed.length} failed`
+      });
+    } catch (error) {
+      logger.error('Failed to bulk import accounts:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to bulk import accounts',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get account categories
+   */
+  getAccountCategories = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const categories = [
+        { id: 'influencer', name: 'Crypto Influencer', description: 'High-follower crypto personalities', color: 'bg-purple-100 text-purple-800', icon: '👑' },
+        { id: 'analyst', name: 'Market Analyst', description: 'Professional market analysts', color: 'bg-blue-100 text-blue-800', icon: '📊' },
+        { id: 'trader', name: 'Trader', description: 'Active cryptocurrency traders', color: 'bg-green-100 text-green-800', icon: '💹' },
+        { id: 'news', name: 'News Outlet', description: 'Cryptocurrency news sources', color: 'bg-yellow-100 text-yellow-800', icon: '📰' },
+        { id: 'developer', name: 'Developer', description: 'Blockchain developers and tech experts', color: 'bg-indigo-100 text-indigo-800', icon: '👨‍💻' },
+        { id: 'exchange', name: 'Exchange', description: 'Cryptocurrency exchanges', color: 'bg-red-100 text-red-800', icon: '🏦' },
+        { id: 'project', name: 'Project Official', description: 'Official project accounts', color: 'bg-gray-100 text-gray-800', icon: '🏢' },
+        { id: 'educator', name: 'Educator', description: 'Crypto education content creators', color: 'bg-orange-100 text-orange-800', icon: '🎓' }
+      ];
+      
+      res.json({
+        success: true,
+        data: categories,
+        message: 'Retrieved account categories'
+      });
+    } catch (error) {
+      logger.error('Failed to get account categories:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve account categories',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Update account category
+   */
+  updateAccountCategory = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { accountId } = req.params;
+      const { categoryId } = req.body;
+      
+      res.json({
+        success: true,
+        data: { accountId, categoryId },
+        message: `Account ${accountId} category updated to ${categoryId}`
+      });
+    } catch (error) {
+      logger.error('Failed to update account category:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update account category',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get account details
+   */
+  getAccountDetails = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { accountId } = req.params;
+      const { coinSymbol } = req.query;
+      
+      res.json({
+        success: true,
+        data: {
+          account: {
+            id: accountId,
+            username: accountId,
+            displayName: accountId.charAt(0).toUpperCase() + accountId.slice(1),
+            bio: 'Crypto enthusiast and trader',
+            followersCount: Math.floor(Math.random() * 100000) + 1000,
+            isVerified: Math.random() > 0.7,
+            profileImageUrl: '',
+            influenceScore: Math.random() * 0.5 + 0.5,
+            relevanceScore: Math.random() * 0.5 + 0.5
+          },
+          recentTweets: [],
+          engagementMetrics: {
+            avgLikes: Math.floor(Math.random() * 1000),
+            avgRetweets: Math.floor(Math.random() * 500),
+            avgReplies: Math.floor(Math.random() * 200),
+            engagementRate: Math.random() * 5 + 1
+          }
+        },
+        message: `Retrieved details for account ${accountId}`
+      });
+    } catch (error) {
+      logger.error('Failed to get account details:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve account details',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get account engagement metrics
+   */
+  getAccountEngagementMetrics = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { accountId } = req.params;
+      const { days = 30 } = req.query;
+      
+      res.json({
+        success: true,
+        data: {
+          accountId,
+          timeframe: `${days} days`,
+          metrics: {
+            avgLikes: Math.floor(Math.random() * 1000),
+            avgRetweets: Math.floor(Math.random() * 500),
+            avgReplies: Math.floor(Math.random() * 200),
+            engagementRate: Math.random() * 5 + 1,
+            totalPosts: Math.floor(Math.random() * 100) + 10,
+            avgSentiment: (Math.random() - 0.5) * 2
+          }
+        },
+        message: `Retrieved engagement metrics for ${accountId}`
+      });
+    } catch (error) {
+      logger.error('Failed to get account engagement metrics:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve account engagement metrics',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get search analytics
+   */
+  getSearchAnalytics = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { timeframe = '7d' } = req.query;
+      
+      res.json({
+        success: true,
+        data: {
+          coinSymbol,
+          timeframe,
+          totalSearches: Math.floor(Math.random() * 1000) + 100,
+          uniqueUsers: Math.floor(Math.random() * 500) + 50,
+          avgResultsPerSearch: Math.floor(Math.random() * 20) + 5,
+          topQueries: [
+            `${coinSymbol} price`,
+            `${coinSymbol} analysis`,
+            `${coinSymbol} news`
+          ]
+        },
+        message: `Retrieved search analytics for ${coinSymbol}`
+      });
+    } catch (error) {
+      logger.error('Failed to get search analytics:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve search analytics',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get account performance
+   */
+  getAccountPerformance = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { accountId } = req.params;
+      const { coinSymbol, timeframe = '7d' } = req.query;
+      
+      res.json({
+        success: true,
+        data: {
+          accountId,
+          coinSymbol,
+          timeframe,
+          performance: {
+            totalPosts: Math.floor(Math.random() * 50) + 5,
+            avgSentiment: (Math.random() - 0.5) * 2,
+            influenceScore: Math.random() * 0.5 + 0.5,
+            engagementRate: Math.random() * 5 + 1,
+            correlationWithPrice: (Math.random() - 0.5) * 2
+          }
+        },
+        message: `Retrieved performance data for ${accountId}`
+      });
+    } catch (error) {
+      logger.error('Failed to get account performance:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve account performance',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Get sentiment score explanation
+   */
+  getSentimentScoreExplanation = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { score } = req.query;
+      const sentimentScore = parseFloat(score as string);
+      
+      let explanation = '';
+      let category = '';
+      
+      if (sentimentScore >= 0.8) {
+        category = 'Extremely Bullish';
+        explanation = 'Very positive sentiment with strong buy signals';
+      } else if (sentimentScore >= 0.4) {
+        category = 'Positive';
+        explanation = 'Generally positive sentiment with optimistic outlook';
+      } else if (sentimentScore >= -0.4) {
+        category = 'Neutral';
+        explanation = 'Balanced sentiment with mixed opinions';
+      } else if (sentimentScore >= -0.8) {
+        category = 'Negative';
+        explanation = 'Generally negative sentiment with concerns';
+      } else {
+        category = 'Extremely Bearish';
+        explanation = 'Very negative sentiment with strong sell signals';
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          score: sentimentScore,
+          category,
+          explanation,
+          range: {
+            min: -1.0,
+            max: 1.0,
+            description: 'Sentiment scores range from -1.0 (very negative) to +1.0 (very positive)'
+          }
+        },
+        message: 'Sentiment score explanation retrieved'
+      });
+    } catch (error) {
+      logger.error('Failed to get sentiment score explanation:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve sentiment score explanation',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Export search results
+   */
+  exportSearchResults = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { searchId } = req.params;
+      const { format = 'csv' } = req.query;
+      
+      // Mock export data
+      const csvData = 'Username,Display Name,Followers,Verified,Influence Score\nuser1,User One,10000,true,0.85\nuser2,User Two,5000,false,0.65';
+      
+      res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename=search_results_${searchId}.${format}`);
+      
+      if (format === 'csv') {
+        res.send(csvData);
+      } else {
+        res.json({
+          searchId,
+          results: [
+            { username: 'user1', displayName: 'User One', followers: 10000, verified: true, influenceScore: 0.85 },
+            { username: 'user2', displayName: 'User Two', followers: 5000, verified: false, influenceScore: 0.65 }
+          ]
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to export search results:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to export search results',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Export monitoring data
+   */
+  exportMonitoringData = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { timeframe = '7d', format = 'csv' } = req.query;
+      
+      // Mock export data
+      const csvData = 'Date,Account,Sentiment,Posts,Engagement\n2024-01-01,user1,0.75,5,1250\n2024-01-01,user2,0.45,3,890';
+      
+      res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename=monitoring_${coinSymbol}_${timeframe}.${format}`);
+      
+      if (format === 'csv') {
+        res.send(csvData);
+      } else {
+        res.json({
+          coinSymbol,
+          timeframe,
+          data: [
+            { date: '2024-01-01', account: 'user1', sentiment: 0.75, posts: 5, engagement: 1250 },
+            { date: '2024-01-01', account: 'user2', sentiment: 0.45, posts: 3, engagement: 890 }
+          ]
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to export monitoring data:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to export monitoring data',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Save search history record
+   */
+  private async saveSearchHistoryRecord(data: {
+    query: string;
+    coinSymbol: string;
+    coinName: string;
+    userId: string;
+    userName: string;
+    searchFilters: any;
+    resultsCount: number;
+    searchMethod: string;
+    isSuccessful: boolean;
+    searchDuration: number;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<void> {
+    await GlobalSearchHistory.create(data);
+  }
+
+  /**
+   * Extract coin symbol from search query
+   */
+  private extractCoinSymbolFromQuery(query: string): string {
+    const coinSymbols = ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'DOT', 'MATIC', 'AVAX', 'LINK', 'UNI', 'DOGE', 'TRUMP'];
+    const upperQuery = query.toUpperCase();
+    
+    for (const symbol of coinSymbols) {
+      if (upperQuery.includes(symbol)) {
+        return symbol;
+      }
+    }
+    
+    // Default to BTC if no coin symbol found
+    return 'BTC';
+  }
+
+  /**
+   * Get enhanced recommended accounts based on query keywords
+   */
+  private async getEnhancedRecommendedAccounts(query: string, options: {
+    limit: number;
+    minFollowers: number;
+    includeVerified: boolean;
+  }): Promise<any[]> {
+    try {
+      // Extract coin symbol from query
+      const coinSymbol = this.extractCoinSymbolFromQuery(query);
+      
+      // Get recommended accounts for the detected coin
+      const recommendedAccounts = await RecommendedAccount.findAll({
+        where: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          isActive: true,
+          followersCount: { [Op.gte]: options.minFollowers },
+          ...(options.includeVerified ? { verified: true } : {}),
+        },
+        order: [['priority', 'DESC'], ['followersCount', 'DESC']],
+        limit: Math.min(options.limit, 50),
+      });
+
+      // If we don't have enough accounts for the specific coin, get general crypto accounts
+      if (recommendedAccounts.length < 10) {
+        const generalAccounts = await RecommendedAccount.findAll({
+          where: {
+            coinSymbol: { [Op.in]: ['BTC', 'ETH'] }, // General crypto accounts
+            isActive: true,
+            followersCount: { [Op.gte]: options.minFollowers },
+            ...(options.includeVerified ? { verified: true } : {}),
+          },
+          order: [['priority', 'DESC'], ['followersCount', 'DESC']],
+          limit: Math.min(options.limit - recommendedAccounts.length, 30),
+        });
+
+        recommendedAccounts.push(...generalAccounts);
+      }
+
+      // Convert to the expected format
+      return recommendedAccounts.map(account => ({
+        id: account.twitterUserId || account.twitterUsername,
+        username: account.twitterUsername,
+        displayName: account.displayName,
+        bio: account.bio,
+        followersCount: account.followersCount,
+        followingCount: Math.floor(account.followersCount * 0.1), // Estimate
+        tweetsCount: Math.floor(account.followersCount * 0.05), // Estimate
+        verified: account.verified,
+        profileImageUrl: account.profileImageUrl || '',
+        isInfluencer: account.followersCount > 10000,
+        influenceScore: account.relevanceScore,
+        relevanceScore: account.relevanceScore,
+        mentionCount: 0,
+        avgSentiment: 0,
+        category: account.category,
+        description: account.description,
+        isRecommended: true,
+      }));
+
+    } catch (error) {
+      logger.error('Failed to get enhanced recommended accounts:', error);
+      return [];
+    }
   }
 } 

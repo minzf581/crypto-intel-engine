@@ -4,6 +4,8 @@ import logger from '../utils/logger';
 import notificationService from './notificationService';
 import { calculateStrength } from '../utils/signalUtils';
 import coinGeckoService from './coinGeckoService';
+import rateLimitService from './rateLimitService';
+import cacheService, { CacheService } from './cacheService';
 
 // CoinGecko API configuration
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
@@ -59,7 +61,7 @@ class PriceService {
   }
 
   /**
-   * Get cryptocurrency real-time prices
+   * Get cryptocurrency real-time prices with rate limiting and caching
    */
   async fetchRealPrices(): Promise<PriceData[]> {
     try {
@@ -94,47 +96,110 @@ class PriceService {
         return [];
       }
 
+      // Generate cache key
+      const cacheKey = CacheService.generateCoinGeckoKey('price', {
+        ids: coinIds,
+        vs_currencies: 'usd',
+        include_24hr_change: true,
+        include_last_updated_at: true
+      });
+
+      // Try to get from cache first
+      const cachedData = cacheService.get<any>(cacheKey);
+      if (cachedData) {
+        logger.info(`Using cached price data for ${assets.length} assets`);
+        return this.processPriceResponse(cachedData, assets);
+      }
+
       logger.info(`Fetching price data for: ${coinIds}`);
 
-      const response = await axios.get(
-        `${COINGECKO_API_BASE}/simple/price`,
-        {
-          params: {
-            ids: coinIds,
-            vs_currencies: 'usd',
-            include_24hr_change: true,
-            include_last_updated_at: true
-          },
-          timeout: 10000
-        }
+      // Use rate limiting service to make the API call
+      const response = await rateLimitService.executeWithRateLimit(
+        'coingecko',
+        async () => {
+          return await axios.get(
+            `${COINGECKO_API_BASE}/simple/price`,
+            {
+              params: {
+                ids: coinIds,
+                vs_currencies: 'usd',
+                include_24hr_change: true,
+                include_last_updated_at: true
+              },
+              timeout: 10000
+            }
+          );
+        },
+        3 // max retries
       );
 
-      // Convert response data to PriceData array
-      const priceData: PriceData[] = assets.map(asset => {
-        const coinId = asset.coingeckoId;
-        const coinData = response.data[coinId!];
+      // Cache the response
+      cacheService.set(cacheKey, response.data);
 
-        if (!coinData) {
-          logger.warn(`Price data not found for ${asset.symbol} (CoinGecko ID: ${coinId})`);
-          return null;
-        }
-
-        return {
-          symbol: asset.symbol,
-          currentPrice: coinData.usd,
-          priceChange24h: coinData.usd_24h_change || 0,
-          priceChangePercentage24h: coinData.usd_24h_change || 0,
-          lastUpdated: new Date(coinData.last_updated_at * 1000)
-        };
-      }).filter(Boolean) as PriceData[];
-
-      logger.info(`Successfully fetched price data for ${priceData.length} cryptocurrencies`);
-      return priceData;
+      // Process and return the data
+      return this.processPriceResponse(response.data, assets);
 
     } catch (error: any) {
       logger.error('Error fetching price data from CoinGecko:', error);
+      
+      // Check if it's a rate limit error and provide helpful message
+      if (error.message.includes('Rate limit exceeded') || error.message.includes('429')) {
+        logger.warn('CoinGecko API rate limit exceeded. Using cached data if available or reducing request frequency.');
+        
+        // Try to return any cached data as fallback
+        const fallbackData = this.getFallbackPriceData();
+        if (fallbackData.length > 0) {
+          logger.info(`Returning ${fallbackData.length} cached price records as fallback`);
+          return fallbackData;
+        }
+      }
+      
       return [];
     }
+  }
+
+  /**
+   * Process price response data
+   */
+  private processPriceResponse(responseData: any, assets: any[]): PriceData[] {
+    const priceData: PriceData[] = assets.map(asset => {
+      const coinId = asset.coingeckoId;
+      const coinData = responseData[coinId!];
+
+      if (!coinData) {
+        logger.warn(`Price data not found for ${asset.symbol} (CoinGecko ID: ${coinId})`);
+        return null;
+      }
+
+      return {
+        symbol: asset.symbol,
+        currentPrice: coinData.usd,
+        priceChange24h: coinData.usd_24h_change || 0,
+        priceChangePercentage24h: coinData.usd_24h_change || 0,
+        lastUpdated: new Date(coinData.last_updated_at * 1000)
+      };
+    }).filter(Boolean) as PriceData[];
+
+    logger.info(`Successfully processed price data for ${priceData.length} cryptocurrencies`);
+    return priceData;
+  }
+
+  /**
+   * Get fallback price data from cache or previous history
+   */
+  private getFallbackPriceData(): PriceData[] {
+    const fallbackData: PriceData[] = [];
+    
+    // Try to get data from price history
+    for (const [symbol, data] of Object.entries(priceHistory)) {
+      // Only use data that's less than 10 minutes old
+      const dataAge = Date.now() - data.lastUpdated.getTime();
+      if (dataAge < 10 * 60 * 1000) {
+        fallbackData.push(data);
+      }
+    }
+    
+    return fallbackData;
   }
 
   /**
@@ -224,7 +289,7 @@ class PriceService {
       return;
     }
 
-    logger.info('Starting real-time price monitoring service');
+    logger.info('Starting real-time price monitoring service with rate limiting');
 
     // Execute immediately
     this.monitorPrices();
@@ -233,6 +298,11 @@ class PriceService {
     this.intervalId = setInterval(() => {
       this.monitorPrices();
     }, PRICE_UPDATE_INTERVAL);
+
+    // Set up cache cleanup interval
+    setInterval(() => {
+      cacheService.cleanupExpired();
+    }, 5 * 60 * 1000); // Clean up every 5 minutes
   }
 
   /**
@@ -252,6 +322,11 @@ class PriceService {
   private async monitorPrices(): Promise<void> {
     try {
       logger.info('Starting price monitoring check...');
+      
+      // Check rate limit status
+      const rateLimitStatus = rateLimitService.getRateLimitStatus('coingecko');
+      logger.debug(`CoinGecko rate limit status: ${rateLimitStatus.requestsInWindow}/${rateLimitStatus.maxRequests} requests in window`);
+      
       const priceData = await this.fetchRealPrices();
       
       if (priceData.length > 0) {
@@ -273,24 +348,42 @@ class PriceService {
   }
 
   /**
+   * Get cache and rate limit statistics
+   */
+  getServiceStats(): {
+    cache: any;
+    rateLimit: any;
+  } {
+    return {
+      cache: cacheService.getStats(),
+      rateLimit: rateLimitService.getRateLimitStatus('coingecko')
+    };
+  }
+
+  /**
+   * Initialize price monitoring service
+   */
+  initialize(): void {
+    logger.info('Initializing real-time price monitoring service');
+    this.startPriceMonitoring();
+  }
+
+  /**
    * Manually trigger price check (for testing)
    */
   async triggerPriceCheck(): Promise<void> {
     await this.monitorPrices();
   }
-
-
 }
 
-// Export singleton
-const priceService = new PriceService();
+export default new PriceService();
 
 /**
  * Initialize price monitoring service
  */
 export const initializePriceMonitor = () => {
   logger.info('Initializing real-time price monitoring service');
+  const priceService = new PriceService();
   priceService.startPriceMonitoring();
-};
-
-export default priceService; 
+  return priceService;
+}; 

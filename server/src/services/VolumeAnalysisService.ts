@@ -3,6 +3,8 @@ import logger from '../utils/logger';
 import axios from 'axios';
 import { Op } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimitService from './rateLimitService';
+import cacheService, { CacheService } from './cacheService';
 
 export class VolumeAnalysisService {
   private static instance: VolumeAnalysisService;
@@ -15,11 +17,11 @@ export class VolumeAnalysisService {
   }
 
   /**
-   * Analyze volume for a specific symbol
+   * Analyze volume for a specific symbol with rate limiting and caching
    */
   async analyzeVolume(symbol: string): Promise<VolumeAnalysis | null> {
     try {
-      // Fetch volume data from CoinGecko
+      // Fetch volume data from CoinGecko with rate limiting
       const volumeData = await this.fetchVolumeData(symbol);
       if (!volumeData) {
         logger.warn(`No volume data available for ${symbol}`);
@@ -51,64 +53,67 @@ export class VolumeAnalysisService {
   }
 
   /**
-   * Analyze volume for multiple symbols
+   * Analyze volume for multiple symbols with improved rate limiting
    */
   async analyzeMultipleSymbols(symbols: string[]): Promise<VolumeAnalysis[]> {
     const results: VolumeAnalysis[] = [];
     
-    for (const symbol of symbols) {
-      const analysis = await this.analyzeVolume(symbol);
-      if (analysis) {
-        results.push(analysis);
-      }
+    logger.info(`Starting volume analysis for ${symbols.length} symbols with rate limiting`);
+    
+    for (let i = 0; i < symbols.length; i++) {
+      const symbol = symbols[i];
       
-      // Add delay to avoid rate limiting
-      await this.delay(200);
+      try {
+        // Check rate limit status before each request
+        const rateLimitStatus = rateLimitService.getRateLimitStatus('coingecko');
+        logger.debug(`Processing ${symbol} (${i + 1}/${symbols.length}). Rate limit: ${rateLimitStatus.requestsInWindow}/${rateLimitStatus.maxRequests}`);
+        
+        const analysis = await this.analyzeVolume(symbol);
+        if (analysis) {
+          results.push(analysis);
+        }
+        
+        // Add progressive delay to avoid overwhelming the API
+        const delay = Math.min(500 + (i * 100), 2000); // Increase delay progressively, max 2 seconds
+        await this.delay(delay);
+        
+      } catch (error) {
+        logger.error(`Failed to analyze volume for ${symbol}:`, error);
+        
+        // If rate limit error, wait longer before continuing
+        if (error instanceof Error && error.message.includes('rate limit')) {
+          logger.warn(`Rate limit hit during volume analysis, waiting 60 seconds...`);
+          await this.delay(60000);
+        }
+      }
     }
 
+    logger.info(`Volume analysis completed for ${results.length}/${symbols.length} symbols`);
     return results;
   }
 
   /**
-   * Get volume analysis history for a symbol
+   * Get volume history for a symbol
    */
-  async getVolumeHistory(
-    symbol: string,
-    days: number = 7
-  ): Promise<VolumeAnalysis[]> {
-    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    
-    return await VolumeAnalysis.findAll({
-      where: {
-        symbol,
-        timestamp: {
-          [Op.gte]: startDate,
+  async getVolumeHistory(symbol: string, days: number): Promise<VolumeAnalysis[]> {
+    try {
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      
+      const history = await VolumeAnalysis.findAll({
+        where: {
+          symbol,
+          timestamp: {
+            [Op.gte]: startDate,
+          },
         },
-      },
-      order: [['timestamp', 'ASC']],
-    });
-  }
+        order: [['timestamp', 'DESC']],
+      });
 
-  /**
-   * Get symbols with unusual volume activity
-   */
-  async getUnusualVolumeSymbols(
-    timeframe: number = 24
-  ): Promise<VolumeAnalysis[]> {
-    const startDate = new Date(Date.now() - timeframe * 60 * 60 * 1000);
-    
-    return await VolumeAnalysis.findAll({
-      where: {
-        timestamp: {
-          [Op.gte]: startDate,
-        },
-        [Op.or]: [
-          { unusualVolumeDetected: true },
-          { volumeSpike: true },
-        ],
-      },
-      order: [['timestamp', 'DESC']],
-    });
+      return history;
+    } catch (error) {
+      logger.error(`Failed to get volume history for ${symbol}:`, error);
+      return [];
+    }
   }
 
   /**
@@ -251,26 +256,50 @@ export class VolumeAnalysisService {
   }
 
   /**
-   * Private methods
+   * Fetch volume data with rate limiting and caching
    */
   private async fetchVolumeData(symbol: string): Promise<any> {
     try {
-      // Get coin ID from symbol
+      // Get coin ID from symbol with caching
       const coinId = await this.getCoinId(symbol);
       if (!coinId) return null;
 
-      // Fetch market data including volume
-      const response = await axios.get(
-        `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`,
-        {
-          params: {
-            vs_currency: 'usd',
-            days: 30,
-            interval: 'daily',
-          },
-          timeout: 10000,
-        }
+      // Generate cache key for volume data
+      const cacheKey = CacheService.generateCoinGeckoKey('market_chart', {
+        coinId,
+        vs_currency: 'usd',
+        days: 30,
+        interval: 'daily'
+      });
+
+      // Try to get from cache first
+      const cachedData = cacheService.get<any>(cacheKey);
+      if (cachedData) {
+        logger.debug(`Using cached volume data for ${symbol}`);
+        return cachedData;
+      }
+
+      // Fetch market data including volume with rate limiting
+      const response = await rateLimitService.executeWithRateLimit(
+        'coingecko',
+        async () => {
+          return await axios.get(
+            `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`,
+            {
+              params: {
+                vs_currency: 'usd',
+                days: 30,
+                interval: 'daily',
+              },
+              timeout: 10000,
+            }
+          );
+        },
+        3 // max retries
       );
+
+      // Cache the response
+      cacheService.set(cacheKey, response.data);
 
       return response.data;
     } catch (error) {
@@ -279,14 +308,37 @@ export class VolumeAnalysisService {
     }
   }
 
+  /**
+   * Get coin ID with caching
+   */
   private async getCoinId(symbol: string): Promise<string | null> {
     try {
-      const response = await axios.get(
-        'https://api.coingecko.com/api/v3/coins/list',
-        { timeout: 10000 }
-      );
+      // Generate cache key for coin list
+      const cacheKey = 'coingecko:coinlist:all';
 
-      const coin = response.data.find((c: any) => 
+      // Try to get from cache first
+      let coinList = cacheService.get<any[]>(cacheKey);
+      
+      if (!coinList) {
+        // Fetch coin list with rate limiting
+        const response = await rateLimitService.executeWithRateLimit(
+          'coingecko',
+          async () => {
+            return await axios.get(
+              'https://api.coingecko.com/api/v3/coins/list',
+              { timeout: 10000 }
+            );
+          },
+          3 // max retries
+        );
+
+        coinList = response.data;
+        
+        // Cache for 24 hours
+        cacheService.set(cacheKey, coinList, 24 * 60 * 60 * 1000);
+      }
+
+      const coin = coinList?.find((c: any) => 
         c.symbol.toLowerCase() === symbol.toLowerCase()
       );
 
@@ -378,5 +430,45 @@ export class VolumeAnalysisService {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get symbols with unusual volume activity
+   */
+  async getUnusualVolumeSymbols(timeframe: number = 24): Promise<VolumeAnalysis[]> {
+    try {
+      const startDate = new Date(Date.now() - timeframe * 60 * 60 * 1000);
+      
+      const unusualVolumes = await VolumeAnalysis.findAll({
+        where: {
+          timestamp: {
+            [Op.gte]: startDate,
+          },
+          [Op.or]: [
+            { unusualVolumeDetected: true },
+            { volumeSpike: true },
+          ],
+        },
+        order: [['timestamp', 'DESC']],
+      });
+
+      return unusualVolumes;
+    } catch (error) {
+      logger.error(`Failed to get unusual volume symbols:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get service statistics
+   */
+  getServiceStats(): {
+    cache: any;
+    rateLimit: any;
+  } {
+    return {
+      cache: cacheService.getStats(),
+      rateLimit: rateLimitService.getRateLimitStatus('coingecko')
+    };
   }
 } 

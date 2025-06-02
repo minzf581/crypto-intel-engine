@@ -148,7 +148,7 @@ export class NotificationEnhancedController {
               spikesDetected: unusualSymbols.length,
               activeAssets: overview.activeAssets || 8
             },
-            assets: unusualSymbols.map(symbolData => ({
+            assets: unusualSymbols.map((symbolData: any) => ({
               symbol: symbolData.symbol,
               name: getCryptoName(symbolData.symbol),
               volume24h: symbolData.volume24h,

@@ -101,4 +101,111 @@ router.post('/add-recommended-account',
   socialSentimentController.addRecommendedAccountToMonitoring
 );
 
+// === NEW ENHANCED FEATURES ROUTES ===
+
+// Search History Management
+router.post('/search-history',
+  authenticateToken,
+  socialSentimentController.saveSearchHistory
+);
+
+router.get('/search-history/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getSearchHistory
+);
+
+router.delete('/search-history/:historyId',
+  authenticateToken,
+  socialSentimentController.deleteSearchHistory
+);
+
+// Saved Searches Management
+router.post('/saved-searches',
+  authenticateToken,
+  socialSentimentController.saveSearch
+);
+
+router.get('/saved-searches/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getSavedSearches
+);
+
+router.put('/saved-searches/:searchId',
+  authenticateToken,
+  socialSentimentController.updateSavedSearch
+);
+
+router.delete('/saved-searches/:searchId',
+  authenticateToken,
+  socialSentimentController.deleteSavedSearch
+);
+
+// Popular Searches and Accounts
+router.get('/popular-searches/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getPopularSearches
+);
+
+router.get('/popular-accounts/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getPopularAccounts
+);
+
+// Bulk Import Accounts
+router.post('/bulk-import-accounts',
+  authenticateToken,
+  socialSentimentController.bulkImportAccounts
+);
+
+// Account Categories
+router.get('/account-categories',
+  authenticateToken,
+  socialSentimentController.getAccountCategories
+);
+
+router.put('/account-category/:accountId',
+  authenticateToken,
+  socialSentimentController.updateAccountCategory
+);
+
+// Enhanced Account Details
+router.get('/account-details/:accountId',
+  authenticateToken,
+  socialSentimentController.getAccountDetails
+);
+
+router.get('/account-engagement/:accountId',
+  authenticateToken,
+  socialSentimentController.getAccountEngagementMetrics
+);
+
+// Search Analytics
+router.get('/search-analytics/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getSearchAnalytics
+);
+
+// Account Performance Tracking
+router.get('/account-performance/:accountId',
+  authenticateToken,
+  socialSentimentController.getAccountPerformance
+);
+
+// Sentiment Score Explanations
+router.get('/sentiment-explanation',
+  authenticateToken,
+  socialSentimentController.getSentimentScoreExplanation
+);
+
+// Export Data
+router.get('/export-search-results/:searchId',
+  authenticateToken,
+  socialSentimentController.exportSearchResults
+);
+
+router.get('/export-monitoring-data/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.exportMonitoringData
+);
+
 export default router; 

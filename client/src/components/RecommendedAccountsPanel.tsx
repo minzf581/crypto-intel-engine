@@ -136,10 +136,25 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
 
   const addToMonitoring = async (account: RecommendedAccount) => {
     try {
-      const response = await socialSentimentApi.addRecommendedAccountToMonitoring({
+      // 检查认证状态
+      const token = localStorage.getItem('token');
+      if (!token || token === 'undefined' || token === 'null') {
+        alert('Please log in first to add accounts to monitoring.');
+        return;
+      }
+
+      console.log('Adding account to monitoring:', {
         accountId: account.id,
         coinSymbol: selectedCoin,
+        accountUsername: account.twitterUsername
       });
+
+      const response = await socialSentimentApi.addRecommendedAccountToMonitoring(
+        account.id,
+        selectedCoin
+      );
+
+      console.log('API response:', response);
 
       if (response.success) {
         // Update local state
@@ -159,9 +174,39 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
       } else {
         throw new Error(response.message || 'Failed to add account to monitoring');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to add account to monitoring:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to add account to monitoring. Please try again.';
+      
+      // 提供更详细的错误信息
+      let errorMessage = 'Failed to add account to monitoring. Please try again.';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        console.error('API Error Details:', {
+          status,
+          data,
+          url: error.config?.url,
+          method: error.config?.method,
+          requestData: error.config?.data
+        });
+        
+        if (status === 400) {
+          errorMessage = `Bad Request: ${data.error || data.message || 'Invalid request parameters'}`;
+        } else if (status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+          // 清除无效token
+          localStorage.removeItem('token');
+        } else if (status === 404) {
+          errorMessage = 'Account not found. Please refresh the page and try again.';
+        } else {
+          errorMessage = `Server error (${status}): ${data.message || data.error || 'Unknown error'}`;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       alert(errorMessage);
     }
   };

@@ -10,6 +10,7 @@ import analysisRoutes from './analysisRoutes';
 import enhancedRoutes from './enhanced';
 import socialSentimentRoutes from './socialSentimentRoutes';
 import recommendedAccountRoutes from './recommendedAccountRoutes';
+import systemRoutes from './system';
 
 const router = Router();
 
@@ -45,5 +46,8 @@ router.use('/social-sentiment', socialSentimentRoutes);
 
 // Recommended accounts routes
 router.use('/recommended-accounts', recommendedAccountRoutes);
+
+// System monitoring routes
+router.use('/system', systemRoutes);
 
 export default router; 

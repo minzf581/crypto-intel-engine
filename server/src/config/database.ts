@@ -3,6 +3,13 @@ import path from 'path';
 import env from './env';
 import logger from '../utils/logger';
 import fs from 'fs';
+import { User } from '../models/User';
+import { TwitterAccount } from '../models/TwitterAccount';
+import { TwitterPost } from '../models/TwitterPost';
+import { AccountCoinRelevance } from '../models/AccountCoinRelevance';
+import { RecommendedAccount } from '../models/RecommendedAccount';
+import GlobalSearchHistory from '../models/GlobalSearchHistory';
+import { VolumeAnalysis } from '../models/VolumeAnalysis';
 
 let sequelize: Sequelize;
 
