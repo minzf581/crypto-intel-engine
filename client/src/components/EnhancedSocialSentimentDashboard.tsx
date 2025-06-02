@@ -320,27 +320,75 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
     try {
       console.log('Loading monitoring data for coin:', selectedCoin);
       
-      const statusResponse = await socialSentimentApi.getMonitoringStatus(selectedCoin);
-      console.log('Monitoring status response:', statusResponse);
-      setMonitoringStatus(statusResponse.data);
+      // 并行加载监控状态和账户数据
+      const [statusResponse, accountsResponse] = await Promise.all([
+        socialSentimentApi.getMonitoringStatus(selectedCoin).catch(err => {
+          console.warn('Failed to load monitoring status:', err);
+          return { data: { isMonitoring: false, monitoredCoins: [], totalMonitoredCoins: 0 } };
+        }),
+        socialSentimentApi.getMonitoredAccounts(selectedCoin).catch(err => {
+          console.warn('Failed to load monitored accounts:', err);
+          return { data: [] };
+        })
+      ]);
 
-      const accountsResponse = await socialSentimentApi.getMonitoredAccounts(selectedCoin);
+      console.log('Monitoring status response:', statusResponse);
       console.log('Monitored accounts response:', accountsResponse);
       
-      // 后端返回的是扁平的账户对象数组，不是嵌套结构
-      const accounts = Array.isArray(accountsResponse.data) ? accountsResponse.data : [];
-      const validAccounts = accounts.filter(account => 
-        account && 
-        typeof account === 'object' && 
-        (account.id || account.username)
-      );
+      // 设置监控状态
+      if (statusResponse && statusResponse.data) {
+        setMonitoringStatus(statusResponse.data);
+      }
+
+      // 处理账户数据
+      let accounts = [];
+      if (accountsResponse && accountsResponse.data) {
+        // 确保响应数据是数组
+        const rawAccounts = Array.isArray(accountsResponse.data) ? accountsResponse.data : [];
+        
+        // 过滤和验证账户数据
+        accounts = rawAccounts.filter(account => {
+          if (!account || typeof account !== 'object') {
+            console.warn('Invalid account object:', account);
+            return false;
+          }
+          
+          if (!account.id && !account.username) {
+            console.warn('Account missing id and username:', account);
+            return false;
+          }
+          
+          return true;
+        }).map(account => ({
+          // 确保所有必需字段都存在
+          id: account.id || account.username || `unknown-${Math.random()}`,
+          username: account.username || 'unknown',
+          displayName: account.displayName || account.username || 'Unknown Account',
+          bio: account.bio || '',
+          followersCount: Number(account.followersCount) || 0,
+          profileImageUrl: account.profileImageUrl || '/default-avatar.png',
+          influenceScore: Number(account.influenceScore) || 0,
+          relevanceScore: Number(account.relevanceScore) || 0,
+          isVerified: Boolean(account.isVerified),
+          mentionCount: Number(account.mentionCount) || 0,
+          lastMentionAt: account.lastMentionAt || null,
+          addedAt: account.addedAt || new Date().toISOString(),
+          isConfirmed: Boolean(account.isConfirmed)
+        }));
+      }
       
-      console.log(`Filtered ${validAccounts.length} valid accounts from ${accounts.length} total`);
-      setMonitoringAccounts(validAccounts);
+      console.log(`Processed ${accounts.length} valid monitoring accounts:`, accounts);
+      setMonitoringAccounts(accounts);
+
     } catch (error) {
       console.error('Failed to load monitoring data:', error);
-      setMonitoringStatus(null);
+      // 设置空数组而不是保持loading状态
       setMonitoringAccounts([]);
+      setMonitoringStatus({
+        isMonitoring: false,
+        monitoredCoins: [],
+        totalMonitoredCoins: 0
+      });
     } finally {
       setIsLoading(false);
     }
@@ -837,7 +885,7 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
         </div>
       </div>
 
-      {monitoringAccounts.length === 0 ? (
+      {!monitoringAccounts || monitoringAccounts.length === 0 ? (
         <div className="text-center py-12">
           <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No accounts being monitored</h3>
@@ -857,44 +905,68 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {monitoringAccounts
-            .filter(account => account && (account.id || account.username)) // 过滤掉无效的数据
-            .map((account) => (
-            <div key={account.id || account.username} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <img
-                  src={account.profileImageUrl || '/default-avatar.png'}
-                  alt={account.displayName || account.username || 'Account'}
-                  className="h-10 w-10 rounded-full"
-                  onError={(e) => {
-                    // 如果图片加载失败，使用默认头像
-                    e.currentTarget.src = '/default-avatar.png';
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {account.displayName || account.username || 'Unknown Account'}
-                    </h4>
-                    {account.isVerified && (
-                      <ShieldCheckIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                    )}
+            .filter(account => {
+              // 更严格的过滤条件
+              return account && 
+                     typeof account === 'object' && 
+                     (account.id || account.username) &&
+                     account.id !== null &&
+                     account.id !== undefined;
+            })
+            .map((account) => {
+              // 为每个字段提供默认值
+              const safeAccount = {
+                id: account.id || account.username || `unknown-${Math.random()}`,
+                username: account.username || 'unknown',
+                displayName: account.displayName || account.username || 'Unknown Account',
+                profileImageUrl: account.profileImageUrl || '/default-avatar.png',
+                isVerified: Boolean(account.isVerified),
+                followersCount: Number(account.followersCount) || 0,
+                relevanceScore: Number(account.relevanceScore) || 0,
+                addedAt: account.addedAt || null
+              };
+
+              return (
+                <div key={safeAccount.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <img
+                      src={safeAccount.profileImageUrl}
+                      alt={safeAccount.displayName}
+                      className="h-10 w-10 rounded-full"
+                      onError={(e) => {
+                        // 如果图片加载失败，使用默认头像
+                        const target = e.currentTarget as HTMLImageElement;
+                        if (target.src !== '/default-avatar.png') {
+                          target.src = '/default-avatar.png';
+                        }
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {safeAccount.displayName}
+                        </h4>
+                        {safeAccount.isVerified && (
+                          <ShieldCheckIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        @{safeAccount.username}
+                      </p>
+                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <span>{safeAccount.followersCount.toLocaleString()} followers</span>
+                        <span>Relevance: {safeToFixed(safeAccount.relevanceScore, 2)}</span>
+                      </div>
+                      {safeAccount.addedAt && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Added: {new Date(safeAccount.addedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    @{account.username || 'unknown'}
-                  </p>
-                  <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>{(account.followersCount || 0).toLocaleString()} followers</span>
-                    <span>Relevance: {safeToFixed(account.relevanceScore, 2) || 'N/A'}</span>
-                  </div>
-                  {account.addedAt && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Added: {new Date(account.addedAt).toLocaleDateString()}
-                    </p>
-                  )}
                 </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
         </div>
       )}
     </div>
