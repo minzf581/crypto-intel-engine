@@ -207,6 +207,40 @@ export const socialSentimentApi = {
     return response.data;
   },
 
+  // Check monitoring status for multiple accounts
+  checkAccountsMonitoringStatus: async (coinSymbol: string, accountIds: string[]) => {
+    const response = await api.post(`/check-monitoring-status/${coinSymbol}`, {
+      accountIds
+    });
+    return response.data;
+  },
+
+  // Check Twitter API status and configuration
+  checkTwitterApiStatus: async () => {
+    const response = await api.get('/twitter-api-status');
+    return response.data;
+  },
+
+  // Reset Twitter API rate limits (emergency use only)
+  resetTwitterRateLimit: async (endpoint?: string) => {
+    const response = await api.post('/reset-twitter-rate-limit', {
+      endpoint
+    });
+    return response.data;
+  },
+
+  // Get real-time tweets from monitored accounts
+  getRealTimeTweets: async (coinSymbol: string, options: {
+    accountIds: string[];
+    limit?: number;
+    sortBy?: 'time' | 'engagement' | 'sentiment';
+    includeReplies?: boolean;
+    includeRetweets?: boolean;
+  }) => {
+    const response = await api.post(`/real-time-tweets/${coinSymbol}`, options);
+    return response.data;
+  },
+
   // === NEW ENHANCED FEATURES ===
 
   // Search History Management

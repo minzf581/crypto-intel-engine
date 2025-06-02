@@ -2713,4 +2713,503 @@ export class SocialSentimentController {
       return [];
     }
   }
+
+  /**
+   * Check monitoring status for multiple accounts
+   */
+  checkAccountsMonitoringStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { accountIds } = req.body;
+
+      if (!accountIds || !Array.isArray(accountIds)) {
+        res.status(400).json({
+          success: false,
+          message: 'Account IDs array is required'
+        });
+        return;
+      }
+
+      // Get monitored accounts for the coin using the same pattern as getMonitoredAccounts
+      const monitoredAccounts = await AccountCoinRelevance.findAll({
+        where: {
+          coinSymbol: coinSymbol.toUpperCase(),
+          isConfirmed: true,
+        },
+        include: [{ 
+          model: TwitterAccount, 
+          as: 'account',
+          required: true 
+        }],
+      });
+      
+      // Create a set of monitored account IDs for fast lookup
+      const monitoredAccountIds = new Set(monitoredAccounts.map((relevance: any) => relevance.account.id));
+      
+      // Check status for each account ID with ID mapping
+      const accountStatuses = accountIds.map(accountId => {
+        // Try both the original ID and with 'rec_' prefix for recommended accounts
+        const isMonitored = monitoredAccountIds.has(accountId) || monitoredAccountIds.has(`rec_${accountId}`);
+        
+        return {
+          accountId,
+          isMonitored
+        };
+      });
+
+      res.json({
+        success: true,
+        data: {
+          accountStatuses
+        }
+      });
+    } catch (error) {
+      console.error('Failed to check accounts monitoring status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to check monitoring status'
+      });
+    }
+  };
+
+  // Check Twitter API status and configuration
+  checkTwitterApiStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // Check if Twitter API credentials are configured
+      const isConfigured = !!(
+        process.env.TWITTER_BEARER_TOKEN || 
+        (process.env.TWITTER_API_KEY && process.env.TWITTER_API_SECRET)
+      );
+
+      if (!isConfigured) {
+        res.json({
+          success: true,
+          data: {
+            isConfigured: false,
+            isConnected: false,
+            message: 'Twitter API credentials not configured',
+            rateLimitStatus: {},
+            recommendations: ['Configure Twitter API credentials to enable real-time features']
+          }
+        });
+        return;
+      }
+
+      // Get detailed rate limit status
+      const rateLimitStatus = this.twitterService.getDetailedRateLimitStatus();
+      const cacheMetrics = this.twitterService.getCachePerformanceMetrics();
+
+      // Test Twitter API connectivity with enhanced error handling
+      try {
+        const testResponse = await this.twitterService.testConnection();
+        
+        res.json({
+          success: true,
+          data: {
+            isConfigured: true,
+            isConnected: testResponse.success,
+            message: testResponse.message || (testResponse.success ? 'Twitter API is available' : 'Twitter API connection failed'),
+            rateLimitStatus: rateLimitStatus.rateLimits,
+            cacheMetrics: {
+              size: rateLimitStatus.cache.size,
+              hitRate: rateLimitStatus.cache.hitRate,
+              oldestEntryAge: Math.round(rateLimitStatus.cache.oldestEntry / 60000), // in minutes
+              totalCacheSize: cacheMetrics.totalCacheSize
+            },
+            recommendations: [
+              ...rateLimitStatus.recommendations,
+              ...cacheMetrics.recommendedActions
+            ],
+            healthStatus: this.determineHealthStatus(rateLimitStatus.rateLimits),
+            lastChecked: new Date().toISOString()
+          }
+        });
+      } catch (apiError: any) {
+        console.error('Twitter API test failed:', apiError);
+        
+        // Determine error type and provide specific guidance
+        let errorType = 'unknown';
+        let userMessage = 'Twitter API connection failed';
+        let recommendations = rateLimitStatus.recommendations;
+
+        if (apiError.message?.includes('rate limit')) {
+          errorType = 'rate_limit';
+          userMessage = 'Twitter API rate limit exceeded';
+          recommendations = [
+            '⏰ Wait for rate limit to reset before making more requests',
+            '💾 Enable caching to reduce API calls',
+            '🔄 Consider implementing request queuing',
+            ...recommendations
+          ];
+        } else if (apiError.message?.includes('authentication')) {
+          errorType = 'authentication';
+          userMessage = 'Twitter API authentication failed';
+          recommendations = [
+            '🔑 Check Twitter API credentials',
+            '🔄 Regenerate Twitter Bearer Token',
+            '📋 Verify API permissions',
+            ...recommendations
+          ];
+        } else if (apiError.message?.includes('forbidden')) {
+          errorType = 'permissions';
+          userMessage = 'Twitter API access forbidden';
+          recommendations = [
+            '🔐 Check API access permissions',
+            '💳 Verify Twitter API subscription level',
+            '📋 Review API usage policies',
+            ...recommendations
+          ];
+        }
+
+        res.json({
+          success: true,
+          data: {
+            isConfigured: true,
+            isConnected: false,
+            message: userMessage,
+            errorType,
+            errorDetails: apiError.message,
+            rateLimitStatus: rateLimitStatus.rateLimits,
+            cacheMetrics: {
+              size: rateLimitStatus.cache.size,
+              hitRate: rateLimitStatus.cache.hitRate,
+              oldestEntryAge: Math.round(rateLimitStatus.cache.oldestEntry / 60000),
+              totalCacheSize: cacheMetrics.totalCacheSize
+            },
+            recommendations,
+            healthStatus: 'error',
+            lastChecked: new Date().toISOString()
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to check Twitter API status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to check Twitter API status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  // Reset Twitter API rate limits (emergency use only)
+  resetTwitterRateLimit = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { endpoint } = req.body;
+      
+      // Log the reset action for audit purposes
+      logger.warn(`Manual rate limit reset requested by user`, {
+        endpoint: endpoint || 'all',
+        userAgent: req.headers['user-agent'],
+        ip: req.ip,
+        timestamp: new Date().toISOString()
+      });
+
+      // Reset the rate limit
+      this.twitterService.forceResetRateLimit(endpoint);
+
+      res.json({
+        success: true,
+        message: endpoint 
+          ? `Rate limit reset for endpoint: ${endpoint}` 
+          : 'All rate limits reset',
+        data: {
+          resetEndpoint: endpoint || 'all',
+          timestamp: new Date().toISOString(),
+          warning: 'This is an emergency action. Rate limits exist to protect API quotas.'
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to reset Twitter rate limit:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reset rate limit',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Determine overall health status based on rate limits
+   */
+  private determineHealthStatus(rateLimits: { [endpoint: string]: any }): 'healthy' | 'warning' | 'critical' | 'emergency' {
+    const statuses = Object.values(rateLimits).map(limit => limit.status);
+    
+    if (statuses.includes('emergency')) return 'emergency';
+    if (statuses.includes('critical')) return 'critical';
+    if (statuses.includes('warning')) return 'warning';
+    return 'healthy';
+  }
+
+  // Get real-time tweets from monitored accounts
+  getRealTimeTweets = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { 
+        accountIds, 
+        limit = 50, 
+        sortBy = 'time',
+        includeReplies = false,
+        includeRetweets = true 
+      } = req.body;
+
+      if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Account IDs array is required'
+        });
+        return;
+      }
+
+      // Check if Twitter API is configured
+      const isConfigured = !!(
+        process.env.TWITTER_BEARER_TOKEN || 
+        (process.env.TWITTER_API_KEY && process.env.TWITTER_API_SECRET)
+      );
+
+      if (!isConfigured) {
+        res.status(503).json({
+          success: false,
+          message: 'Twitter API not configured. Please contact administrator.',
+          data: {
+            tweets: [],
+            totalCount: 0,
+            message: 'Twitter API credentials not available'
+          }
+        });
+        return;
+      }
+
+      // Test Twitter API connectivity first
+      try {
+        const testResponse = await this.twitterService.testConnection();
+        if (!testResponse.success) {
+          res.status(503).json({
+            success: false,
+            message: 'Twitter API is currently unavailable. Please try again later.',
+            data: {
+              tweets: [],
+              totalCount: 0,
+              message: 'Twitter API connection failed'
+            }
+          });
+          return;
+        }
+      } catch (testError) {
+        console.error('Twitter API test failed:', testError);
+        res.status(503).json({
+          success: false,
+          message: 'Twitter API is currently unavailable. Please try again later.',
+          data: {
+            tweets: [],
+            totalCount: 0,
+            message: 'Twitter API authentication failed'
+          }
+        });
+        return;
+      }
+
+      // Get account details from database
+      const accounts = await TwitterAccount.findAll({
+        where: {
+          id: accountIds
+        },
+        include: [{
+          model: AccountCoinRelevance,
+          as: 'coinRelevances',
+          where: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            isConfirmed: true
+          },
+          required: true
+        }]
+      });
+
+      if (accounts.length === 0) {
+        res.json({
+          success: true,
+          data: {
+            tweets: [],
+            totalCount: 0,
+            message: 'No monitored accounts found for the specified IDs'
+          }
+        });
+        return;
+      }
+
+      // Extract Twitter usernames for API calls
+      const usernames = accounts.map((account: any) => account.username).filter(Boolean);
+
+      if (usernames.length === 0) {
+        res.json({
+          success: true,
+          data: {
+            tweets: [],
+            totalCount: 0,
+            message: 'No valid Twitter usernames found in monitored accounts'
+          }
+        });
+        return;
+      }
+
+      // Fetch tweets from Twitter API
+      try {
+        const tweetsResponse = await this.twitterService.getUserTweets(usernames, {
+          maxResults: limit,
+          includeReplies,
+          includeRetweets,
+          tweetFields: ['created_at', 'public_metrics', 'author_id', 'context_annotations'],
+          userFields: ['profile_image_url', 'verified', 'public_metrics'],
+          expansions: ['author_id']
+        });
+
+        if (!tweetsResponse.success) {
+          throw new Error(tweetsResponse.message || 'Failed to fetch tweets');
+        }
+
+        // Check if we got any tweets
+        if (!tweetsResponse.data || !tweetsResponse.data.tweets || tweetsResponse.data.tweets.length === 0) {
+          res.json({
+            success: true,
+            data: {
+              tweets: [],
+              totalCount: 0,
+              accountsQueried: usernames.length,
+              message: 'No recent tweets found from monitored accounts',
+              lastUpdated: new Date().toISOString()
+            }
+          });
+          return;
+        }
+
+        // Process and analyze tweets
+        const processedTweets = await Promise.all(
+          tweetsResponse.data.tweets.map(async (tweet: any) => {
+            // Perform sentiment analysis
+            const sentimentResult = this.twitterService.analyzeSentiment(tweet.text, coinSymbol);
+            
+            // Calculate engagement metrics
+            const metrics = tweet.public_metrics || {};
+            const totalEngagement = (metrics.like_count || 0) + 
+                                   (metrics.retweet_count || 0) + 
+                                   (metrics.reply_count || 0) + 
+                                   (metrics.quote_count || 0);
+
+            // Find author details
+            const author = tweetsResponse.data.users?.find((user: any) => user.id === tweet.author_id) || {};
+
+            return {
+              id: tweet.id,
+              text: tweet.text,
+              createdAt: tweet.created_at,
+              author: {
+                id: author.id || tweet.author_id,
+                username: author.username || 'unknown',
+                displayName: author.name || author.username || 'Unknown User',
+                profileImageUrl: author.profile_image_url || '/default-avatar.png',
+                isVerified: author.verified || false
+              },
+              metrics: {
+                likeCount: metrics.like_count || 0,
+                retweetCount: metrics.retweet_count || 0,
+                replyCount: metrics.reply_count || 0,
+                quoteCount: metrics.quote_count || 0
+              },
+              sentiment: {
+                score: sentimentResult.sentimentScore || 0,
+                label: sentimentResult.sentiment || 'neutral',
+                confidence: sentimentResult.impactScore || 0
+              },
+              engagement: {
+                score: totalEngagement,
+                rate: author.public_metrics?.followers_count ? 
+                      (totalEngagement / author.public_metrics.followers_count) * 100 : 0
+              }
+            };
+          })
+        );
+
+        // Sort tweets based on sortBy parameter
+        processedTweets.sort((a: any, b: any) => {
+          switch (sortBy) {
+            case 'engagement':
+              return b.engagement.score - a.engagement.score;
+            case 'sentiment':
+              return Math.abs(b.sentiment.score) - Math.abs(a.sentiment.score);
+            default: // 'time'
+              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          }
+        });
+
+        res.json({
+          success: true,
+          data: {
+            tweets: processedTweets,
+            totalCount: processedTweets.length,
+            accountsQueried: usernames.length,
+            lastUpdated: new Date().toISOString()
+          }
+        });
+
+      } catch (twitterError: any) {
+        console.error('Twitter API error:', twitterError);
+        
+        // Handle specific Twitter API errors
+        if (twitterError.response?.status === 401) {
+          res.status(503).json({
+            success: false,
+            message: 'Twitter API authentication failed. Please contact administrator.',
+            data: {
+              tweets: [],
+              totalCount: 0,
+              message: 'Twitter API authentication failed'
+            }
+          });
+        } else if (twitterError.response?.status === 429) {
+          res.status(503).json({
+            success: false,
+            message: 'Twitter API rate limit exceeded. Please try again later.',
+            data: {
+              tweets: [],
+              totalCount: 0,
+              message: 'Twitter API rate limit exceeded'
+            }
+          });
+        } else if (twitterError.response?.status === 403) {
+          res.status(503).json({
+            success: false,
+            message: 'Twitter API access forbidden. Please contact administrator.',
+            data: {
+              tweets: [],
+              totalCount: 0,
+              message: 'Twitter API access forbidden'
+            }
+          });
+        } else {
+          res.status(503).json({
+            success: false,
+            message: 'Twitter API is temporarily unavailable. Please try again later.',
+            data: {
+              tweets: [],
+              totalCount: 0,
+              message: 'Twitter API temporarily unavailable'
+            }
+          });
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to get real-time tweets:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error while fetching real-time tweets',
+        data: {
+          tweets: [],
+          totalCount: 0,
+          message: 'Internal server error'
+        }
+      });
+    }
+  };
 } 

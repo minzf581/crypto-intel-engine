@@ -189,30 +189,61 @@ server/src/
 
 Remember: ANY Chinese text found in code, UI, logs, or documentation should be immediately converted to English.
 
-## NO Demo/Mock Data Policy
-**CRITICAL: NEVER create or use demo/mock/fake data in this application**
+## ABSOLUTE NO MOCK/DEMO/FAKE DATA POLICY
+**CRITICAL: NEVER create, use, or display mock/demo/fake data in this application**
 
-### Why Demo Data is Prohibited
-- Users will question the authenticity and credibility of the platform
-- Demo data creates false impressions about real market conditions
-- It undermines user trust in the intelligence and analysis provided
-- Real users expect real data for making real financial decisions
+### Why Mock Data is STRICTLY PROHIBITED
+- **LEGAL LIABILITY**: Mock data can mislead users into making financial decisions based on false information, potentially resulting in lawsuits
+- **REGULATORY COMPLIANCE**: Financial applications must use real data to comply with regulations
+- **USER TRUST**: Any fake data undermines the credibility and trustworthiness of the platform
+- **MARKET INTEGRITY**: Displaying false market data can be considered market manipulation
+- **PROFESSIONAL STANDARDS**: Real financial intelligence platforms never use mock data
 
-### Requirements for Real Data Only
-- All cryptocurrency prices must come from actual market APIs (CoinGecko, etc.)
-- All social sentiment data must come from real social media platforms
-- All news data must be from legitimate cryptocurrency news sources
-- All trading signals must be based on real market analysis
-- All user accounts and authentication must be production-ready
+### ZERO TOLERANCE ENFORCEMENT
+- **Real-Time Tweets**: MUST use actual Twitter API data or show "Data not available" message
+- **Price Data**: MUST use real CoinGecko/exchange APIs or show error states
+- **Social Sentiment**: MUST use real social media analysis or display service unavailable
+- **News Data**: MUST use legitimate news sources or show no data available
+- **User Accounts**: MUST be production-ready authentication, no demo accounts in production
+- **Trading Signals**: MUST be based on real market analysis, never simulated
 
-### When APIs are Not Available
-- Show appropriate error messages explaining the service is temporarily unavailable
-- Display "Data source not configured" or "API connection required" messages
-- Provide clear instructions for administrators to configure required APIs
-- Never substitute with placeholder or demo data
+### MANDATORY IMPLEMENTATION REQUIREMENTS
+- When APIs are not available: Show clear error messages explaining the service is temporarily unavailable
+- When data sources are not configured: Display "Data source not configured" with admin instructions
+- When external services fail: Provide transparent error states with retry options
+- NEVER substitute with placeholder, demo, or mock data under any circumstances
 
-### Implementation Guidelines
-- Use try-catch blocks with proper error handling for API failures
-- Log when external services are unavailable but don't mask it with fake data
-- Implement graceful degradation that informs users of limited functionality
-- Show loading states and error states transparently 
+### VIOLATION CONSEQUENCES
+- Any code containing mock data will be immediately rejected
+- Functions generating fake data must be removed or replaced with real API calls
+- Components displaying mock data must show error states instead
+- Pull requests with mock data will not be merged
+
+### APPROVED ALTERNATIVES TO MOCK DATA
+- Loading states with spinners/skeletons
+- Error states with clear explanations
+- "Service unavailable" messages
+- "API not configured" notifications
+- Empty states with instructions to configure data sources
+- Graceful degradation that informs users of limited functionality
+
+### REAL-TIME TWEETS SPECIFIC REQUIREMENTS
+- MUST connect to actual Twitter API for tweet data
+- MUST use real sentiment analysis services
+- MUST display actual engagement metrics from Twitter
+- MUST show real timestamps from Twitter
+- If Twitter API is unavailable: Show "Twitter API not available" message
+- If sentiment analysis fails: Show "Sentiment analysis unavailable"
+- NEVER generate fake tweets, fake sentiment scores, or fake engagement data
+
+### CODE REVIEW CHECKLIST
+- [ ] No functions named `generateMock*`, `createFake*`, or `simulateData*`
+- [ ] No hardcoded sample data arrays
+- [ ] No placeholder text that looks like real data
+- [ ] All API calls connect to real external services
+- [ ] Error handling shows appropriate "service unavailable" messages
+- [ ] No demo user accounts with fake data
+- [ ] All timestamps come from real data sources
+- [ ] All metrics are calculated from actual data
+
+**REMEMBER: This is a financial intelligence platform. Users' financial decisions depend on our data accuracy. Mock data is not just unprofessional—it's potentially illegal and definitely unethical.** 

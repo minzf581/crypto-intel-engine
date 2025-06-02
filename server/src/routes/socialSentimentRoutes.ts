@@ -101,6 +101,30 @@ router.post('/add-recommended-account',
   socialSentimentController.addRecommendedAccountToMonitoring
 );
 
+// Check monitoring status for multiple accounts
+router.post('/check-monitoring-status/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.checkAccountsMonitoringStatus
+);
+
+// Check Twitter API status and configuration
+router.get('/twitter-api-status',
+  authenticateToken,
+  socialSentimentController.checkTwitterApiStatus
+);
+
+// Reset Twitter API rate limits (emergency use only)
+router.post('/reset-twitter-rate-limit',
+  authenticateToken,
+  socialSentimentController.resetTwitterRateLimit
+);
+
+// Get real-time tweets from monitored accounts
+router.post('/real-time-tweets/:coinSymbol',
+  authenticateToken,
+  socialSentimentController.getRealTimeTweets
+);
+
 // === NEW ENHANCED FEATURES ROUTES ===
 
 // Search History Management

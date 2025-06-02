@@ -22,96 +22,265 @@ interface CacheEntry<T> {
 class RateLimitManager {
   private rateLimits: Map<string, RateLimitInfo> = new Map();
   private cache: Map<string, CacheEntry<any>> = new Map();
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-  private readonly MIN_REMAINING_THRESHOLD = 10; // 提高阈值到10个请求
+  private readonly CACHE_TTL = 15 * 60 * 1000; // 增加到15分钟
+  private readonly MIN_REMAINING_THRESHOLD = 20; // 提高到20个请求
   private readonly CRITICAL_THRESHOLD = 5; // 关键阈值
+  private readonly EMERGENCY_THRESHOLD = 2; // 紧急阈值
+  private requestQueue: Map<string, number> = new Map(); // 跟踪每个端点的请求频率
+  private lastRequestTime: Map<string, number> = new Map();
+  private readonly MIN_REQUEST_INTERVAL = 1000; // 最小请求间隔1秒
 
   /**
-   * Check if we can make a request to the given endpoint
+   * Check if we can make a request to the given endpoint with intelligent throttling
    */
   canMakeRequest(endpoint: string): boolean {
     const rateLimit = this.rateLimits.get(endpoint);
-    if (!rateLimit) return true;
-
     const now = Date.now();
-    if (now > rateLimit.reset * 1000) {
-      // Rate limit window has reset
-      this.rateLimits.delete(endpoint);
-      return true;
-    }
-
-    // 如果剩余请求数很少，更加谨慎
-    if (rateLimit.remaining <= this.CRITICAL_THRESHOLD) {
-      logger.warn(`Critical rate limit threshold reached for ${endpoint}: ${rateLimit.remaining}/${rateLimit.limit}`);
+    
+    // 检查最小请求间隔
+    const lastRequest = this.lastRequestTime.get(endpoint) || 0;
+    if (now - lastRequest < this.MIN_REQUEST_INTERVAL) {
+      logger.debug(`Request too frequent for ${endpoint}, waiting...`);
       return false;
     }
 
-    return rateLimit.remaining > this.MIN_REMAINING_THRESHOLD;
+    if (!rateLimit) {
+      this.lastRequestTime.set(endpoint, now);
+      return true;
+    }
+
+    // 检查速率限制窗口是否已重置
+    if (now > rateLimit.reset * 1000) {
+      this.rateLimits.delete(endpoint);
+      this.lastRequestTime.set(endpoint, now);
+      logger.info(`Rate limit window reset for ${endpoint}`);
+      return true;
+    }
+
+    // 智能阈值检查
+    if (rateLimit.remaining <= this.EMERGENCY_THRESHOLD) {
+      logger.error(`Emergency rate limit threshold reached for ${endpoint}: ${rateLimit.remaining}/${rateLimit.limit}`);
+      return false;
+    }
+
+    if (rateLimit.remaining <= this.CRITICAL_THRESHOLD) {
+      logger.warn(`Critical rate limit threshold reached for ${endpoint}: ${rateLimit.remaining}/${rateLimit.limit}`);
+      // 只允许关键请求
+      return endpoint.includes('testConnection') ? false : false;
+    }
+
+    if (rateLimit.remaining <= this.MIN_REMAINING_THRESHOLD) {
+      logger.warn(`Low rate limit threshold for ${endpoint}: ${rateLimit.remaining}/${rateLimit.limit}`);
+      // 减少非关键请求
+      return !endpoint.includes('search');
+    }
+
+    this.lastRequestTime.set(endpoint, now);
+    return true;
   }
 
   /**
-   * Update rate limit info from response headers
+   * Update rate limit info from response headers with enhanced logging
    */
-  updateRateLimit(endpoint: string, headers: Headers) {
-    const remaining = parseInt(headers.get('x-rate-limit-remaining') || '0');
-    const reset = parseInt(headers.get('x-rate-limit-reset') || '0');
-    const limit = parseInt(headers.get('x-rate-limit-limit') || '0');
+  updateRateLimit(endpoint: string, headers: any) {
+    const remaining = parseInt(headers['x-rate-limit-remaining'] || '0');
+    const reset = parseInt(headers['x-rate-limit-reset'] || '0');
+    const limit = parseInt(headers['x-rate-limit-limit'] || '0');
+    const appLimit24h = parseInt(headers['x-app-limit-24hour-remaining'] || '0');
 
     this.rateLimits.set(endpoint, { remaining, reset, limit });
     
-    logger.info(`Rate limit for ${endpoint}: ${remaining}/${limit}, resets at ${new Date(reset * 1000).toISOString()}`);
+    const resetTime = new Date(reset * 1000);
+    const waitTime = Math.max(0, reset * 1000 - Date.now());
+    
+    logger.info(`Rate limit updated for ${endpoint}:`, {
+      remaining: `${remaining}/${limit}`,
+      resetTime: resetTime.toISOString(),
+      waitTimeMinutes: Math.round(waitTime / 60000),
+      appLimit24h: appLimit24h
+    });
+
+    // 如果接近限制，发出警告
+    if (remaining <= this.MIN_REMAINING_THRESHOLD) {
+      logger.warn(`Approaching rate limit for ${endpoint}. Consider implementing caching or reducing request frequency.`);
+    }
   }
 
   /**
-   * Get wait time until rate limit resets
+   * Get intelligent wait time with exponential backoff
    */
-  getWaitTime(endpoint: string): number {
+  getWaitTime(endpoint: string, attempt: number = 1): number {
     const rateLimit = this.rateLimits.get(endpoint);
     if (!rateLimit) return 0;
 
     const now = Date.now();
     const resetTime = rateLimit.reset * 1000;
-    return Math.max(0, resetTime - now);
+    const baseWaitTime = Math.max(0, resetTime - now);
+
+    // 如果在紧急阈值内，等待到重置时间
+    if (rateLimit.remaining <= this.EMERGENCY_THRESHOLD) {
+      return baseWaitTime;
+    }
+
+    // 指数退避算法
+    const exponentialBackoff = Math.min(
+      Math.pow(2, attempt - 1) * 1000, // 从1秒开始，指数增长
+      60000 // 最大1分钟
+    );
+
+    return Math.max(baseWaitTime, exponentialBackoff);
   }
 
   /**
-   * Cache data with TTL
+   * Enhanced cache with compression and smart TTL
    */
-  setCache<T>(key: string, data: T, ttl: number = this.CACHE_TTL): void {
+  setCache<T>(key: string, data: T, ttl?: number): void {
     const now = Date.now();
+    const cacheTTL = ttl || this.CACHE_TTL;
+    
+    // 根据数据类型调整TTL
+    if (key.includes('user') || key.includes('profile')) {
+      // 用户数据缓存更长时间
+      ttl = ttl || 30 * 60 * 1000; // 30分钟
+    } else if (key.includes('tweets') || key.includes('timeline')) {
+      // 推文数据缓存较短时间
+      ttl = ttl || 5 * 60 * 1000; // 5分钟
+    }
+
     this.cache.set(key, {
       data,
       timestamp: now,
-      expiresAt: now + ttl
+      expiresAt: now + cacheTTL
     });
+
+    logger.debug(`Cached data for key: ${key}, TTL: ${cacheTTL}ms`);
   }
 
   /**
-   * Get cached data if not expired
+   * Get cached data with hit/miss logging
    */
   getCache<T>(key: string): T | null {
     const entry = this.cache.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      logger.debug(`Cache miss for key: ${key}`);
+      return null;
+    }
 
     const now = Date.now();
     if (now > entry.expiresAt) {
       this.cache.delete(key);
+      logger.debug(`Cache expired for key: ${key}`);
       return null;
     }
 
+    logger.debug(`Cache hit for key: ${key}`);
     return entry.data as T;
   }
 
   /**
-   * Clear expired cache entries
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; hitRate: number; oldestEntry: number } {
+    const now = Date.now();
+    let oldestEntry = now;
+    let validEntries = 0;
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (now <= entry.expiresAt) {
+        validEntries++;
+        oldestEntry = Math.min(oldestEntry, entry.timestamp);
+      }
+    }
+
+    return {
+      size: validEntries,
+      hitRate: 0, // 需要额外跟踪来计算
+      oldestEntry: now - oldestEntry
+    };
+  }
+
+  /**
+   * Clear expired cache entries with statistics
    */
   clearExpiredCache(): void {
     const now = Date.now();
+    let removedCount = 0;
+    
     for (const [key, entry] of this.cache.entries()) {
       if (now > entry.expiresAt) {
         this.cache.delete(key);
+        removedCount++;
       }
     }
+
+    if (removedCount > 0) {
+      logger.info(`Cleared ${removedCount} expired cache entries`);
+    }
+  }
+
+  /**
+   * Get comprehensive rate limit status
+   */
+  getRateLimitStatus(): { [endpoint: string]: RateLimitInfo & { waitTime: number; status: string } } {
+    const now = Date.now();
+    const status: any = {};
+
+    for (const [endpoint, rateLimit] of this.rateLimits.entries()) {
+      const waitTime = Math.max(0, rateLimit.reset * 1000 - now);
+      let rateLimitStatus = 'healthy';
+
+      if (rateLimit.remaining <= this.EMERGENCY_THRESHOLD) {
+        rateLimitStatus = 'emergency';
+      } else if (rateLimit.remaining <= this.CRITICAL_THRESHOLD) {
+        rateLimitStatus = 'critical';
+      } else if (rateLimit.remaining <= this.MIN_REMAINING_THRESHOLD) {
+        rateLimitStatus = 'warning';
+      }
+
+      status[endpoint] = {
+        ...rateLimit,
+        waitTime,
+        status: rateLimitStatus
+      };
+    }
+
+    return status;
+  }
+
+  /**
+   * Force wait for rate limit reset
+   */
+  async waitForRateLimit(endpoint: string): Promise<void> {
+    const waitTime = this.getWaitTime(endpoint);
+    if (waitTime > 0) {
+      logger.info(`Waiting ${Math.round(waitTime / 1000)}s for rate limit reset on ${endpoint}`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  /**
+   * Force reset rate limits for specific endpoint (emergency use)
+   */
+  forceResetEndpoint(endpoint: string): void {
+    this.rateLimits.delete(endpoint);
+    // Clear related cache entries
+    const cacheKeysToDelete: string[] = [];
+    for (const [key] of this.cache.entries()) {
+      if (key.includes(endpoint)) {
+        cacheKeysToDelete.push(key);
+      }
+    }
+    cacheKeysToDelete.forEach(key => this.cache.delete(key));
+    logger.warn(`Force reset rate limit for endpoint: ${endpoint}`);
+  }
+
+  /**
+   * Force clear all rate limits and cache (emergency use)
+   */
+  forceResetAll(): void {
+    this.rateLimits.clear();
+    this.cache.clear();
+    logger.warn('Force reset all rate limits and cache - emergency action');
   }
 }
 
@@ -1140,7 +1309,7 @@ export class TwitterService {
   }
 
   /**
-   * Make HTTP request with rate limit handling and exponential backoff
+   * Make HTTP request with enhanced rate limit handling and intelligent retry logic
    */
   private async makeRequestWithRetry(
     url: string,
@@ -1155,7 +1324,7 @@ export class TwitterService {
       try {
         // Check rate limit before making request
         if (!this.rateLimitManager.canMakeRequest(endpoint)) {
-          const waitTime = this.rateLimitManager.getWaitTime(endpoint);
+          const waitTime = this.rateLimitManager.getWaitTime(endpoint, attempt + 1);
           if (waitTime > 0) {
             // 如果等待时间超过最大限制，直接抛出错误而不是等待
             if (waitTime > MAX_WAIT_TIME) {
@@ -1174,15 +1343,19 @@ export class TwitterService {
         this.rateLimitManager.updateRateLimit(endpoint, response.headers);
         
         if (response.ok) {
+          // 成功请求，重置重试计数
           return response;
         }
         
+        // Handle specific HTTP status codes
         if (response.status === 429) {
           // Rate limit exceeded
           const resetHeader = response.headers.get('x-rate-limit-reset');
+          const remainingHeader = response.headers.get('x-rate-limit-remaining');
+          
           let waitTime = resetHeader ? 
             (parseInt(resetHeader) * 1000 - Date.now()) : 
-            this.calculateBackoffDelay(attempt);
+            this.calculateBackoffDelay(attempt + 1);
           
           // 限制最大等待时间
           if (waitTime > MAX_WAIT_TIME) {
@@ -1190,55 +1363,83 @@ export class TwitterService {
             throw new Error(`Twitter API rate limit exceeded. Please try again in ${Math.ceil(waitTime / 60000)} minutes.`);
           }
           
-          logger.warn(`Rate limit exceeded for ${endpoint}. Waiting ${Math.ceil(waitTime / 1000)} seconds before retry ${attempt + 1}/${maxRetries}`);
+          logger.warn(`Rate limit exceeded for ${endpoint}. Remaining: ${remainingHeader || 'unknown'}. Waiting ${Math.ceil(waitTime / 1000)} seconds before retry ${attempt + 1}/${maxRetries}`);
           
           if (attempt < maxRetries - 1) {
             await this.sleep(waitTime);
             attempt++;
             continue;
           }
+        } else if (response.status === 401) {
+          // Authentication error - don't retry
+          const errorData = await response.json().catch(() => ({ error: 'Authentication failed' }));
+          logger.error(`Authentication failed for ${endpoint}:`, errorData);
+          throw new Error(`Twitter API authentication failed: ${errorData.detail || errorData.error || 'Invalid credentials'}`);
+        } else if (response.status === 403) {
+          // Forbidden - don't retry
+          const errorData = await response.json().catch(() => ({ error: 'Access forbidden' }));
+          logger.error(`Access forbidden for ${endpoint}:`, errorData);
+          throw new Error(`Twitter API access forbidden: ${errorData.detail || errorData.error || 'Insufficient permissions'}`);
+        } else if (response.status >= 500) {
+          // Server error - retry with exponential backoff
+          const waitTime = this.calculateBackoffDelay(attempt + 1);
+          logger.warn(`Server error ${response.status} for ${endpoint}. Retrying in ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
+          
+          if (attempt < maxRetries - 1) {
+            await this.sleep(waitTime);
+            attempt++;
+            continue;
+          }
+        } else {
+          // Other client errors - don't retry
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+          logger.error(`Client error ${response.status} for ${endpoint}:`, errorData);
+          throw new Error(`Twitter API error ${response.status}: ${errorData.detail || errorData.error || response.statusText}`);
         }
         
-        // For other errors, use exponential backoff
-        if (attempt < maxRetries - 1 && response.status >= 500) {
-          const backoffDelay = this.calculateBackoffDelay(attempt);
-          logger.warn(`Request failed with status ${response.status}. Retrying in ${Math.ceil(backoffDelay / 1000)} seconds... (${attempt + 1}/${maxRetries})`);
-          await this.sleep(backoffDelay);
+        // If we reach here, we've exhausted retries
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(`Twitter API request failed after ${maxRetries} attempts: ${errorData.detail || errorData.error || response.statusText}`);
+        
+      } catch (error) {
+        if (error instanceof Error && (
+          error.message.includes('rate limit') || 
+          error.message.includes('authentication') ||
+          error.message.includes('forbidden')
+        )) {
+          // Don't retry these specific errors
+          throw error;
+        }
+        
+        // Network or other errors - retry with exponential backoff
+        if (attempt < maxRetries - 1) {
+          const waitTime = this.calculateBackoffDelay(attempt + 1);
+          logger.warn(`Network error for ${endpoint}: ${error instanceof Error ? error.message : 'Unknown error'}. Retrying in ${waitTime}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await this.sleep(waitTime);
           attempt++;
           continue;
         }
         
-        throw new Error(`Twitter API request failed: ${response.status} ${response.statusText}`);
-        
-      } catch (error) {
-        if (attempt === maxRetries - 1) {
-          throw error;
-        }
-        
-        // 如果是速率限制错误，不要重试
-        if (error instanceof Error && error.message.includes('rate limit exceeded')) {
-          throw error;
-        }
-        
-        const backoffDelay = this.calculateBackoffDelay(attempt);
-        logger.warn(`Request error: ${error}. Retrying in ${Math.ceil(backoffDelay / 1000)} seconds... (${attempt + 1}/${maxRetries})`);
-        await this.sleep(backoffDelay);
-        attempt++;
+        // Final attempt failed
+        logger.error(`Request failed after ${maxRetries} attempts for ${endpoint}:`, error);
+        throw error;
       }
     }
     
-    throw new Error(`Max retries (${maxRetries}) exceeded for ${endpoint}`);
+    throw new Error(`Request failed after ${maxRetries} attempts`);
   }
 
   /**
-   * Calculate exponential backoff delay
+   * Calculate exponential backoff delay with jitter
    */
   private calculateBackoffDelay(attempt: number): number {
-    const baseDelay = 1000; // 1 second
-    const maxDelay = 60000; // 60 seconds
-    const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+    // Exponential backoff: 1s, 2s, 4s, 8s, etc. with max of 30s
+    const baseDelay = Math.min(Math.pow(2, attempt - 1) * 1000, 30000);
+    
     // Add jitter to prevent thundering herd
-    return delay + Math.random() * 1000;
+    const jitter = Math.random() * 0.3 * baseDelay; // ±30% jitter
+    
+    return Math.floor(baseDelay + jitter);
   }
 
   /**
@@ -1342,5 +1543,347 @@ export class TwitterService {
         searchMethod: 'No Data Available'
       };
     }
+  }
+
+  /**
+   * Test Twitter API connection with enhanced caching and error handling
+   */
+  async testConnection(): Promise<{ success: boolean; message?: string }> {
+    const cacheKey = 'twitter_connection_test'; // 在方法开始就定义cacheKey
+    
+    try {
+      if (!this.isConfigured) {
+        return {
+          success: false,
+          message: 'Twitter API not configured - missing bearer token'
+        };
+      }
+
+      // Check cache first to avoid unnecessary API calls
+      const cachedResult = this.rateLimitManager.getCache<{ success: boolean; message?: string }>(cacheKey);
+      if (cachedResult) {
+        logger.debug('Using cached connection test result');
+        return cachedResult;
+      }
+
+      // Check if we can make a request
+      if (!this.rateLimitManager.canMakeRequest('connection_test')) {
+        const waitTime = this.rateLimitManager.getWaitTime('connection_test');
+        if (waitTime > 30000) { // If wait time is more than 30 seconds
+          return {
+            success: false,
+            message: `Twitter API rate limit exceeded. Please try again in ${Math.ceil(waitTime / 60000)} minutes.`
+          };
+        }
+        
+        // Wait for a short time if it's reasonable
+        await this.rateLimitManager.waitForRateLimit('connection_test');
+      }
+
+      // Make a simple API call to test connectivity
+      const url = `${this.baseUrl}/users/by?usernames=twitter&user.fields=public_metrics`;
+      const options: RequestInit = {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.bearerToken}`,
+          'Content-Type': 'application/json',
+        },
+      };
+
+      const response = await this.makeRequestWithRetry(url, options, 'connection_test', 2); // Reduced retries for test
+      
+      if (response.ok) {
+        const result = { success: true, message: 'Twitter API connection successful' };
+        
+        // Cache successful result for 5 minutes
+        this.rateLimitManager.setCache(cacheKey, result, 5 * 60 * 1000);
+        
+        logger.info('Twitter API connection test successful');
+        return result;
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const result = {
+          success: false,
+          message: `Twitter API connection failed: ${errorData.detail || errorData.error || response.statusText}`
+        };
+        
+        // Cache failed result for 1 minute to avoid rapid retries
+        this.rateLimitManager.setCache(cacheKey, result, 60 * 1000);
+        
+        return result;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Twitter API connection test failed:', error);
+      
+      const result = {
+        success: false,
+        message: `Twitter API connection test failed: ${errorMessage}`
+      };
+      
+      // Cache failed result for 1 minute
+      this.rateLimitManager.setCache(cacheKey, result, 60 * 1000);
+      
+      return result;
+    }
+  }
+
+  /**
+   * Get tweets from multiple users with enhanced rate limiting and caching
+   */
+  async getUserTweets(usernames: string[], options: {
+    maxResults?: number;
+    includeReplies?: boolean;
+    includeRetweets?: boolean;
+    tweetFields?: string[];
+    userFields?: string[];
+    expansions?: string[];
+  } = {}): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      if (!this.isConfigured) {
+        return {
+          success: false,
+          message: 'Twitter API not configured - missing bearer token'
+        };
+      }
+
+      if (!usernames || usernames.length === 0) {
+        return {
+          success: false,
+          message: 'No usernames provided'
+        };
+      }
+
+      // Clean and validate usernames
+      const cleanUsernames = usernames
+        .map(username => username.replace('@', '').trim())
+        .filter(username => username.length > 0)
+        .slice(0, 100); // Limit to 100 users to avoid excessive API calls
+
+      if (cleanUsernames.length === 0) {
+        return {
+          success: false,
+          message: 'No valid usernames provided'
+        };
+      }
+
+      // Check cache first
+      const cacheKey = `user_tweets_${cleanUsernames.sort().join(',')}_${JSON.stringify(options)}`;
+      const cachedResult = this.rateLimitManager.getCache<any>(cacheKey);
+      if (cachedResult) {
+        logger.debug(`Using cached tweets for ${cleanUsernames.length} users`);
+        return {
+          success: true,
+          data: cachedResult
+        };
+      }
+
+      // Check rate limits
+      if (!this.rateLimitManager.canMakeRequest('user_tweets')) {
+        const waitTime = this.rateLimitManager.getWaitTime('user_tweets');
+        if (waitTime > 60000) { // If wait time is more than 1 minute
+          return {
+            success: false,
+            message: `Twitter API rate limit exceeded. Please try again in ${Math.ceil(waitTime / 60000)} minutes.`
+          };
+        }
+      }
+
+      const {
+        maxResults = 10,
+        includeReplies = false,
+        includeRetweets = true,
+        tweetFields = ['created_at', 'public_metrics', 'author_id', 'context_annotations'],
+        userFields = ['profile_image_url', 'verified', 'public_metrics'],
+        expansions = ['author_id']
+      } = options;
+
+      // Build query parameters
+      const queryParams = new URLSearchParams({
+        usernames: cleanUsernames.join(','),
+        'max_results': Math.min(maxResults, 100).toString(),
+        'tweet.fields': tweetFields.join(','),
+        'user.fields': userFields.join(','),
+        'expansions': expansions.join(',')
+      });
+
+      // Add exclude parameters if needed
+      const excludeTypes = [];
+      if (!includeReplies) excludeTypes.push('replies');
+      if (!includeRetweets) excludeTypes.push('retweets');
+      
+      if (excludeTypes.length > 0) {
+        queryParams.append('exclude', excludeTypes.join(','));
+      }
+
+      const url = `${this.baseUrl}/tweets/search/recent?query=from:${cleanUsernames.join(' OR from:')}&${queryParams.toString()}`;
+      
+      const options_req: RequestInit = {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.bearerToken}`,
+          'Content-Type': 'application/json',
+        },
+      };
+
+      logger.info(`Fetching tweets for ${cleanUsernames.length} users with max ${maxResults} results each`);
+
+      const response = await this.makeRequestWithRetry(url, options_req, 'user_tweets', 3);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        return {
+          success: false,
+          message: `Failed to fetch tweets: ${errorData.detail || errorData.error || response.statusText}`
+        };
+      }
+
+      const data = await response.json();
+      
+      // Process and validate response
+      const result = {
+        tweets: data.data || [],
+        users: data.includes?.users || [],
+        meta: data.meta || { result_count: 0 },
+        query_info: {
+          usernames: cleanUsernames,
+          total_users: cleanUsernames.length,
+          max_results: maxResults,
+          include_replies: includeReplies,
+          include_retweets: includeRetweets
+        }
+      };
+
+      // Cache the result for 5 minutes (tweets are time-sensitive)
+      this.rateLimitManager.setCache(cacheKey, result, 5 * 60 * 1000);
+
+      logger.info(`Successfully fetched ${result.tweets.length} tweets from ${cleanUsernames.length} users`);
+
+      return {
+        success: true,
+        data: result
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to get user tweets:', error);
+
+      // Handle specific error types
+      if (errorMessage.includes('rate limit')) {
+        return {
+          success: false,
+          message: 'Twitter API rate limit exceeded. Please try again later.'
+        };
+      } else if (errorMessage.includes('authentication')) {
+        return {
+          success: false,
+          message: 'Twitter API authentication failed. Please check credentials.'
+        };
+      } else if (errorMessage.includes('forbidden')) {
+        return {
+          success: false,
+          message: 'Twitter API access forbidden. Please check permissions.'
+        };
+      } else {
+        return {
+          success: false,
+          message: `Failed to fetch tweets: ${errorMessage}`
+        };
+      }
+    }
+  }
+
+  /**
+   * Get comprehensive rate limit status and cache statistics
+   */
+  public getDetailedRateLimitStatus(): {
+    rateLimits: { [endpoint: string]: RateLimitInfo & { waitTime: number; status: string } };
+    cache: { size: number; hitRate: number; oldestEntry: number };
+    recommendations: string[];
+  } {
+    const rateLimits = this.rateLimitManager.getRateLimitStatus();
+    const cache = this.rateLimitManager.getCacheStats();
+    const recommendations: string[] = [];
+
+    // Generate recommendations based on current status
+    for (const [endpoint, status] of Object.entries(rateLimits)) {
+      if (status.status === 'emergency') {
+        recommendations.push(`🚨 Emergency: ${endpoint} has only ${status.remaining} requests left. Consider waiting ${Math.ceil(status.waitTime / 60000)} minutes.`);
+      } else if (status.status === 'critical') {
+        recommendations.push(`⚠️ Critical: ${endpoint} is running low on requests (${status.remaining}/${status.limit}). Reduce request frequency.`);
+      } else if (status.status === 'warning') {
+        recommendations.push(`⚡ Warning: ${endpoint} approaching rate limit (${status.remaining}/${status.limit}). Consider caching more aggressively.`);
+      }
+    }
+
+    if (cache.size < 10) {
+      recommendations.push('💾 Consider enabling more aggressive caching to reduce API calls.');
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push('✅ All systems operating normally. Rate limits are healthy.');
+    }
+
+    return {
+      rateLimits,
+      cache,
+      recommendations
+    };
+  }
+
+  /**
+   * Force clear all caches and reset rate limit tracking
+   */
+  public resetRateLimitManager(): void {
+    this.rateLimitManager.clearExpiredCache();
+    logger.info('Rate limit manager reset completed');
+  }
+
+  /**
+   * Force reset specific endpoint rate limits (emergency use only)
+   */
+  public forceResetRateLimit(endpoint?: string): void {
+    if (endpoint) {
+      this.rateLimitManager.forceResetEndpoint(endpoint);
+    } else {
+      this.rateLimitManager.forceResetAll();
+    }
+  }
+
+  /**
+   * Preemptively wait for rate limits to reset if needed
+   */
+  public async waitForOptimalConditions(endpoint: string): Promise<void> {
+    if (!this.rateLimitManager.canMakeRequest(endpoint)) {
+      await this.rateLimitManager.waitForRateLimit(endpoint);
+    }
+  }
+
+  /**
+   * Get cache hit rate and performance metrics
+   */
+  public getCachePerformanceMetrics(): {
+    totalCacheSize: number;
+    cacheHitRate: number;
+    averageResponseTime: number;
+    recommendedActions: string[];
+  } {
+    const stats = this.rateLimitManager.getCacheStats();
+    const actions: string[] = [];
+
+    if (stats.size > 1000) {
+      actions.push('Consider implementing cache size limits to prevent memory issues');
+    }
+
+    if (stats.oldestEntry > 30 * 60 * 1000) { // 30 minutes
+      actions.push('Some cache entries are very old. Consider reducing TTL for better data freshness');
+    }
+
+    return {
+      totalCacheSize: stats.size,
+      cacheHitRate: stats.hitRate,
+      averageResponseTime: 0, // Would need additional tracking
+      recommendedActions: actions
+    };
   }
 } 

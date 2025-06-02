@@ -20,11 +20,12 @@ import {
   InformationCircleIcon,
   QuestionMarkCircleIcon,
   HeartIcon,
-  ChatBubbleLeftRightIcon,
+  ChatBubbleLeftIcon,
   ArrowPathIcon,
   PlusIcon,
   TrashIcon,
-  EllipsisHorizontalIcon
+  EllipsisHorizontalIcon,
+  FunnelIcon
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
 import { 
@@ -45,6 +46,7 @@ import SentimentScoreTooltip from './SentimentScoreTooltip';
 import SearchHistoryPanel from './SearchHistoryPanel';
 import BulkImportModal from './BulkImportModal';
 import AccountPreviewCard from './AccountPreviewCard';
+import RealTimeTweets from './RealTimeTweets';
 
 const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
   if (value === null || value === undefined || isNaN(value)) return '--';
@@ -68,6 +70,13 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
   coinName = 'Bitcoin'
 }) => {
   const [activeTab, setActiveTab] = useState<'search' | 'recommended' | 'monitoring' | 'analysis'>('search');
+  const [monitoringSubTab, setMonitoringSubTab] = useState<'overview' | 'tweets'>('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    minFollowers: 1000,
+    includeVerified: false,
+    sortBy: 'relevance'
+  });
   const [searchResults, setSearchResults] = useState<SearchResults>({
     accounts: [],
     totalCount: 0,
@@ -78,42 +87,26 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
     searchMethod: ''
   });
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
-  const [sentimentSummary, setSentimentSummary] = useState<SentimentSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [timeframe, setTimeframe] = useState<'1h' | '4h' | '24h' | '7d'>('24h');
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sentimentSummary, setSentimentSummary] = useState<any>(null);
+  const [monitoringAccounts, setMonitoringAccounts] = useState<any[]>([]);
+  const [monitoringStatus, setMonitoringStatus] = useState<any>(null);
+  const [accountMonitoringStatuses, setAccountMonitoringStatuses] = useState<{ [key: string]: boolean }>({});
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<any[]>([]);
+  const [popularSearches, setPopularSearches] = useState<any[]>([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [timeframe, setTimeframe] = useState<'1h' | '4h' | '24h' | '7d'>('24h');
   
   // Enhanced search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
-    minFollowers: 1000,
-    maxFollowers: undefined,
-    includeVerified: true,
-    accountCategories: [],
-    minEngagementRate: undefined,
-    language: undefined,
-    location: undefined,
-    hasRecentActivity: true
-  });
-  const [currentPage, setCurrentPage] = useState(1);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   
   // Search history and saved searches
-  const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [popularSearches, setPopularSearches] = useState<PopularSearch[]>([]);
   const [popularAccounts, setPopularAccounts] = useState<PopularAccount[]>([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
-  
-  // Bulk import
-  const [showBulkImport, setShowBulkImport] = useState(false);
-  
-  // Monitoring state
-  const [monitoringAccounts, setMonitoringAccounts] = useState<any[]>([]);
-  const [monitoringStatus, setMonitoringStatus] = useState<any>(null);
-
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   useEffect(() => {
     // Check authentication status
@@ -166,6 +159,12 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
       }
       
       setCurrentPage(page);
+      
+      // Check monitoring status for the new accounts
+      if (response.data.accounts && response.data.accounts.length > 0) {
+        const accountIds = response.data.accounts.map((account: any) => account.id);
+        await checkSearchResultsMonitoringStatus(accountIds);
+      }
       
       // Save to search history
       await saveSearchToHistory(searchQuery, searchFilters, response.data.totalCount);
@@ -316,82 +315,89 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
   };
 
   const loadMonitoringData = async () => {
-    setIsLoading(true);
+    if (!isAuthenticated) {
+      console.log('User not authenticated, skipping monitoring data load');
+      return;
+    }
+
+    console.log('Loading monitoring data for coin:', selectedCoin);
+    
     try {
-      console.log('Loading monitoring data for coin:', selectedCoin);
-      
-      // 并行加载监控状态和账户数据
       const [statusResponse, accountsResponse] = await Promise.all([
-        socialSentimentApi.getMonitoringStatus(selectedCoin).catch(err => {
-          console.warn('Failed to load monitoring status:', err);
-          return { data: { isMonitoring: false, monitoredCoins: [], totalMonitoredCoins: 0 } };
-        }),
-        socialSentimentApi.getMonitoredAccounts(selectedCoin).catch(err => {
-          console.warn('Failed to load monitored accounts:', err);
-          return { data: [] };
-        })
+        socialSentimentApi.getMonitoringStatus(selectedCoin),
+        socialSentimentApi.getMonitoredAccounts(selectedCoin)
       ]);
 
       console.log('Monitoring status response:', statusResponse);
       console.log('Monitored accounts response:', accountsResponse);
-      
-      // 设置监控状态
-      if (statusResponse && statusResponse.data) {
-        setMonitoringStatus(statusResponse.data);
-      }
 
-      // 处理账户数据
-      let accounts = [];
-      if (accountsResponse && accountsResponse.data) {
-        // 确保响应数据是数组
-        const rawAccounts = Array.isArray(accountsResponse.data) ? accountsResponse.data : [];
-        
-        // 过滤和验证账户数据
-        accounts = rawAccounts.filter(account => {
-          if (!account || typeof account !== 'object') {
-            console.warn('Invalid account object:', account);
-            return false;
-          }
-          
-          if (!account.id && !account.username) {
-            console.warn('Account missing id and username:', account);
-            return false;
-          }
-          
-          return true;
-        }).map(account => ({
-          // 确保所有必需字段都存在
-          id: account.id || account.username || `unknown-${Math.random()}`,
-          username: account.username || 'unknown',
-          displayName: account.displayName || account.username || 'Unknown Account',
-          bio: account.bio || '',
-          followersCount: Number(account.followersCount) || 0,
-          profileImageUrl: account.profileImageUrl || '/default-avatar.png',
-          influenceScore: Number(account.influenceScore) || 0,
-          relevanceScore: Number(account.relevanceScore) || 0,
-          isVerified: Boolean(account.isVerified),
-          mentionCount: Number(account.mentionCount) || 0,
-          lastMentionAt: account.lastMentionAt || null,
-          addedAt: account.addedAt || new Date().toISOString(),
-          isConfirmed: Boolean(account.isConfirmed)
-        }));
-      }
+      setMonitoringStatus(statusResponse.data);
       
-      console.log(`Processed ${accounts.length} valid monitoring accounts:`, accounts);
-      setMonitoringAccounts(accounts);
+      if (accountsResponse.success && Array.isArray(accountsResponse.data)) {
+        // Filter out any invalid accounts and provide defaults
+        const validAccounts = accountsResponse.data
+          .filter(account => account && typeof account === 'object')
+          .map(account => ({
+            id: account.id || account.twitterAccountId || `unknown-${Date.now()}`,
+            username: account.username || account.twitterUsername || 'unknown',
+            displayName: account.displayName || account.username || account.twitterUsername || 'Unknown Account',
+            bio: account.bio || '',
+            followersCount: account.followersCount || 0,
+            isVerified: account.isVerified || false,
+            profileImageUrl: account.profileImageUrl || '/default-avatar.png',
+            relevanceScore: account.relevanceScore || 0,
+            addedAt: account.addedAt || new Date().toISOString(),
+            // Add any other required fields with defaults
+            influenceScore: account.influenceScore || 0,
+            category: account.category || 'unknown',
+            description: account.description || account.bio || '',
+            priority: account.priority || 1,
+            isMonitored: true, // These are monitored accounts
+            monitoringStatus: 'active'
+          }));
 
+        console.log(`Processed ${validAccounts.length} valid monitoring accounts:`, validAccounts);
+        setMonitoringAccounts(validAccounts);
+      } else {
+        console.warn('Invalid monitored accounts response:', accountsResponse);
+        setMonitoringAccounts([]);
+      }
     } catch (error) {
       console.error('Failed to load monitoring data:', error);
-      // 设置空数组而不是保持loading状态
       setMonitoringAccounts([]);
-      setMonitoringStatus({
-        isMonitoring: false,
-        monitoredCoins: [],
-        totalMonitoredCoins: 0
-      });
-    } finally {
-      setIsLoading(false);
+      setMonitoringStatus(null);
     }
+  };
+
+  // Check monitoring status for search results
+  const checkSearchResultsMonitoringStatus = async (accountIds: string[]) => {
+    if (!isAuthenticated || accountIds.length === 0) return;
+
+    try {
+      const response = await socialSentimentApi.checkAccountsMonitoringStatus(selectedCoin, accountIds);
+      
+      if (response.success) {
+        const statusMap: { [key: string]: boolean } = {};
+        response.data.accountStatuses.forEach((status: any) => {
+          statusMap[status.accountId] = status.isMonitored;
+        });
+        
+        setAccountMonitoringStatuses(prev => ({
+          ...prev,
+          ...statusMap
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to check monitoring status for search results:', error);
+    }
+  };
+
+  // Handle monitoring status change for individual accounts
+  const handleMonitoringStatusChange = (accountId: string, isMonitored: boolean) => {
+    setAccountMonitoringStatuses(prev => ({
+      ...prev,
+      [accountId]: isMonitored
+    }));
   };
 
   const toggleAccountSelection = (accountId: string) => {
@@ -712,6 +718,8 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
                 isSelected={selectedAccounts.has(account.id)}
                 onToggleSelect={() => toggleAccountSelection(account.id)}
                 coinSymbol={selectedCoin}
+                isMonitored={accountMonitoringStatuses[account.id] || false}
+                onMonitoringStatusChange={handleMonitoringStatusChange}
               />
             ))}
           </div>
@@ -885,7 +893,45 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
         </div>
       </div>
 
-      {!monitoringAccounts || monitoringAccounts.length === 0 ? (
+      {/* Sub-tab navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8" aria-label="Monitoring tabs">
+          {[
+            { id: 'overview', name: 'Account Overview', icon: UserGroupIcon },
+            { id: 'tweets', name: 'Real-Time Tweets', icon: ChatBubbleLeftIcon },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMonitoringSubTab(tab.id as any)}
+              className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
+                monitoringSubTab === tab.id
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              <tab.icon className="h-5 w-5 mr-2" />
+              {tab.name}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Sub-tab content */}
+      <div>
+        {monitoringSubTab === 'overview' && renderAccountOverview()}
+        {monitoringSubTab === 'tweets' && (
+          <RealTimeTweets 
+            coinSymbol={selectedCoin} 
+            monitoredAccounts={monitoringAccounts} 
+          />
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAccountOverview = () => {
+    if (!monitoringAccounts || monitoringAccounts.length === 0) {
+      return (
         <div className="text-center py-12">
           <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No accounts being monitored</h3>
@@ -902,75 +948,135 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
             </button>
           </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {monitoringAccounts
-            .filter(account => {
-              // 更严格的过滤条件
-              return account && 
-                     typeof account === 'object' && 
-                     (account.id || account.username) &&
-                     account.id !== null &&
-                     account.id !== undefined;
-            })
-            .map((account) => {
-              // 为每个字段提供默认值
-              const safeAccount = {
-                id: account.id || account.username || `unknown-${Math.random()}`,
-                username: account.username || 'unknown',
-                displayName: account.displayName || account.username || 'Unknown Account',
-                profileImageUrl: account.profileImageUrl || '/default-avatar.png',
-                isVerified: Boolean(account.isVerified),
-                followersCount: Number(account.followersCount) || 0,
-                relevanceScore: Number(account.relevanceScore) || 0,
-                addedAt: account.addedAt || null
-              };
+      );
+    }
 
-              return (
-                <div key={safeAccount.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <img
-                      src={safeAccount.profileImageUrl}
-                      alt={safeAccount.displayName}
-                      className="h-10 w-10 rounded-full"
-                      onError={(e) => {
-                        // 如果图片加载失败，使用默认头像
-                        const target = e.currentTarget as HTMLImageElement;
-                        if (target.src !== '/default-avatar.png') {
-                          target.src = '/default-avatar.png';
-                        }
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {safeAccount.displayName}
-                        </h4>
-                        {safeAccount.isVerified && (
-                          <ShieldCheckIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        @{safeAccount.username}
-                      </p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                        <span>{safeAccount.followersCount.toLocaleString()} followers</span>
-                        <span>Relevance: {safeToFixed(safeAccount.relevanceScore, 2)}</span>
-                      </div>
-                      {safeAccount.addedAt && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          Added: {new Date(safeAccount.addedAt).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+    return (
+      <div className="space-y-6">
+        {/* Monitoring stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <div className="flex items-center">
+              <EyeIcon className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                  Active Monitoring
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  {monitoringAccounts.length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-center">
+              <ChartBarIcon className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  Posts Today
+                </p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {monitoringStatus?.totalPosts || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <div className="flex items-center">
+              <ClockIcon className="h-8 w-8 text-yellow-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                  Alerts
+                </p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {monitoringStatus?.alertCount || 0}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Monitored accounts grid */}
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h4 className="text-md font-medium text-gray-900 dark:text-white">
+              Monitored Accounts ({monitoringAccounts.length})
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Accounts currently being monitored for {coinName} sentiment
+            </p>
+          </div>
+          
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {monitoringAccounts
+                .filter(account => {
+                  return account && 
+                         typeof account === 'object' && 
+                         (account.id || account.username) &&
+                         account.id !== null &&
+                         account.id !== undefined;
+                })
+                .map((account) => {
+                  const safeAccount = {
+                    id: account.id || account.username || `unknown-${Math.random()}`,
+                    username: account.username || 'unknown',
+                    displayName: account.displayName || account.username || 'Unknown Account',
+                    profileImageUrl: account.profileImageUrl || '/default-avatar.png',
+                    isVerified: Boolean(account.isVerified),
+                    followersCount: Number(account.followersCount) || 0,
+                    relevanceScore: Number(account.relevanceScore) || 0,
+                    addedAt: account.addedAt || null
+                  };
+
+                  return (
+                    <div key={safeAccount.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <div className="flex items-start space-x-3">
+                        <img
+                          src={safeAccount.profileImageUrl}
+                          alt={safeAccount.displayName}
+                          className="h-10 w-10 rounded-full"
+                          onError={(e) => {
+                            const target = e.currentTarget as HTMLImageElement;
+                            if (target.src !== '/default-avatar.png') {
+                              target.src = '/default-avatar.png';
+                            }
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {safeAccount.displayName}
+                            </h4>
+                            {safeAccount.isVerified && (
+                              <ShieldCheckIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                            @{safeAccount.username}
+                          </p>
+                          <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                            <span>{safeAccount.followersCount.toLocaleString()} followers</span>
+                            <span>Relevance: {safeToFixed(safeAccount.relevanceScore, 2)}</span>
+                          </div>
+                          {safeAccount.addedAt && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Added: {new Date(safeAccount.addedAt).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderRecommendedTab = () => (
     <RecommendedAccountsPanel

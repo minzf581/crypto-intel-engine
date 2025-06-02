@@ -72,6 +72,8 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'priority' | 'followers' | 'relevance'>('priority');
   const [showOnlyUnmonitored, setShowOnlyUnmonitored] = useState(false);
+  const [monitoringStatuses, setMonitoringStatuses] = useState<{ [key: string]: boolean }>({});
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   useEffect(() => {
     loadRecommendedAccounts();
@@ -80,6 +82,13 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
   useEffect(() => {
     filterAndSortAccounts();
   }, [accounts, selectedCategory, searchQuery, sortBy, showOnlyUnmonitored]);
+
+  // Check monitoring status when accounts are loaded
+  useEffect(() => {
+    if (accounts.length > 0) {
+      checkMonitoringStatus();
+    }
+  }, [accounts, selectedCoin]);
 
   const loadRecommendedAccounts = async () => {
     setIsLoading(true);
@@ -91,6 +100,36 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
       setAccounts([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkMonitoringStatus = async () => {
+    if (accounts.length === 0) return;
+    
+    setIsCheckingStatus(true);
+    try {
+      // Get account IDs from recommended accounts
+      const accountIds = accounts.map(account => account.id);
+      
+      const response = await socialSentimentApi.checkAccountsMonitoringStatus(selectedCoin, accountIds);
+      
+      if (response.success) {
+        const statusMap: { [key: string]: boolean } = {};
+        response.data.accountStatuses.forEach((status: any) => {
+          statusMap[status.accountId] = status.isMonitored;
+        });
+        setMonitoringStatuses(statusMap);
+        
+        // Update accounts with monitoring status
+        setAccounts(prev => prev.map(account => ({
+          ...account,
+          isMonitored: statusMap[account.id] || false
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to check monitoring status:', error);
+    } finally {
+      setIsCheckingStatus(false);
     }
   };
 
@@ -165,6 +204,12 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
               : acc
           )
         );
+
+        // Update monitoring statuses map
+        setMonitoringStatuses(prev => ({
+          ...prev,
+          [account.id]: true
+        }));
 
         // Show success message
         alert(`Successfully added ${account.displayName} to monitoring for ${selectedCoin}`);

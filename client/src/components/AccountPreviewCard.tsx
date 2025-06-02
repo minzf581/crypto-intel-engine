@@ -7,7 +7,8 @@ import {
   EyeIcon,
   CalendarIcon,
   CheckCircleIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { TwitterAccount, RecentTweet } from '../types/socialSentiment';
 import { socialSentimentApi } from '../services/socialSentimentApi';
@@ -17,17 +18,48 @@ interface AccountPreviewCardProps {
   isSelected: boolean;
   onToggleSelect: () => void;
   coinSymbol: string;
+  isMonitored?: boolean;
+  onMonitoringStatusChange?: (accountId: string, isMonitored: boolean) => void;
 }
 
 const AccountPreviewCard: React.FC<AccountPreviewCardProps> = ({
   account,
   isSelected,
   onToggleSelect,
-  coinSymbol
+  coinSymbol,
+  isMonitored: initialIsMonitored = false,
+  onMonitoringStatusChange
 }) => {
   const [recentTweets, setRecentTweets] = useState<RecentTweet[]>([]);
   const [isLoadingTweets, setIsLoadingTweets] = useState(false);
   const [showTweets, setShowTweets] = useState(false);
+  const [isMonitored, setIsMonitored] = useState(initialIsMonitored);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+
+  useEffect(() => {
+    checkMonitoringStatus();
+  }, [account.id, coinSymbol]);
+
+  useEffect(() => {
+    setIsMonitored(initialIsMonitored);
+  }, [initialIsMonitored]);
+
+  const checkMonitoringStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const response = await socialSentimentApi.checkAccountsMonitoringStatus(coinSymbol, [account.id]);
+      
+      if (response.success && response.data.accountStatuses.length > 0) {
+        const status = response.data.accountStatuses[0];
+        setIsMonitored(status.isMonitored);
+        onMonitoringStatusChange?.(account.id, status.isMonitored);
+      }
+    } catch (error) {
+      console.error('Failed to check monitoring status:', error);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -155,14 +187,24 @@ const AccountPreviewCard: React.FC<AccountPreviewCardProps> = ({
         </div>
         
         <button
-          onClick={onToggleSelect}
+          onClick={isMonitored ? undefined : onToggleSelect}
+          disabled={isMonitored}
           className={`flex-shrink-0 p-2 rounded-full transition-colors ${
-            isSelected
+            isMonitored
+              ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-not-allowed'
+              : isSelected
               ? 'bg-blue-600 text-white'
               : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
           }`}
+          title={isMonitored ? 'Already monitoring this account' : isSelected ? 'Remove from selection' : 'Add to selection'}
         >
-          <CheckCircleIcon className="h-5 w-5" />
+          {isCheckingStatus ? (
+            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+          ) : isMonitored ? (
+            <CheckCircleIcon className="h-5 w-5" />
+          ) : (
+            <CheckCircleIcon className="h-5 w-5" />
+          )}
         </button>
       </div>
 
@@ -224,6 +266,16 @@ const AccountPreviewCard: React.FC<AccountPreviewCardProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Monitoring Status */}
+      {isMonitored && (
+        <div className="flex items-center justify-center space-x-2 mt-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+          <CheckCircleIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <span className="text-sm font-medium text-green-700 dark:text-green-300">
+            Currently Monitoring
+          </span>
+        </div>
+      )}
 
       {/* Recent Tweets Toggle */}
       <button
