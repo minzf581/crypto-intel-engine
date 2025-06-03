@@ -5,6 +5,8 @@ import { TwitterPost } from '../models/TwitterPost';
 import { AccountCoinRelevance } from '../models/AccountCoinRelevance';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
+import { getSandboxConfig } from '../config/sandboxConfig';
+import TwitterSandboxService from './sandbox/TwitterSandboxService';
 
 // Rate limit management interfaces
 interface RateLimitInfo {
@@ -391,7 +393,7 @@ export class TwitterService {
 
   /**
    * Search for Twitter accounts related to a cryptocurrency
-   * ONLY returns real data from Twitter API - NO DEMO/MOCK DATA
+   * Supports both real data and sandbox mode for development
    */
   async searchAccountsForCoin(
     coinSymbol: string,
@@ -403,6 +405,20 @@ export class TwitterService {
     } = {}
   ): Promise<TwitterSearchResult> {
     const { limit = 50, minFollowers = 1000, includeVerified = true } = options;
+    const sandboxConfig = getSandboxConfig();
+
+    // Check if sandbox mode is enabled for Twitter
+    if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
+      logger.info(`${sandboxConfig.notificationPrefix}Using sandbox data for ${coinSymbol} (${coinName})`, {
+        limit,
+        minFollowers,
+        includeVerified,
+        mode: 'sandbox'
+      });
+
+      const sandboxService = TwitterSandboxService.getInstance();
+      return sandboxService.generateMockAccountsForCoin(coinSymbol, coinName, options);
+    }
 
     try {
       logger.info(`Searching Twitter accounts for ${coinSymbol} (${coinName}) with REAL API data only`, {
@@ -413,7 +429,7 @@ export class TwitterService {
 
       // Validate Twitter API configuration
       if (!this.bearerToken) {
-        throw new Error('Twitter API Bearer Token is required. Please configure TWITTER_BEARER_TOKEN environment variable. Demo data is prohibited for financial applications.');
+        throw new Error('Twitter API Bearer Token is required. Please configure TWITTER_BEARER_TOKEN environment variable. Set SANDBOX_MODE=enabled for development testing.');
       }
 
       // Build search queries for the cryptocurrency
@@ -439,7 +455,7 @@ export class TwitterService {
       // If no queries succeeded, throw detailed error
       if (successfulQueries === 0) {
         logger.error(`All Twitter API queries failed for ${coinSymbol}:`, queryErrors);
-        throw new Error(`Twitter API search failed for ${coinSymbol}. Errors: ${queryErrors.join('; ')}. Please check API configuration, rate limits, and permissions.`);
+        throw new Error(`Twitter API search failed for ${coinSymbol}. Errors: ${queryErrors.join('; ')}. Please check API configuration, rate limits, and permissions. For development testing, set SANDBOX_MODE=enabled.`);
       }
 
       // If no users found, return empty result with clear message
@@ -486,27 +502,27 @@ export class TwitterService {
       logger.error(`Twitter API search failed for ${coinSymbol}:`, error);
       
       if (error instanceof Error) {
-        // Provide specific error details without fallback to demo data
+        // Provide specific error details with sandbox mode suggestion
         if (error.message.includes('rate limit') || error.message.includes('429')) {
-          throw new Error(`Twitter API rate limit exceeded for ${coinSymbol}. Please wait before making more requests. Demo data is not permitted for financial applications.`);
+          throw new Error(`Twitter API rate limit exceeded for ${coinSymbol}. Please wait before making more requests. For development testing, set SANDBOX_MODE=enabled to use mock data.`);
         }
         
         if (error.message.includes('authentication') || error.message.includes('401')) {
-          throw new Error(`Twitter API authentication failed. Please check TWITTER_BEARER_TOKEN configuration. Demo data is not permitted for financial applications.`);
+          throw new Error(`Twitter API authentication failed. Please check TWITTER_BEARER_TOKEN configuration. For development testing, set SANDBOX_MODE=enabled to use mock data.`);
         }
         
         if (error.message.includes('403')) {
-          throw new Error(`Twitter API access forbidden. Please check API permissions and endpoints. Demo data is not permitted for financial applications.`);
+          throw new Error(`Twitter API access forbidden. Please check API permissions and endpoints. For development testing, set SANDBOX_MODE=enabled to use mock data.`);
         }
       }
       
-      throw new Error(`Twitter API search failed for ${coinSymbol}: ${error instanceof Error ? error.message : 'Unknown error'}. Please check API configuration and network connectivity.`);
+      throw new Error(`Twitter API search failed for ${coinSymbol}: ${error instanceof Error ? error.message : 'Unknown error'}. Please check API configuration and network connectivity. For development testing, set SANDBOX_MODE=enabled.`);
     }
   }
 
   /**
    * Search for Twitter accounts with custom query
-   * ONLY returns real data from Twitter API - NO DEMO/MOCK DATA
+   * Supports both real data and sandbox mode for development
    */
   async searchAccountsWithCustomQuery(
     query: string,
@@ -517,6 +533,20 @@ export class TwitterService {
     } = {}
   ): Promise<TwitterSearchResult> {
     const { limit = 50, minFollowers = 1000, includeVerified = true } = options;
+    const sandboxConfig = getSandboxConfig();
+
+    // Check if sandbox mode is enabled for Twitter
+    if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
+      logger.info(`${sandboxConfig.notificationPrefix}Using sandbox data for custom query "${query}"`, {
+        limit,
+        minFollowers,
+        includeVerified,
+        mode: 'sandbox'
+      });
+
+      const sandboxService = TwitterSandboxService.getInstance();
+      return sandboxService.generateMockAccountsWithQuery(query, options);
+    }
 
     try {
       logger.info(`Searching Twitter accounts with custom query "${query}" using REAL API data only`, {
@@ -582,17 +612,17 @@ export class TwitterService {
       if (error instanceof Error) {
         // 如果是速率限制错误，返回推荐账户作为降级策略
         if (error.message.includes('rate limit') || error.message.includes('429')) {
-          logger.info(`Rate limit reached, falling back to recommended accounts for query "${query}"`);
+          logger.info(`Rate limit reached, falling back to recommended accounts for query "${query}". For development testing, set SANDBOX_MODE=enabled.`);
           return this.getFallbackRecommendedAccounts(query, limit);
         }
         
         if (error.message.includes('authentication') || error.message.includes('401')) {
-          logger.warn(`Authentication failed, falling back to recommended accounts for query "${query}"`);
+          logger.warn(`Authentication failed, falling back to recommended accounts for query "${query}". For development testing, set SANDBOX_MODE=enabled.`);
           return this.getFallbackRecommendedAccounts(query, limit);
         }
         
         if (error.message.includes('403')) {
-          logger.warn(`Access forbidden, falling back to recommended accounts for query "${query}"`);
+          logger.warn(`Access forbidden, falling back to recommended accounts for query "${query}". For development testing, set SANDBOX_MODE=enabled.`);
           return this.getFallbackRecommendedAccounts(query, limit);
         }
       }

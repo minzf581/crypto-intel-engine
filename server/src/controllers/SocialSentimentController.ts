@@ -1286,6 +1286,38 @@ export class SocialSentimentController {
    */
   getMonitoringStatus = async (req: Request, res: Response): Promise<void> => {
     try {
+      // Check if we're in sandbox mode
+      const { getSandboxConfig } = await import('../config/sandboxConfig');
+      const sandboxConfig = getSandboxConfig();
+
+      if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
+        // Return sandbox monitoring status
+        const { coinSymbol } = req.params;
+        
+        const mockStatus = {
+          isMonitoring: true,
+          coinSymbol: coinSymbol?.toUpperCase() || 'BTC',
+          totalPosts: Math.floor(Math.random() * 50) + 20, // 20-70 posts
+          alertCount: Math.floor(Math.random() * 5), // 0-4 alerts
+          monitoredAccounts: Math.floor(Math.random() * 10) + 5, // 5-14 accounts
+          lastUpdate: new Date().toISOString(),
+          searchMethod: 'Sandbox Mock Data (Development Only)',
+          dataCollectionStatus: {
+            isRunning: true,
+            lastRun: new Date(Date.now() - Math.random() * 3600000).toISOString(), // Within last hour
+            nextRun: new Date(Date.now() + 1800000).toISOString(), // In 30 minutes
+          }
+        };
+
+        res.json({
+          success: true,
+          data: mockStatus,
+          message: `Monitoring status retrieved for ${coinSymbol?.toUpperCase() || 'BTC'} (Sandbox Mode)`,
+        });
+        return;
+      }
+
+      // Original production code
       // Get all monitored coins and their account counts
       const monitoredCoins = await AccountCoinRelevance.findAll({
         where: { isConfirmed: true },
@@ -1343,6 +1375,62 @@ export class SocialSentimentController {
     try {
       const { coinSymbol } = req.params;
 
+      // Check if we're in sandbox mode
+      const { getSandboxConfig } = await import('../config/sandboxConfig');
+      const sandboxConfig = getSandboxConfig();
+
+      if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
+        // Return sandbox monitored accounts
+        const TwitterSandboxService = (await import('../services/sandbox/TwitterSandboxService')).default;
+        const twitterSandbox = new TwitterSandboxService();
+        
+        // Generate monitored accounts for the specific coin
+        const coinName = this.getCoinNameFromSymbol(coinSymbol.toUpperCase());
+        const mockSearchResult = twitterSandbox.generateMockAccountsForCoin(
+          coinSymbol.toUpperCase(), 
+          coinName, 
+          { limit: 8 }
+        );
+        
+        // Extract accounts from the search result
+        const mockAccounts = mockSearchResult.accounts;
+        
+        // Format the accounts as monitored accounts with additional monitoring data
+        const monitoredAccountsData = mockAccounts.map((account: any, index: number) => ({
+          id: account.id,
+          username: account.username,
+          displayName: account.displayName,
+          bio: account.bio,
+          followersCount: account.followersCount,
+          isVerified: account.isVerified,
+          profileImageUrl: account.profileImageUrl,
+          influenceScore: account.influenceScore,
+          relevanceScore: 0.7 + (Math.random() * 0.3), // 70-100% relevance
+          mentionCount: Math.floor(Math.random() * 20) + 5, // 5-24 mentions
+          lastMentionAt: new Date(Date.now() - Math.random() * 86400000).toISOString(), // Within last day
+          addedAt: new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(), // Within last week
+          isConfirmed: true,
+          isMonitored: true,
+          monitoringStatus: 'active',
+          recentPostsCount: Math.floor(Math.random() * 10) + 1, // 1-10 recent posts
+          avgSentiment: (Math.random() - 0.5) * 2, // -1 to 1
+        }));
+
+        res.json({
+          success: true,
+          data: monitoredAccountsData,
+          message: `Found ${monitoredAccountsData.length} monitored accounts for ${coinSymbol.toUpperCase()} (Sandbox Mode)`,
+          metadata: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            totalAccounts: monitoredAccountsData.length,
+            lastUpdated: new Date(),
+            searchMethod: 'Sandbox Mock Data (Development Only)',
+          }
+        });
+        return;
+      }
+
+      // Original production code
       // Get all confirmed monitored accounts for this coin
       const monitoredAccounts = await AccountCoinRelevance.findAll({
         where: {
@@ -3233,17 +3321,53 @@ export class SocialSentimentController {
 
       logger.info(`Manual data collection triggered for ${coinSymbol} by user`);
 
+      // Check if we're in sandbox mode
+      const { getSandboxConfig } = await import('../config/sandboxConfig');
+      const sandboxConfig = getSandboxConfig();
+
+      if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
+        // Return sandbox data collection result
+        const mockResult = {
+          success: true,
+          accountsProcessed: Math.floor(Math.random() * 10) + 5, // 5-14 accounts
+          postsCollected: Math.floor(Math.random() * 50) + 20, // 20-69 posts
+          errors: [],
+          timestamp: new Date().toISOString(),
+          searchMethod: 'Sandbox Data Collection',
+          dataSource: 'Mock Data'
+        };
+
+        logger.info(`[SANDBOX] Mock data collection completed for ${coinSymbol}: ${mockResult.postsCollected} posts from ${mockResult.accountsProcessed} accounts`);
+
+        res.json({
+          success: true,
+          data: {
+            coinSymbol: coinSymbol.toUpperCase(),
+            accountsProcessed: mockResult.accountsProcessed,
+            postsCollected: mockResult.postsCollected,
+            errors: mockResult.errors,
+            timestamp: mockResult.timestamp,
+            searchMethod: mockResult.searchMethod,
+            dataSource: mockResult.dataSource,
+            sandboxNote: 'This is sandbox data for development purposes'
+          },
+          message: `${sandboxConfig.notificationPrefix}Data collection completed for ${coinSymbol}. Processed ${mockResult.accountsProcessed} accounts and collected ${mockResult.postsCollected} posts.`
+        });
+        return;
+      }
+
       // Check Twitter API configuration first
       if (!this.twitterService.isTwitterConfigured()) {
         res.status(503).json({
           success: false,
-          message: 'Twitter API is not configured. Please contact administrator.',
+          message: 'Twitter API is not configured. Please contact administrator or enable sandbox mode for development.',
           data: {
             coinSymbol: coinSymbol.toUpperCase(),
             accountsProcessed: 0,
             postsCollected: 0,
             errors: ['Twitter API credentials not available'],
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            suggestion: 'Set SANDBOX_MODE=enabled for development testing'
           }
         });
         return;
@@ -3262,7 +3386,7 @@ export class SocialSentimentController {
 
         res.status(429).json({
           success: false,
-          message: 'Twitter API rate limits are critically low. Please wait before trying again.',
+          message: 'Twitter API rate limits are critically low. Please wait before trying again or enable sandbox mode.',
           data: {
             coinSymbol: coinSymbol.toUpperCase(),
             accountsProcessed: 0,
@@ -3273,7 +3397,8 @@ export class SocialSentimentController {
             recommendations: [
               'Wait for rate limits to reset (typically 15 minutes)',
               'Try again with fewer accounts',
-              'Consider using automatic data collection with longer intervals'
+              'Consider using automatic data collection with longer intervals',
+              'Enable sandbox mode: SANDBOX_MODE=enabled for development'
             ]
           }
         });
@@ -3286,13 +3411,14 @@ export class SocialSentimentController {
         if (!testResult.success) {
           res.status(503).json({
             success: false,
-            message: 'Twitter API is currently unavailable. Please try again later.',
+            message: 'Twitter API is currently unavailable. Please try again later or enable sandbox mode.',
             data: {
               coinSymbol: coinSymbol.toUpperCase(),
               accountsProcessed: 0,
               postsCollected: 0,
               errors: [testResult.message || 'API connection failed'],
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              suggestion: 'Set SANDBOX_MODE=enabled for development testing'
             }
           });
           return;
@@ -3300,13 +3426,14 @@ export class SocialSentimentController {
       } catch (testError) {
         res.status(503).json({
           success: false,
-          message: 'Failed to verify Twitter API connectivity.',
+          message: 'Failed to verify Twitter API connectivity. Enable sandbox mode for development.',
           data: {
             coinSymbol: coinSymbol.toUpperCase(),
             accountsProcessed: 0,
             postsCollected: 0,
             errors: ['API connectivity test failed'],
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            suggestion: 'Set SANDBOX_MODE=enabled for development testing'
           }
         });
         return;
@@ -3509,6 +3636,132 @@ export class SocialSentimentController {
         success: false,
         message: 'Failed to test data collection',
         error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Search accounts for coin - Test endpoint (no authentication required)
+   * This endpoint is for testing sandbox mode functionality
+   */
+  searchAccountsForCoinTest = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { symbol = 'BTC', limit = 5 } = req.query;
+      
+      logger.info(`🧪 Testing account search for ${symbol} (sandbox mode test)`);
+      
+      // Determine coin name from symbol
+      const coinName = this.getCoinNameFromSymbol(symbol as string);
+      
+      const result = await this.twitterService.searchAccountsForCoin(
+        symbol as string,
+        coinName,
+        {
+          limit: Number(limit),
+          minFollowers: 1000,
+          includeVerified: true,
+        }
+      );
+
+      res.json({
+        success: true,
+        data: result,
+        message: `Found ${result.totalCount} Twitter accounts for ${symbol}`,
+        metadata: {
+          coinSymbol: symbol,
+          coinName,
+          searchQuery: result.query,
+          totalFound: result.totalCount,
+          hasMore: result.hasMore,
+          searchMethod: result.searchMethod,
+          testMode: true,
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to search accounts for coin (test):', error);
+
+      let statusCode = 500;
+      let errorMessage = 'Internal server error while searching accounts';
+
+      if (error instanceof Error) {
+        if (error.message.includes('Twitter API configuration required')) {
+          statusCode = 503;
+          errorMessage = 'Twitter API service not configured. Using sandbox mode for testing.';
+        } else if (error.message.includes('rate limit')) {
+          statusCode = 429;
+          errorMessage = 'Rate limit exceeded. Using sandbox mode for testing.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+        testMode: true
+      });
+    }
+  };
+
+  /**
+   * Search accounts with query - Test endpoint (no authentication required)
+   * This endpoint is for testing sandbox mode functionality
+   */
+  searchAccountsWithQueryTest = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { query = 'Bitcoin', limit = 3 } = req.query;
+      
+      logger.info(`🧪 Testing account search with query "${query}" (sandbox mode test)`);
+      
+      const result = await this.twitterService.searchAccountsWithCustomQuery(
+        query as string,
+        {
+          limit: Number(limit),
+          minFollowers: 1000,
+          includeVerified: true,
+        }
+      );
+
+      res.json({
+        success: true,
+        data: result,
+        message: `Found ${result.totalCount} Twitter accounts for query "${query}"`,
+        metadata: {
+          searchQuery: query,
+          totalFound: result.totalCount,
+          hasMore: result.hasMore,
+          searchMethod: result.searchMethod,
+          testMode: true,
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to search accounts with query (test):', error);
+
+      let statusCode = 500;
+      let errorMessage = 'Internal server error while searching accounts';
+
+      if (error instanceof Error) {
+        if (error.message.includes('Twitter API configuration required')) {
+          statusCode = 503;
+          errorMessage = 'Twitter API service not configured. Using sandbox mode for testing.';
+        } else if (error.message.includes('rate limit')) {
+          statusCode = 429;
+          errorMessage = 'Rate limit exceeded. Using sandbox mode for testing.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+        testMode: true
       });
     }
   };

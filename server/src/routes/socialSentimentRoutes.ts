@@ -5,6 +5,21 @@ import { authenticateToken } from '../middlewares/auth';
 const router = Router();
 const socialSentimentController = new SocialSentimentController();
 
+// === SANDBOX TESTING ENDPOINTS (No Authentication Required) ===
+// These endpoints are for testing sandbox mode functionality
+
+// Search accounts for a specific cryptocurrency (sandbox test endpoint)
+router.get('/search-accounts-coin',
+  socialSentimentController.searchAccountsForCoinTest
+);
+
+// Search accounts with custom query (sandbox test endpoint)
+router.get('/search-accounts-query-test',
+  socialSentimentController.searchAccountsWithQueryTest
+);
+
+// === AUTHENTICATED ENDPOINTS ===
+
 // Search accounts for a specific cryptocurrency
 router.get('/search-accounts/:coinSymbol/:coinName', 
   authenticateToken, 

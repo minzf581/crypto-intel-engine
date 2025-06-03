@@ -6,6 +6,10 @@ import { AuthProvider } from './context/AuthContext';
 import { AssetProvider } from './context/AssetContext';
 import { SignalProvider } from './context/SignalContext';
 import './styles/index.css';
+import { logFrontendSandboxConfig } from './config/sandboxConfig';
+
+// Log sandbox configuration for debugging
+logFrontendSandboxConfig();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

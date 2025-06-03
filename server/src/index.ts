@@ -23,12 +23,16 @@ import { AddressInfo } from 'net';
 import path from 'path';
 import fs from 'fs';
 import { getCorsConfig, logEnvironmentInfo, detectEnvironment } from './utils/environment';
+import { logSandboxConfig } from './config/sandboxConfig';
 
 const app = express();
 const server = http.createServer(app);
 
 // Log environment configuration for debugging
 logEnvironmentInfo();
+
+// Log sandbox configuration for debugging
+logSandboxConfig();
 
 // Get environment-aware CORS configuration
 const corsOptions = getCorsConfig();
