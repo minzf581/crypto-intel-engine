@@ -18,6 +18,7 @@ export interface Notification {
   read: boolean;
   data?: any;
   timestamp: string;
+  priority?: 'critical' | 'high' | 'medium' | 'low';
 }
 
 // Notification context type
@@ -136,17 +137,62 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (Notification.permission === 'granted') {
         new Notification(notification.title, {
           body: notification.message,
-          icon: '/favicon.ico'
+          icon: '/favicon.ico',
+          tag: `notification-${notification.id}`,
+          requireInteraction: notification.priority === 'critical',
+        });
+      }
+    };
+
+    const handleBrowserNotification = (notificationData: any) => {
+      console.log('Received browser notification request:', notificationData);
+      
+      // Show browser notification if permission is granted
+      if (Notification.permission === 'granted') {
+        const browserNotification = new Notification(notificationData.title, {
+          body: notificationData.body,
+          icon: notificationData.icon || '/favicon.ico',
+          tag: notificationData.tag,
+          requireInteraction: notificationData.requireInteraction || false,
+          data: notificationData.data,
+        });
+
+        // Handle notification click
+        browserNotification.onclick = () => {
+          window.focus();
+          browserNotification.close();
+          
+          // Navigate to notification or specific page if needed
+          if (notificationData.data?.actionUrl) {
+            window.location.href = notificationData.data.actionUrl;
+          }
+        };
+
+        // Auto-close after 5 seconds for non-critical notifications
+        if (!notificationData.requireInteraction) {
+          setTimeout(() => {
+            browserNotification.close();
+          }, 5000);
+        }
+      } else if (Notification.permission === 'default') {
+        // Request permission if not yet determined
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') {
+            // Retry showing the notification
+            handleBrowserNotification(notificationData);
+          }
         });
       }
     };
     
-    // Register notification event listener
+    // Register notification event listeners
     socket.on('notification', handleNewNotification);
+    socket.on('browser_notification', handleBrowserNotification);
     
     // Cleanup function
     return () => {
       socket.off('notification', handleNewNotification);
+      socket.off('browser_notification', handleBrowserNotification);
     };
   }, [socket, isAuthenticated]);
   

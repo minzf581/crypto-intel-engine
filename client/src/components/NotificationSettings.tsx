@@ -32,6 +32,13 @@ export const NotificationSettings: React.FC = () => {
   useEffect(() => {
     loadSettings();
     setupPushNotifications();
+    
+    // Check email service status
+    checkEmailServiceStatus().then(isConfigured => {
+      if (!isConfigured) {
+        console.warn('Email service is not configured');
+      }
+    });
   }, []);
 
   const loadSettings = async () => {
@@ -95,6 +102,51 @@ export const NotificationSettings: React.FC = () => {
       toast.error('Failed to send test notification');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/notifications/email/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          testEmail: true,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('Test email sent successfully! Check your inbox.');
+      } else {
+        toast.error(data.error || 'Failed to send test email');
+      }
+    } catch (error) {
+      console.error('Failed to send test email:', error);
+      toast.error('Failed to send test email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkEmailServiceStatus = async () => {
+    try {
+      const response = await fetch('/api/notifications/email/status', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      const data = await response.json();
+      return data.emailServiceConfigured;
+    } catch (error) {
+      console.error('Failed to check email service status:', error);
+      return false;
     }
   };
 
@@ -285,21 +337,42 @@ export const NotificationSettings: React.FC = () => {
         
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Send a test notification to verify your settings are working correctly.
+            Send test notifications to verify your settings are working correctly.
           </p>
           
-          <button
-            onClick={sendTestNotification}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
-          >
-            {loading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            ) : (
-              <BellIcon className="w-4 h-4" />
-            )}
-            <span>Send Test Notification</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={sendTestNotification}
+              disabled={loading}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+            >
+              {loading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <BellIcon className="w-4 h-4" />
+              )}
+              <span>Test Browser Notification</span>
+            </button>
+
+            <button
+              onClick={sendTestEmail}
+              disabled={loading || !settings.emailEnabled}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+            >
+              {loading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <EnvelopeIcon className="w-4 h-4" />
+              )}
+              <span>Test Email Notification</span>
+            </button>
+          </div>
+          
+          {!settings.emailEnabled && (
+            <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+              ⚠️ Email notifications are disabled. Enable them above to test email functionality.
+            </p>
+          )}
           
           {fcmToken && (
             <p className="text-xs text-gray-500">

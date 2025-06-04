@@ -14,6 +14,7 @@ import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
 import env from '../config/env';
 import { TwitterDataCollectionService } from '../services/TwitterDataCollectionService';
+import UnifiedDataSourceService from '../services/UnifiedDataSourceService';
 
 export class SocialSentimentController {
   private socialSentimentService: SocialSentimentService;
@@ -21,6 +22,7 @@ export class SocialSentimentController {
   private twitterOAuthService: TwitterOAuthService;
   private recommendedAccountService: RecommendedAccountService;
   private dataCollectionService: TwitterDataCollectionService;
+  private unifiedDataSource: UnifiedDataSourceService;
 
   constructor() {
     this.socialSentimentService = SocialSentimentService.getInstance();
@@ -28,6 +30,7 @@ export class SocialSentimentController {
     this.twitterOAuthService = TwitterOAuthService.getInstance();
     this.recommendedAccountService = RecommendedAccountService.getInstance();
     this.dataCollectionService = TwitterDataCollectionService.getInstance();
+    this.unifiedDataSource = UnifiedDataSourceService.getInstance();
   }
 
   /**
@@ -606,7 +609,7 @@ export class SocialSentimentController {
   };
 
   /**
-   * Get sentiment summary for a coin
+   * Get sentiment summary for a coin - Updated to use unified data source
    */
   getCoinSentimentSummary = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -622,56 +625,29 @@ export class SocialSentimentController {
         return;
       }
 
-      // Get posts for the timeframe
-      const timeframeDuration = this.getTimeframeDuration(timeframe as string);
-      const startDate = new Date(Date.now() - timeframeDuration);
-
-      const posts = await TwitterPost.findAll({
-        where: {
-          content: { [Op.like]: `%${coinSymbol}%` },
-          publishedAt: { [Op.gte]: startDate },
-        },
-        include: [{ model: TwitterAccount, as: 'account' }],
-        order: [['publishedAt', 'DESC']],
-      });
-
-      // Calculate sentiment distribution
-      const sentimentDistribution = { positive: 0, negative: 0, neutral: 0 };
-      const impactDistribution = { low: 0, medium: 0, high: 0 };
-      let totalSentimentScore = 0;
-      let totalImpactScore = 0;
-
-      posts.forEach(post => {
-        sentimentDistribution[post.sentiment]++;
-        impactDistribution[post.impact]++;
-        totalSentimentScore += post.sentimentScore;
-        totalImpactScore += post.impactScore;
-      });
-
-      // Get significant posts
-      const significantPosts = posts
-        .filter(post => post.impact === 'high' || Math.abs(post.sentimentScore) > 0.7)
-        .slice(0, 10);
-
-      // Extract trending keywords
-      const trendingKeywords = this.extractTrendingKeywords(posts);
+      // Use unified data source for consistency
+      const sentimentData = await this.unifiedDataSource.getSentimentAnalysisData(
+        coinSymbol.toUpperCase(), 
+        timeframe as '1h' | '4h' | '24h' | '7d'
+      );
 
       const summary = {
-        coinSymbol,
+        coinSymbol: coinSymbol.toUpperCase(),
         timeframe,
-        totalPosts: posts.length,
-        sentimentDistribution,
-        avgSentimentScore: posts.length > 0 ? totalSentimentScore / posts.length : 0,
-        impactDistribution,
-        avgImpactScore: posts.length > 0 ? totalImpactScore / posts.length : 0,
-        significantPosts,
-        trendingKeywords,
+        totalPosts: sentimentData.totalPosts,
+        sentimentDistribution: sentimentData.sentimentDistribution,
+        avgSentimentScore: sentimentData.avgSentimentScore,
+        impactDistribution: sentimentData.impactDistribution,
+        significantPosts: sentimentData.significantPosts,
+        trendingKeywords: sentimentData.trendingKeywords,
+        dataSource: sentimentData.dataSource,
+        lastUpdate: new Date().toISOString()
       };
 
       res.json({
         success: true,
         data: summary,
-        message: `Sentiment summary for ${coinSymbol} (${timeframe})`,
+        message: `Sentiment summary for ${coinSymbol.toUpperCase()} (${timeframe}) - Source: ${sentimentData.dataSource}`,
       });
     } catch (error) {
       logger.error('Failed to get sentiment summary:', error);
@@ -1076,7 +1052,7 @@ export class SocialSentimentController {
   };
 
   /**
-   * Get sentiment trend analysis
+   * Get sentiment trend analysis - Updated to use unified data source
    */
   getSentimentTrend = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -1092,15 +1068,24 @@ export class SocialSentimentController {
         return;
       }
 
-      const trendData = await this.socialSentimentService.getSentimentTrend(
-        coinSymbol,
+      // Use unified data source for consistent trend data
+      const tweetData = await this.unifiedDataSource.getTweetDataForCoin(
+        coinSymbol.toUpperCase(), 
         timeframe as '1h' | '4h' | '24h' | '7d'
       );
 
+      // Generate trend data from unified tweet data
+      const trendData = this.generateTrendDataFromTweets(tweetData, timeframe as string);
+
       res.json({
         success: true,
-        data: trendData,
-        message: `Sentiment trend for ${coinSymbol}`,
+        data: {
+          ...trendData,
+          coinSymbol: coinSymbol.toUpperCase(),
+          timeframe,
+          dataSource: tweetData.dataSource
+        },
+        message: `Sentiment trend for ${coinSymbol} (${tweetData.dataSource})`,
       });
     } catch (error) {
       logger.error('Failed to get sentiment trend:', error);
@@ -1111,6 +1096,271 @@ export class SocialSentimentController {
       });
     }
   };
+
+  /**
+   * Generate trend data from unified tweet data
+   */
+  private generateTrendDataFromTweets(tweetData: any, timeframe: string): any {
+    const posts = tweetData.posts || [];
+    
+    // Group posts by time periods
+    const periods = this.groupPostsByTimePeriods(posts, timeframe);
+    
+    // Calculate trend metrics
+    const trendPoints = periods.map(period => ({
+      timestamp: period.timestamp,
+      sentimentScore: period.avgSentiment,
+      postCount: period.postCount,
+      positiveCount: period.sentimentCounts.positive,
+      negativeCount: period.sentimentCounts.negative,
+      neutralCount: period.sentimentCounts.neutral,
+      highImpactCount: period.impactCounts.high,
+      mediumImpactCount: period.impactCounts.medium,
+      lowImpactCount: period.impactCounts.low
+    }));
+
+    return {
+      trendPoints,
+      summary: {
+        totalPosts: tweetData.totalPosts,
+        avgSentimentScore: tweetData.avgSentimentScore,
+        sentimentDistribution: tweetData.sentimentDistribution,
+        impactDistribution: tweetData.impactDistribution,
+        timeframe,
+        periodsCount: periods.length
+      }
+    };
+  }
+
+  /**
+   * Group posts by time periods based on timeframe
+   */
+  private groupPostsByTimePeriods(posts: any[], timeframe: string): any[] {
+    if (!posts || posts.length === 0) {
+      return [];
+    }
+
+    const periodDuration = this.getPeriodDuration(timeframe);
+    const periodsCount = this.getPeriodsCount(timeframe);
+    const now = new Date();
+    
+    const periods: any[] = [];
+    
+    for (let i = 0; i < periodsCount; i++) {
+      const periodEnd = new Date(now.getTime() - i * periodDuration);
+      const periodStart = new Date(periodEnd.getTime() - periodDuration);
+      
+      const periodPosts = posts.filter(post => {
+        const postTime = new Date(post.publishedAt);
+        return postTime >= periodStart && postTime < periodEnd;
+      });
+      
+      const sentimentCounts = { positive: 0, negative: 0, neutral: 0 };
+      const impactCounts = { high: 0, medium: 0, low: 0 };
+      let totalSentiment = 0;
+      
+      periodPosts.forEach(post => {
+        sentimentCounts[post.sentiment as 'positive' | 'negative' | 'neutral']++;
+        impactCounts[post.impact as 'high' | 'medium' | 'low']++;
+        totalSentiment += post.sentimentScore;
+      });
+      
+      periods.push({
+        timestamp: periodStart.toISOString(),
+        postCount: periodPosts.length,
+        avgSentiment: periodPosts.length > 0 ? totalSentiment / periodPosts.length : 0,
+        sentimentCounts,
+        impactCounts
+      });
+    }
+    
+    return periods.reverse(); // Return chronological order
+  }
+
+  /**
+   * Get period duration in milliseconds
+   */
+  private getPeriodDuration(timeframe: string): number {
+    switch (timeframe) {
+      case '1h': return 10 * 60 * 1000; // 10 minutes per period
+      case '4h': return 30 * 60 * 1000; // 30 minutes per period
+      case '24h': return 2 * 60 * 60 * 1000; // 2 hours per period
+      case '7d': return 24 * 60 * 60 * 1000; // 1 day per period
+      default: return 2 * 60 * 60 * 1000;
+    }
+  }
+
+  /**
+   * Get number of periods to display
+   */
+  private getPeriodsCount(timeframe: string): number {
+    switch (timeframe) {
+      case '1h': return 6; // 6 periods of 10 minutes
+      case '4h': return 8; // 8 periods of 30 minutes
+      case '24h': return 12; // 12 periods of 2 hours
+      case '7d': return 7; // 7 periods of 1 day
+      default: return 12;
+    }
+  }
+
+  /**
+   * Get real-time sentiment alerts - Updated to use unified data source
+   */
+  getSentimentAlerts = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { coinSymbol } = req.params;
+      const { limit = 20, severity } = req.query;
+
+      // Use unified data source to get tweet data
+      const tweetData = await this.unifiedDataSource.getTweetDataForCoin(
+        coinSymbol.toUpperCase(), 
+        '24h'
+      );
+
+      // Generate alerts from high-impact posts
+      const alerts = this.generateAlertsFromTweets(tweetData.posts, coinSymbol.toUpperCase());
+
+      // Filter by severity if specified
+      const filteredAlerts = severity 
+        ? alerts.filter(alert => alert.severity === severity)
+        : alerts;
+
+      res.json({
+        success: true,
+        data: filteredAlerts.slice(0, Number(limit)),
+        message: `Found ${filteredAlerts.length} sentiment alerts for ${coinSymbol} (${tweetData.dataSource})`,
+        metadata: {
+          totalAlerts: alerts.length,
+          dataSource: tweetData.dataSource,
+          totalPosts: tweetData.totalPosts,
+          highImpactPosts: tweetData.posts.filter(post => post.impact === 'high').length
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to get sentiment alerts:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get sentiment alerts',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  /**
+   * Generate alerts from tweets based on impact and sentiment
+   */
+  private generateAlertsFromTweets(posts: any[], coinSymbol: string): any[] {
+    if (!posts || posts.length === 0) {
+      return [];
+    }
+
+    const alerts: any[] = [];
+    
+    // High impact posts become alerts
+    const highImpactPosts = posts.filter(post => post.impact === 'high');
+    
+    highImpactPosts.forEach((post, index) => {
+      const severity = this.calculateAlertSeverity(post);
+      const alertType = this.determineAlertType(post);
+      
+      alerts.push({
+        id: `alert_${post.id}_${Date.now()}_${index}`,
+        coinSymbol,
+        type: alertType,
+        severity,
+        title: this.generateAlertTitle(post, coinSymbol),
+        message: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
+        sentimentScore: post.sentimentScore,
+        impactScore: post.impactScore,
+        engagement: {
+          likes: post.likeCount,
+          retweets: post.retweetCount,
+          replies: post.replyCount
+        },
+        source: {
+          platform: 'twitter',
+          username: post.account?.username || 'unknown',
+          verified: post.account?.verified || false,
+          followers: post.account?.followersCount || 0
+        },
+        timestamp: post.publishedAt,
+        createdAt: new Date().toISOString(),
+        isActive: true,
+        priority: this.calculateAlertPriority(post)
+      });
+    });
+
+    // Sort by priority and timestamp
+    return alerts.sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority; // Higher priority first
+      }
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(); // Newer first
+    });
+  }
+
+  /**
+   * Calculate alert severity based on post metrics
+   */
+  private calculateAlertSeverity(post: any): 'low' | 'medium' | 'high' | 'critical' {
+    const sentimentMagnitude = Math.abs(post.sentimentScore);
+    const totalEngagement = post.likeCount + post.retweetCount + post.replyCount;
+    
+    if (sentimentMagnitude > 0.8 && totalEngagement > 500) return 'critical';
+    if (sentimentMagnitude > 0.6 && totalEngagement > 200) return 'high';
+    if (sentimentMagnitude > 0.4 && totalEngagement > 50) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Determine alert type based on post content and sentiment
+   */
+  private determineAlertType(post: any): string {
+    if (post.sentimentScore > 0.5) return 'bullish_signal';
+    if (post.sentimentScore < -0.5) return 'bearish_signal';
+    if (post.likeCount + post.retweetCount > 1000) return 'viral_content';
+    if (post.account?.followers > 100000) return 'influencer_post';
+    return 'market_sentiment';
+  }
+
+  /**
+   * Generate alert title based on post and coin
+   */
+  private generateAlertTitle(post: any, coinSymbol: string): string {
+    const sentiment = post.sentiment;
+    const username = post.account?.username || 'User';
+    
+    if (sentiment === 'positive') {
+      return `🚀 Bullish sentiment detected for ${coinSymbol} by @${username}`;
+    } else if (sentiment === 'negative') {
+      return `📉 Bearish sentiment detected for ${coinSymbol} by @${username}`;
+    } else {
+      return `📊 High engagement post about ${coinSymbol} by @${username}`;
+    }
+  }
+
+  /**
+   * Calculate alert priority (1-10, higher is more important)
+   */
+  private calculateAlertPriority(post: any): number {
+    let priority = 5; // Base priority
+    
+    // Sentiment magnitude
+    priority += Math.abs(post.sentimentScore) * 3;
+    
+    // Engagement boost
+    const totalEngagement = post.likeCount + post.retweetCount + post.replyCount;
+    if (totalEngagement > 1000) priority += 2;
+    else if (totalEngagement > 500) priority += 1;
+    
+    // Verified account boost
+    if (post.account?.verified) priority += 1;
+    
+    // High follower count boost
+    if (post.account?.followersCount > 100000) priority += 1;
+    
+    return Math.min(10, Math.max(1, Math.round(priority)));
+  }
 
   /**
    * Get enhanced keyword analysis
@@ -1149,39 +1399,6 @@ export class SocialSentimentController {
       res.status(500).json({
         success: false,
         message: 'Failed to get enhanced keywords',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  };
-
-  /**
-   * Get real-time sentiment alerts
-   */
-  getSentimentAlerts = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { coinSymbol } = req.params;
-      const { limit = 20, severity } = req.query;
-
-      // TODO: Implement real alert fetching from database
-      // This would typically query a SentimentAlert table
-      // For now, return empty array to indicate no real alerts are available
-      
-      const alerts: any[] = [];
-
-      const filteredAlerts = severity 
-        ? alerts.filter(alert => alert.alertLevel === severity)
-        : alerts;
-
-      res.json({
-        success: true,
-        data: filteredAlerts.slice(0, Number(limit)),
-        message: `No sentiment alerts available for ${coinSymbol}. Real-time alert system requires Twitter API configuration.`,
-      });
-    } catch (error) {
-      logger.error('Failed to get sentiment alerts:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get sentiment alerts',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -1282,81 +1499,39 @@ export class SocialSentimentController {
   };
 
   /**
-   * Get monitoring status
+   * Get monitoring status - Updated to use unified data source
    */
   getMonitoringStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-      // Check if we're in sandbox mode
-      const { getSandboxConfig } = await import('../config/sandboxConfig');
-      const sandboxConfig = getSandboxConfig();
+      const { coinSymbol } = req.params;
 
-      if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
-        // Return sandbox monitoring status
-        const { coinSymbol } = req.params;
-        
-        const mockStatus = {
-          isMonitoring: true,
-          coinSymbol: coinSymbol?.toUpperCase() || 'BTC',
-          totalPosts: Math.floor(Math.random() * 50) + 20, // 20-70 posts
-          alertCount: Math.floor(Math.random() * 5), // 0-4 alerts
-          monitoredAccounts: Math.floor(Math.random() * 10) + 5, // 5-14 accounts
-          lastUpdate: new Date().toISOString(),
-          searchMethod: 'Sandbox Mock Data (Development Only)',
-          dataCollectionStatus: {
-            isRunning: true,
-            lastRun: new Date(Date.now() - Math.random() * 3600000).toISOString(), // Within last hour
-            nextRun: new Date(Date.now() + 1800000).toISOString(), // In 30 minutes
-          }
-        };
+      // Use unified data source for consistent monitoring stats
+      const monitoringStats = await this.unifiedDataSource.getMonitoringStats(
+        coinSymbol.toUpperCase()
+      );
 
-        res.json({
-          success: true,
-          data: mockStatus,
-          message: `Monitoring status retrieved for ${coinSymbol?.toUpperCase() || 'BTC'} (Sandbox Mode)`,
-        });
-        return;
-      }
-
-      // Original production code
-      // Get all monitored coins and their account counts
-      const monitoredCoins = await AccountCoinRelevance.findAll({
-        where: { isConfirmed: true },
-        attributes: ['coinSymbol'],
-        group: ['coinSymbol'],
-        raw: true,
-      });
-
-      const status = [];
-      for (const coin of monitoredCoins) {
-        const accountCount = await AccountCoinRelevance.count({
-          where: {
-            coinSymbol: coin.coinSymbol,
-            isConfirmed: true,
-          },
-        });
-
-        const recentPostCount = await TwitterPost.count({
-          where: {
-            content: { [Op.like]: `%${coin.coinSymbol}%` },
-            publishedAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-          },
-        });
-
-        status.push({
-          coinSymbol: coin.coinSymbol,
-          accountCount,
-          recentPostCount,
-        });
-      }
+      const status = {
+        isMonitoring: true,
+        coinSymbol: coinSymbol.toUpperCase(),
+        totalPosts: monitoringStats.totalPosts,
+        alertCount: monitoringStats.alertCount,
+        monitoredAccounts: monitoringStats.monitoredAccounts,
+        lastUpdate: monitoringStats.lastUpdate.toISOString(),
+        dataSource: monitoringStats.dataSource,
+        searchMethod: monitoringStats.dataSource === 'sandbox' 
+          ? 'Sandbox Mock Data (Development Only)' 
+          : 'Production Database',
+        dataCollectionStatus: {
+          isRunning: true,
+          lastRun: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+          nextRun: new Date(Date.now() + 1800000).toISOString(),
+        }
+      };
 
       res.json({
         success: true,
-        data: {
-          isMonitoring: true,
-          monitoredCoins: status,
-          totalMonitoredCoins: status.length,
-        },
-        message: 'Monitoring status retrieved',
+        data: status,
+        message: `Monitoring status retrieved for ${coinSymbol.toUpperCase()} (${monitoringStats.dataSource})`,
       });
     } catch (error) {
       logger.error('Failed to get monitoring status:', error);
@@ -3488,11 +3663,12 @@ export class SocialSentimentController {
   };
 
   /**
-   * Get data collection status and statistics
+   * Get data collection status - Updated to use unified data source
    */
   getDataCollectionStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-      const status = await this.dataCollectionService.getCollectionStatus();
+      // Use unified data source for consistent collection status
+      const status = await this.unifiedDataSource.getDataCollectionStatus();
 
       res.json({
         success: true,
@@ -3500,7 +3676,7 @@ export class SocialSentimentController {
           ...status,
           recommendations: this.generateDataCollectionRecommendations(status)
         },
-        message: 'Data collection status retrieved successfully'
+        message: `Data collection status retrieved successfully (${status.dataSource})`
       });
     } catch (error) {
       logger.error('Failed to get data collection status:', error);

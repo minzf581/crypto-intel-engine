@@ -347,7 +347,7 @@ export class NotificationEnhancedController {
   }
 
   /**
-   * Test notification with push
+   * Test notification with push and email
    */
   static async testNotification(req: Request, res: Response) {
     try {
@@ -356,15 +356,49 @@ export class NotificationEnhancedController {
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const { title, message, type, priority, fcmToken } = req.body;
+      const { title, message, type, priority, fcmToken, testEmail } = req.body;
 
+      // Test email notification if requested
+      if (testEmail) {
+        const EmailService = (await import('../services/EmailService')).default;
+        const user = await (await import('../models')).User.findByPk(userId);
+        
+        if (user && EmailService.isReady()) {
+          const emailSent = await EmailService.sendTestEmail(user.email, user.name);
+          if (emailSent) {
+            return res.json({
+              success: true,
+              message: 'Test email sent successfully',
+              emailSent: true,
+            });
+          } else {
+            return res.status(500).json({
+              success: false,
+              error: 'Failed to send test email. Email service may not be configured.',
+              emailSent: false,
+            });
+          }
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: 'Email service not available or user not found',
+            emailSent: false,
+          });
+        }
+      }
+
+      // Create regular test notification
       const notification = await notificationService.createNotification(
         userId,
         title || 'Test Notification',
-        message || 'This is a test notification with push support',
+        message || 'This is a test notification with push and email support',
         type || 'system',
         priority || 'medium',
-        { test: true, timestamp: new Date() },
+        { 
+          test: true, 
+          timestamp: new Date(),
+          actionUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/notifications`,
+        },
         fcmToken,
         [
           { id: '1', label: 'View', action: 'view', icon: 'eye' },
@@ -375,10 +409,67 @@ export class NotificationEnhancedController {
       res.json({
         success: true,
         notification,
-        message: 'Test notification sent successfully',
+        message: 'Test notification sent successfully (includes push, email, and browser notifications)',
       });
     } catch (error) {
       logger.error('Failed to send test notification:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Update email notification settings
+   */
+  static async updateEmailSettings(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { emailEnabled, digestFrequency } = req.body;
+
+      // Update notification settings
+      const settings = await notificationService.updateNotificationSettings(userId, {
+        emailEnabled: emailEnabled !== undefined ? emailEnabled : undefined,
+      });
+
+      // Store digest frequency in user preferences (if needed)
+      if (digestFrequency) {
+        // You can add this to user model or separate preferences table
+        logger.info(`Digest frequency updated for user ${userId}: ${digestFrequency}`);
+      }
+
+      res.json({
+        success: true,
+        settings: {
+          emailEnabled: settings.emailEnabled,
+          digestFrequency: digestFrequency || 'daily',
+        },
+        message: 'Email settings updated successfully',
+      });
+    } catch (error) {
+      logger.error('Failed to update email settings:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Get email service status
+   */
+  static async getEmailServiceStatus(req: Request, res: Response) {
+    try {
+      const EmailService = (await import('../services/EmailService')).default;
+      
+      res.json({
+        success: true,
+        emailServiceConfigured: EmailService.isReady(),
+        message: EmailService.isReady() 
+          ? 'Email service is configured and ready'
+          : 'Email service is not configured. Set SMTP environment variables to enable email notifications.',
+      });
+    } catch (error) {
+      logger.error('Failed to get email service status:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

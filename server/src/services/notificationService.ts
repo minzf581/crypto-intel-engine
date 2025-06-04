@@ -8,6 +8,7 @@ import { NotificationSettings } from '../models/NotificationSettings';
 import { PushNotificationPayload, NotificationGroup, QuickAction } from '../types/notification';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
+import EmailService, { EmailNotificationData } from './EmailService';
 
 /**
  * Notification Service
@@ -15,6 +16,7 @@ import { Op } from 'sequelize';
 class NotificationService {
   private io: SocketIOServer | null = null;
   private messaging = getMessaging();
+  private emailService = EmailService;
   
   /**
    * Set Socket.IO instance
@@ -83,6 +85,39 @@ class NotificationService {
     sockets.forEach(socket => {
       socket.emit('notification', notification);
     });
+
+    // Also try sending to browser notification API
+    this.sendBrowserNotification(userId, notification);
+  }
+
+  /**
+   * Send browser native notification
+   * @param userId User ID
+   * @param notification Notification object
+   */
+  private sendBrowserNotification(userId: string, notification: NotificationHistory) {
+    try {
+      // Send browser notification request via WebSocket
+      const sockets = Array.from(this.io?.sockets.sockets.values() || [])
+        .filter(socket => socket.data && socket.data.userId === userId);
+      
+      sockets.forEach(socket => {
+        socket.emit('browser_notification', {
+          title: notification.title,
+          body: notification.message,
+          icon: '/favicon.ico',
+          tag: `notification-${notification.id}`,
+          requireInteraction: notification.priority === 'critical',
+          data: {
+            notificationId: notification.id,
+            type: notification.type,
+            priority: notification.priority,
+          }
+        });
+      });
+    } catch (error) {
+      logger.error('Failed to send browser notification:', error);
+    }
   }
 
   /**
@@ -143,6 +178,21 @@ class NotificationService {
             icon: action.icon,
           })),
         });
+      }
+
+      // Send email notification if enabled
+      if (settings?.emailEnabled && this.emailService.isReady()) {
+        const emailData: EmailNotificationData = {
+          userId,
+          title,
+          message,
+          type,
+          priority,
+          data,
+          actionUrl: data?.actionUrl || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/notifications`,
+        };
+        
+        await this.emailService.sendNotificationEmail(emailData);
       }
 
       // Send real-time notification
