@@ -293,7 +293,7 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
             </div>
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {filteredAccounts.length} of {accounts.length} accounts
+            {filteredAccounts?.length || 0} of {accounts?.length || 0} accounts
           </div>
         </div>
 
@@ -362,11 +362,11 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
           </div>
-        ) : filteredAccounts.length === 0 ? (
+        ) : filteredAccounts?.length === 0 ? (
           <div className="text-center py-8">
             <UserGroupIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">
-              {accounts.length === 0 
+              {(accounts?.length || 0) === 0 
                 ? `No recommended accounts available for ${selectedCoin}`
                 : 'No accounts match your current filters'
               }
@@ -374,7 +374,7 @@ const RecommendedAccountsPanel: React.FC<RecommendedAccountsPanelProps> = ({
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredAccounts.map((account) => (
+            {(filteredAccounts || []).map((account) => (
               <div
                 key={account.id}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"

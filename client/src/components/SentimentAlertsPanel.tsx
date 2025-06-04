@@ -244,28 +244,28 @@ const SentimentAlertsPanel: React.FC<SentimentAlertsPanelProps> = ({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2 mb-2">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getAlertBadgeColor(alert.alertLevel)}`}>
-                        {alert.alertLevel.toUpperCase()}
+                        {alert.alertLevel?.toUpperCase() || 'UNKNOWN'}
                       </span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getImpactBadgeColor(alert.impact)}`}>
-                        {alert.impact} impact
+                        {alert.impact || 'unknown'} impact
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatTimeAgo(alert.triggeredAt)}
+                        {alert.triggeredAt ? formatTimeAgo(alert.triggeredAt) : 'Unknown time'}
                       </span>
                     </div>
                     
                     <div className="flex items-center space-x-2 mb-2">
                       <UserIcon className="h-4 w-4 text-gray-400" />
                       <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        @{alert.accountUsername}
+                        @{alert.accountUsername || 'unknown'}
                       </span>
                       <span className={`text-sm font-medium ${getSentimentColor(alert.sentiment, alert.sentimentScore)}`}>
-                        {alert.sentiment} ({safeToFixed(alert.sentimentScore, 2)})
+                        {alert.sentiment || 'neutral'} ({safeToFixed(alert.sentimentScore, 2)})
                       </span>
                     </div>
                     
                     <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                      {alert.content}
+                      {alert.content || 'No content available'}
                     </p>
                   </div>
                 </div>

@@ -102,8 +102,8 @@ const SentimentTrendChart: React.FC<SentimentTrendChartProps> = ({
       );
     }
 
-    const maxSentiment = Math.max(...trendData.sentimentScores.map(Math.abs));
-    const maxVolume = Math.max(...trendData.volumeData);
+    const maxSentiment = Math.max(...(trendData.sentimentScores?.map(Math.abs) || [0]));
+    const maxVolume = Math.max(...(trendData.volumeData || [0]));
 
     return (
       <div className="space-y-4">
@@ -253,7 +253,7 @@ const SentimentTrendChart: React.FC<SentimentTrendChartProps> = ({
                   Total Posts
                 </p>
                 <p className="text-lg font-bold text-blue-600">
-                  {trendData.volumeData.reduce((sum, vol) => sum + vol, 0)}
+                  {trendData?.volumeData ? trendData.volumeData.reduce((sum, vol) => sum + vol, 0) : 0}
                 </p>
               </div>
             </div>
