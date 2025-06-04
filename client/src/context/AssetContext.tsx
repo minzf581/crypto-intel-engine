@@ -75,9 +75,11 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const response = await axios.get('/api/users/assets');
         let selectedSymbols: string[] = [];
         
-        if (response.data && Array.isArray(response.data)) {
-          selectedSymbols = response.data.map((asset: any) => asset.symbol);
+        // Handle successful response format: { success: true, data: { selectedAssets: string[] } }
+        if (response.data && response.data.success && response.data.data && Array.isArray(response.data.data.selectedAssets)) {
+          selectedSymbols = response.data.data.selectedAssets;
         } else if (user?.selectedAssets) {
+          // Fallback to user data
           selectedSymbols = user.selectedAssets;
         }
         
@@ -132,13 +134,14 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       if (!targetAsset) return prevAssets;
       
-      if (!targetAsset.isSelected && selectedCount >= 5) {
-        setError('You can select a maximum of 5 assets');
-        return prevAssets;
+      // If selecting a new asset and none are selected, require at least 1
+      if (!targetAsset.isSelected && selectedCount === 0) {
+        // Allow selection - no restrictions
       }
       
-      if (targetAsset.isSelected && selectedCount <= 3) {
-        setError('You must select at least 3 assets');
+      // If deselecting and only 1 asset is selected, require at least 1
+      if (targetAsset.isSelected && selectedCount === 1) {
+        setError('You must select at least 1 asset');
         return prevAssets;
       }
       

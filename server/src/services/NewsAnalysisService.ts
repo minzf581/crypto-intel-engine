@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Op } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import Parser from 'rss-parser';
+import sequelize from '../config/database';
 
 export class NewsAnalysisService {
   private static instance: NewsAnalysisService;
@@ -74,9 +75,14 @@ export class NewsAnalysisService {
     if (sentiment) whereClause.sentiment = sentiment;
     if (impact) whereClause.impact = impact;
     if (coin) {
-      whereClause.relevantCoins = {
-        [Op.contains]: [coin],
-      };
+      // Use SQLite-compatible JSON query instead of PostgreSQL @> operator
+      whereClause[Op.and] = [
+        sequelize.where(
+          sequelize.fn('JSON_EXTRACT', sequelize.col('relevantCoins'), '$'),
+          'LIKE',
+          `%"${coin}"%`
+        )
+      ];
     }
 
     return await NewsData.findAll({
@@ -149,14 +155,21 @@ export class NewsAnalysisService {
     const trends: Record<string, any[]> = {};
 
     for (const coin of coins) {
+      // Use SQLite-compatible JSON query instead of PostgreSQL @> operator
       const newsItems = await NewsData.findAll({
         where: {
-          relevantCoins: {
-            [Op.contains]: [coin],
-          },
-          publishedAt: {
-            [Op.gte]: startDate,
-          },
+          [Op.and]: [
+            sequelize.where(
+              sequelize.fn('JSON_EXTRACT', sequelize.col('relevantCoins'), '$'),
+              'LIKE',
+              `%"${coin}"%`
+            ),
+            {
+              publishedAt: {
+                [Op.gte]: startDate,
+              },
+            }
+          ]
         },
         order: [['publishedAt', 'ASC']],
       });
@@ -183,14 +196,21 @@ export class NewsAnalysisService {
     const analysis: Record<string, any> = {};
 
     for (const symbol of symbols) {
+      // Use SQLite-compatible JSON query instead of PostgreSQL @> operator
       const recentNews = await NewsData.findAll({
         where: {
-          relevantCoins: {
-            [Op.contains]: [symbol],
-          },
-          publishedAt: {
-            [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          },
+          [Op.and]: [
+            sequelize.where(
+              sequelize.fn('JSON_EXTRACT', sequelize.col('relevantCoins'), '$'),
+              'LIKE',
+              `%"${symbol}"%`
+            ),
+            {
+              publishedAt: {
+                [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000),
+              },
+            }
+          ]
         },
         order: [['publishedAt', 'DESC']],
         limit: 10,

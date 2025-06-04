@@ -25,13 +25,8 @@ const OnboardingPage = () => {
   };
 
   const handleAssetSelectionNext = () => {
-    if (selectedAssets.length < 3) {
-      setError('Please select at least 3 cryptocurrencies');
-      return;
-    }
-    
-    if (selectedAssets.length > 5) {
-      setError('Please select at most 5 cryptocurrencies');
+    if (selectedAssets.length < 1) {
+      setError('Please select at least 1 cryptocurrency');
       return;
     }
     
@@ -147,7 +142,7 @@ const OnboardingPage = () => {
                   Select your cryptocurrencies
                 </h2>
                 <p className="text-neutral-700 dark:text-neutral-300 mb-6">
-                  Choose 3-5 cryptocurrencies that you want to track. You can change this selection later.
+                  Choose cryptocurrencies that you want to track. You can change this selection later.
                 </p>
                 
                 {error && (
@@ -201,7 +196,7 @@ const OnboardingPage = () => {
                 </div>
                 
                 <div className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-                  Selected: <span className="font-medium">{selectedAssets.length}</span> of 5 maximum
+                  Selected: <span className="font-medium">{selectedAssets.length}</span> cryptocurrencies
                 </div>
                 
                 <div className="flex justify-between">

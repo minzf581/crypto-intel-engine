@@ -323,7 +323,7 @@ const SocialSentimentPage: React.FC = () => {
             </div>
             
             {/* Coin Selector */}
-            {selectedAssets.length > 0 && (
+            {selectedAssets.length > 0 ? (
               <div className="flex items-center space-x-2">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Analyzing:
@@ -346,82 +346,119 @@ const SocialSentimentPage: React.FC = () => {
                   ))}
                 </select>
               </div>
+            ) : (
+              <div className="flex items-center space-x-2 px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <span className="text-sm text-yellow-700 dark:text-yellow-300">
+                  No assets selected
+                </span>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Twitter API Status */}
-      <TwitterApiStatus 
-        className="mb-4"
-        showDetails={true}
-        onRefresh={() => {
-          // Optionally refresh other components when API status is refreshed
-        }}
-      />
-
-      {/* Enhanced Features Notice */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start">
-          <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
-              Enhanced Features Available
-            </h4>
-            <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-              <p>This enhanced version includes:</p>
-              <ul className="list-disc list-inside mt-1 space-y-1">
-                <li>Paginated search results with up to 100 accounts per search</li>
-                <li>Advanced filtering by account categories and engagement metrics</li>
-                <li>Search history and saved searches for quick access</li>
-                <li>Popular searches and trending accounts discovery</li>
-                <li>Bulk import via CSV upload or text paste</li>
-                <li>Recent tweet previews with engagement metrics</li>
-                <li>Enhanced sentiment score explanations and tooltips</li>
-              </ul>
+      {/* No Assets Selected Warning */}
+      {selectedAssets.length === 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="h-6 w-6 text-yellow-600 dark:text-yellow-400 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="text-lg font-medium text-yellow-900 dark:text-yellow-100">
+                No Cryptocurrencies Selected
+              </h3>
+              <div className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
+                <p>To use the Social Sentiment Analysis features, you need to:</p>
+                <ol className="list-decimal list-inside mt-2 space-y-1">
+                  <li>Select cryptocurrencies from the sidebar Asset Selector</li>
+                  <li>Choose "Add Cryptocurrency" to search and add new assets</li>
+                  <li>Save your selection to start monitoring sentiment</li>
+                </ol>
+                <p className="mt-3 font-medium">
+                  Once you've selected assets, you'll be able to analyze social sentiment, search for Twitter accounts, and monitor real-time discussions.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Tab Navigation */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <tab.icon className="h-5 w-5 mr-2" />
-                {tab.name}
-                {tab.badge && (
-                  <span className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300 py-0.5 px-2 rounded-full text-xs font-medium">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
+      {/* Show content only if assets are selected */}
+      {selectedAssets.length > 0 && (
+        <>
+          {/* Twitter API Status */}
+          <TwitterApiStatus 
+            className="mb-4"
+            showDetails={true}
+            onRefresh={() => {
+              // Optionally refresh other components when API status is refreshed
+            }}
+          />
 
-        {/* Tab Description */}
-        <div className="px-6 py-3 bg-gray-50 dark:bg-gray-700/50">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {tabs.find(tab => tab.id === activeTab)?.description}
-          </p>
-        </div>
+          {/* Enhanced Features Notice */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start">
+              <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  Enhanced Features Available
+                </h4>
+                <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  <p>This enhanced version includes:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Paginated search results with up to 100 accounts per search</li>
+                    <li>Advanced filtering by account categories and engagement metrics</li>
+                    <li>Search history and saved searches for quick access</li>
+                    <li>Popular searches and trending accounts discovery</li>
+                    <li>Bulk import via CSV upload or text paste</li>
+                    <li>Recent tweet previews with engagement metrics</li>
+                    <li>Enhanced sentiment score explanations and tooltips</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
 
-        {/* Tab Content */}
-        <div className="p-6">
-          {renderTabContent()}
-        </div>
-      </div>
+          {/* Tab Navigation */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    <tab.icon className="h-5 w-5 mr-2" />
+                    {tab.name}
+                    {tab.badge && (
+                      <span className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300 py-0.5 px-2 rounded-full text-xs font-medium">
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Tab Description */}
+            <div className="px-6 py-3 bg-gray-50 dark:bg-gray-700/50">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {tabs.find(tab => tab.id === activeTab)?.description}
+              </p>
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6">
+              {renderTabContent()}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

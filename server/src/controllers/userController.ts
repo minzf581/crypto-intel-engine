@@ -79,9 +79,9 @@ export const updateUserAssets = async (req: Request, res: Response) => {
       return errorResponse(res, 'Assets must be an array', 400);
     }
     
-    // Check if asset count is within allowed range
-    if (assets.length < 3 || assets.length > 5) {
-      return errorResponse(res, 'You must select 3 to 5 assets', 400);
+    // Check if at least one asset is selected
+    if (assets.length < 1) {
+      return errorResponse(res, 'You must select at least 1 asset', 400);
     }
     
     // Validate all asset symbols exist

@@ -1,26 +1,56 @@
 import { Router } from 'express';
 import priceService from '../services/priceService';
-import { Asset } from '../models';
+import { Asset, User } from '../models';
 import logger from '../utils/logger';
+import { authMiddleware } from '../middlewares/auth';
 
 const router = Router();
 
 /**
- * Get dashboard data
+ * Get dashboard data for user's selected assets only
  */
-router.get('/data', async (req, res) => {
+router.get('/data', authMiddleware, async (req, res) => {
   try {
-    // Get all assets
-    const assets = await Asset.findAll();
+    const userId = req.userId;
+    
+    // Get user's selected assets
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // If user has no selected assets, return empty data
+    if (!user.selectedAssets || user.selectedAssets.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          assets: [],
+          lastUpdate: new Date(),
+          hasRealData: false,
+          message: 'No assets selected. Please add cryptocurrencies from the sidebar.'
+        }
+      });
+    }
+
+    // Get only user's selected assets
+    const assets = await Asset.findAll({
+      where: {
+        symbol: user.selectedAssets
+      }
+    });
     
     // Get current price history data
     const priceHistory = priceService.getPriceHistory();
     
-    // Build dashboard data
+    // Build dashboard data for selected assets only
     const dashboardData = assets.map(asset => {
       const priceData = priceHistory[asset.symbol];
       
       return {
+        id: asset.id,
         symbol: asset.symbol,
         name: asset.name,
         logo: asset.logo,
@@ -30,12 +60,13 @@ router.get('/data', async (req, res) => {
       };
     });
     
-    logger.info(`Returning dashboard data for ${dashboardData.length} assets`);
+    logger.info(`Returning dashboard data for ${dashboardData.length} selected assets for user ${userId}`);
     
     res.json({
       success: true,
       data: {
         assets: dashboardData,
+        selectedAssetsCount: user.selectedAssets.length,
         lastUpdate: new Date(),
         hasRealData: Object.keys(priceHistory).length > 0
       }
