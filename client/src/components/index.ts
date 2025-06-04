@@ -4,6 +4,8 @@ export { default as RecommendedAccountsPanel } from './RecommendedAccountsPanel'
 export { default as AccountCorrelationView } from './AccountCorrelationView';
 export { default as SentimentTrendChart } from './SentimentTrendChart';
 export { default as SentimentAlertsPanel } from './SentimentAlertsPanel';
+export { default as PostsDetailModal } from './PostsDetailModal';
+export { default as AlertsDetailModal } from './AlertsDetailModal';
 
 // Dashboard Widgets
 export { default as SocialSentimentWidget } from './dashboard/SocialSentimentWidget';
@@ -16,6 +18,4 @@ export { default as AuthLayout } from './layouts/AuthLayout';
 export { default as DataSourceStatus } from './DataSourceStatus';
 export { default as VolumeAnalysisPanel } from './VolumeAnalysisPanel';
 export { default as NewsAnalysisPanel } from './NewsAnalysisPanel';
-export { default as EnhancedNotificationCenter } from './EnhancedNotificationCenter';
-export { default as NotificationCenter } from './NotificationCenter';
-export { default as NotificationSettings } from './NotificationSettings'; 
+export { default as EnhancedNotificationCenter } from './EnhancedNotificationCenter'; 

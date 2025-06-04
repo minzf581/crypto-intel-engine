@@ -177,7 +177,7 @@ const DashboardPage = () => {
 
         {/* Analysis Overview */}
         <div className="mb-6">
-          <AnalysisOverview />
+          <AnalysisOverview symbols={selectedAssets.map(asset => asset.symbol)} />
         </div>
 
         {/* Signals */}

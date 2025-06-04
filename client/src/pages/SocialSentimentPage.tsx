@@ -107,7 +107,6 @@ const SocialSentimentPage: React.FC = () => {
           <SentimentAlertsPanel
             coinSymbol={selectedCoin}
             coinName={coinName}
-            onAlertRead={() => setNewAlertsCount(0)}
           />
         );
       case 'settings':

@@ -992,6 +992,7 @@ export class SocialSentimentController {
       const { accountId } = req.params;
       const { limit = 20, coinSymbol } = req.query;
 
+      // First try to find posts in database
       const posts = await TwitterPost.findAll({
         where: {
           twitterAccountId: accountId,
@@ -999,10 +1000,50 @@ export class SocialSentimentController {
             content: { [Op.like]: `%${coinSymbol as string}%` },
           }),
         },
-        include: [TwitterAccount],
+        include: [{
+          model: TwitterAccount,
+          as: 'account'
+        }],
         order: [['publishedAt', 'DESC']],
         limit: Number(limit),
       });
+
+      // If no posts found and we're in sandbox mode, return mock posts
+      if (posts.length === 0) {
+        // Check if we're in sandbox mode
+        const { getSandboxConfig } = await import('../config/sandboxConfig');
+        const sandboxConfig = getSandboxConfig();
+
+        if (sandboxConfig.isEnabled && sandboxConfig.twitterMockEnabled) {
+          // Generate mock posts for this account
+          const TwitterSandboxService = (await import('../services/sandbox/TwitterSandboxService')).default;
+          const twitterSandbox = new TwitterSandboxService();
+          
+          // Extract username from accountId (remove mock_ prefix and timestamp)
+          const username = accountId.replace(/^mock_/, '').replace(/_\d+_\d+$/, '');
+          
+          // Generate mock posts
+          const mockPosts = twitterSandbox.generateMockPostsForAccount(
+            accountId,
+            username,
+            coinSymbol as string || 'BTC',
+            Number(limit)
+          );
+
+          res.json({
+            success: true,
+            data: mockPosts,
+            message: `Retrieved ${mockPosts.length} mock posts for account ${accountId} (Sandbox Mode)`,
+            metadata: {
+              dataSource: 'sandbox',
+              accountId,
+              coinSymbol,
+              sandboxNote: 'This is sandbox data for development purposes'
+            }
+          });
+          return;
+        }
+      }
 
       res.json({
         success: true,

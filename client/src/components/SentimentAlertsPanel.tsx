@@ -57,7 +57,7 @@ const SentimentAlertsPanel: React.FC<SentimentAlertsPanelProps> = ({
         options.severity = selectedSeverity;
       }
       
-      const response = await socialSentimentApi.getSentimentAlerts(coinSymbol, options);
+      const response = await socialSentimentApi.getSentimentAlerts(coinSymbol);
       setAlerts(response.data);
     } catch (error) {
       console.error('Failed to load sentiment alerts:', error);

@@ -194,9 +194,7 @@ export const VolumeAnalysisDashboard: React.FC = () => {
                   dataKey="volume" 
                   stroke="#3B82F6" 
                   strokeWidth={2}
-                  dot={(props) => props.payload?.isAnomaly ? 
-                    { fill: '#EF4444', r: 6 } : { fill: '#3B82F6', r: 3 }
-                  }
+                  dot={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -221,7 +219,7 @@ export const VolumeAnalysisDashboard: React.FC = () => {
                 />
                 <Bar 
                   dataKey="volumeRatio" 
-                  fill={(entry: any) => entry?.isAnomaly ? '#EF4444' : '#10B981'}
+                  fill="#10B981"
                 />
               </BarChart>
             </ResponsiveContainer>

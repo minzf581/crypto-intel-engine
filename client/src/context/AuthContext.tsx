@@ -43,7 +43,7 @@ axios.interceptors.request.use(
       
       // Ensure config.headers exists
       if (!config.headers) {
-        config.headers = {};
+        config.headers = {} as any;
       }
       
       // Only add auth header for internal API calls (our backend)
@@ -186,10 +186,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Update axios default headers after successful verification
           if (!axios.defaults.headers) {
-            axios.defaults.headers = {};
+            axios.defaults.headers = {} as any;
           }
           if (!axios.defaults.headers.common) {
-            axios.defaults.headers.common = {};
+            axios.defaults.headers.common = {} as any;
           }
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         } else {
@@ -219,6 +219,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Clear old auth state
       localStorage.removeItem('token');
+      
+      // Properly clear axios headers
       if (axios.defaults.headers?.common) {
         delete axios.defaults.headers.common['Authorization'];
       }
@@ -237,11 +239,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Save token and update auth header
       localStorage.setItem('token', token);
+      
+      // Ensure headers structure exists
       if (!axios.defaults.headers) {
-        axios.defaults.headers = {};
+        axios.defaults.headers = {} as any;
       }
       if (!axios.defaults.headers.common) {
-        axios.defaults.headers.common = {};
+        axios.defaults.headers.common = {} as any;
       }
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
@@ -266,11 +270,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { token, user: userData } = response.data.data;
       
       localStorage.setItem('token', token);
+      
+      // Ensure headers structure exists
       if (!axios.defaults.headers) {
-        axios.defaults.headers = {};
+        axios.defaults.headers = {} as any;
       }
       if (!axios.defaults.headers.common) {
-        axios.defaults.headers.common = {};
+        axios.defaults.headers.common = {} as any;
       }
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       

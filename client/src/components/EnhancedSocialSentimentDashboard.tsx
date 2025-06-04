@@ -48,6 +48,8 @@ import SearchHistoryPanel from './SearchHistoryPanel';
 import BulkImportModal from './BulkImportModal';
 import AccountPreviewCard from './AccountPreviewCard';
 import RealTimeTweets from './RealTimeTweets';
+import PostsDetailModal from './PostsDetailModal';
+import AlertsDetailModal from './AlertsDetailModal';
 
 const safeToFixed = (value: number | null | undefined, decimals: number = 2): string => {
   if (value === null || value === undefined || isNaN(value)) return '--';
@@ -76,7 +78,7 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     minFollowers: 1000,
     includeVerified: false,
-    sortBy: 'relevance'
+    accountCategories: []
   });
   const [searchResults, setSearchResults] = useState<SearchResults>({
     accounts: [],
@@ -118,6 +120,10 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
   const [tweetsList, setTweetsList] = useState<any[]>([]);
   const [isLoadingTweets, setIsLoadingTweets] = useState(false);
   const [tweetsError, setTweetsError] = useState<string | null>(null);
+
+  // Add modal states
+  const [showPostsModal, setShowPostsModal] = useState(false);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
 
   useEffect(() => {
     // Check authentication status
@@ -331,7 +337,7 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
     setTweetsError(null);
     try {
       // Get tweets that mention the selected coin
-      const response = await socialSentimentApi.getCoinSentimentSummary(selectedCoin, timeframe);
+      const response = await socialSentimentApi.getSentimentSummary(selectedCoin, timeframe);
       if (response.success && response.data.significantPosts) {
         setTweetsList(response.data.significantPosts);
       } else {
@@ -821,8 +827,8 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
       {/* Bulk Import Modal */}
       {showBulkImport && (
         <BulkImportModal
-          onImport={handleBulkImport}
           onClose={() => setShowBulkImport(false)}
+          onImport={handleBulkImport}
           coinSymbol={selectedCoin}
           coinName={coinName}
         />
@@ -1038,9 +1044,13 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
             <div className="text-center">
               <p className="text-sm font-medium text-gray-900 dark:text-white">Total Posts</p>
-              <p className="text-3xl font-bold text-blue-600">
+              <button
+                onClick={() => setShowPostsModal(true)}
+                className="text-3xl font-bold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+                title="Click to view posts details"
+              >
                 {sentimentSummary.totalPosts}
-              </p>
+              </button>
             </div>
           </div>
 
@@ -1332,9 +1342,13 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                   Posts Today
                 </p>
-                <p className="text-2xl font-bold text-blue-600">
+                <button
+                  onClick={() => setShowPostsModal(true)}
+                  className="text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+                  title="Click to view posts details"
+                >
                   {monitoringStatus?.totalPosts || 0}
-                </p>
+                </button>
               </div>
             </div>
           </div>
@@ -1346,9 +1360,13 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
                 <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
                   Alerts
                 </p>
-                <p className="text-2xl font-bold text-yellow-600">
+                <button
+                  onClick={() => setShowAlertsModal(true)}
+                  className="text-2xl font-bold text-yellow-600 hover:text-yellow-700 transition-colors cursor-pointer"
+                  title="Click to view alerts details"
+                >
                   {monitoringStatus?.alertCount || 0}
-                </p>
+                </button>
               </div>
             </div>
           </div>
@@ -1438,10 +1456,6 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
     <RecommendedAccountsPanel
       selectedCoin={selectedCoin}
       coinName={coinName}
-      onAccountsSelected={(accounts) => {
-        // Add selected recommended accounts to monitoring
-        setupMonitoring();
-      }}
     />
   );
 
@@ -1479,6 +1493,23 @@ const EnhancedSocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> 
         {activeTab === 'monitoring' && renderMonitoringTab()}
         {activeTab === 'analysis' && renderAnalysisTab()}
       </div>
+
+      {/* Modals */}
+      <PostsDetailModal
+        isOpen={showPostsModal}
+        onClose={() => setShowPostsModal(false)}
+        coinSymbol={selectedCoin}
+        coinName={coinName}
+        totalPosts={monitoringStatus?.totalPosts || 0}
+      />
+
+      <AlertsDetailModal
+        isOpen={showAlertsModal}
+        onClose={() => setShowAlertsModal(false)}
+        coinSymbol={selectedCoin}
+        coinName={coinName}
+        totalAlerts={monitoringStatus?.alertCount || 0}
+      />
     </div>
   );
 };

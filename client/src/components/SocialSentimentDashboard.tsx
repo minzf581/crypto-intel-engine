@@ -12,10 +12,14 @@ import {
   ArrowTrendingDownIcon,
   StarIcon,
   AdjustmentsHorizontalIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  PlusIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { socialSentimentApi } from '../services/socialSentimentApi';
 import RecommendedAccountsPanel from './RecommendedAccountsPanel';
+import PostsDetailModal from './PostsDetailModal';
+import AlertsDetailModal from './AlertsDetailModal';
 // Twitter OAuth removed - using basic search by default
 
 interface TwitterAccount {
@@ -80,6 +84,10 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
   // Add monitoring state
   const [monitoringAccounts, setMonitoringAccounts] = useState<any[]>([]);
   const [monitoringStatus, setMonitoringStatus] = useState<any>(null);
+  
+  // Add modal states
+  const [showPostsModal, setShowPostsModal] = useState(false);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
   
   // Search form state
   const [searchQuery, setSearchQuery] = useState('');
@@ -541,9 +549,13 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                 Posts Today
               </p>
-              <p className="text-2xl font-bold text-blue-600">
+              <button
+                onClick={() => setShowPostsModal(true)}
+                className="text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+                title="Click to view posts details"
+              >
                 {monitoringStatus?.totalPosts || 0}
-              </p>
+              </button>
             </div>
           </div>
         </div>
@@ -555,9 +567,13 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
               <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
                 Alerts
               </p>
-              <p className="text-2xl font-bold text-yellow-600">
+              <button
+                onClick={() => setShowAlertsModal(true)}
+                className="text-2xl font-bold text-yellow-600 hover:text-yellow-700 transition-colors cursor-pointer"
+                title="Click to view alerts details"
+              >
                 {monitoringStatus?.alertCount || 0}
-              </p>
+              </button>
             </div>
           </div>
         </div>
@@ -796,14 +812,14 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+              } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
             >
-              <tab.icon className="h-5 w-5 mr-2" />
-              {tab.name}
+              <tab.icon className="h-5 w-5" />
+              <span>{tab.name}</span>
             </button>
           ))}
         </nav>
@@ -815,6 +831,23 @@ const SocialSentimentDashboard: React.FC<SocialSentimentDashboardProps> = ({
         {activeTab === 'monitoring' && renderMonitoringTab()}
         {activeTab === 'analysis' && renderAnalysisTab()}
       </div>
+
+      {/* Modals */}
+      <PostsDetailModal
+        isOpen={showPostsModal}
+        onClose={() => setShowPostsModal(false)}
+        coinSymbol={selectedCoin}
+        coinName={coinName}
+        totalPosts={monitoringStatus?.totalPosts || 0}
+      />
+
+      <AlertsDetailModal
+        isOpen={showAlertsModal}
+        onClose={() => setShowAlertsModal(false)}
+        coinSymbol={selectedCoin}
+        coinName={coinName}
+        totalAlerts={monitoringStatus?.alertCount || 0}
+      />
     </div>
   );
 };

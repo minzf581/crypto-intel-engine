@@ -181,6 +181,93 @@ class TwitterSandboxService {
   }
 
   /**
+   * Generate mock posts for a specific account
+   */
+  generateMockPostsForAccount(
+    accountId: string,
+    username: string,
+    coinSymbol: string,
+    count: number = 20
+  ): any[] {
+    const posts: any[] = [];
+    const sentiments: Array<'positive' | 'negative' | 'neutral'> = ['positive', 'negative', 'neutral'];
+    const impacts: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
+    
+    logger.info(`[SANDBOX] Generating ${count} mock posts for account ${username} (${accountId})`);
+    
+    for (let i = 0; i < count; i++) {
+      const postId = `mock_post_${accountId}_${Date.now()}_${i}`;
+      const sentiment = sentiments[Math.floor(Math.random() * sentiments.length)];
+      const impact = impacts[Math.floor(Math.random() * impacts.length)];
+      const sentimentScore = this.generateSentimentScore(sentiment);
+      const impactScore = this.generateImpactScore(impact);
+      
+      // Generate realistic engagement metrics
+      const baseEngagement = Math.floor(Math.random() * 1000) + 50;
+      const likeCount = Math.floor(baseEngagement * (0.7 + Math.random() * 0.6));
+      const retweetCount = Math.floor(baseEngagement * (0.1 + Math.random() * 0.3));
+      const replyCount = Math.floor(baseEngagement * (0.05 + Math.random() * 0.15));
+      
+      posts.push({
+        id: postId,
+        content: this.generateMockTweetText(coinSymbol, sentiment),
+        publishedAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(), // Within last 7 days
+        sentimentScore,
+        sentiment,
+        impact,
+        impactScore,
+        likeCount,
+        retweetCount,
+        replyCount,
+        viewCount: Math.floor(baseEngagement * (5 + Math.random() * 10)), // 5-15x engagement
+        account: {
+          id: accountId,
+          username,
+          displayName: this.capitalizeWords(username.replace(/_/g, ' ')),
+          verified: Math.random() > 0.7, // 30% chance of being verified
+          followersCount: Math.floor(Math.random() * 100000) + 5000,
+          profileImageUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${username}`
+        }
+      });
+    }
+    
+    // Sort by publishedAt (newest first)
+    posts.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    
+    return posts;
+  }
+
+  /**
+   * Generate sentiment score based on sentiment label
+   */
+  private generateSentimentScore(sentiment: 'positive' | 'negative' | 'neutral'): number {
+    switch (sentiment) {
+      case 'positive':
+        return Math.random() * 0.8 + 0.2; // 0.2 to 1.0
+      case 'negative':
+        return -(Math.random() * 0.8 + 0.2); // -1.0 to -0.2
+      case 'neutral':
+      default:
+        return (Math.random() - 0.5) * 0.4; // -0.2 to 0.2
+    }
+  }
+
+  /**
+   * Generate impact score based on impact level
+   */
+  private generateImpactScore(impact: 'low' | 'medium' | 'high'): number {
+    switch (impact) {
+      case 'high':
+        return Math.random() * 0.3 + 0.7; // 0.7 to 1.0
+      case 'medium':
+        return Math.random() * 0.4 + 0.3; // 0.3 to 0.7
+      case 'low':
+      default:
+        return Math.random() * 0.3; // 0.0 to 0.3
+    }
+  }
+
+  /**
    * Generate crypto influencer accounts
    */
   private generateCryptoInfluencers(coinSymbol: string, coinName: string, count: number): TwitterAccountForResult[] {
