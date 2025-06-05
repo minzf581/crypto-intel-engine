@@ -167,12 +167,60 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .filter(asset => asset.isSelected)
         .map(asset => asset.symbol);
       
-      await axios.post('/api/users/assets', { assets: selectedSymbols });
+      console.log('Saving asset preferences:', selectedSymbols);
+      
+      // Try to save assets
+      const response = await axios.post('/api/users/assets', { assets: selectedSymbols });
+      console.log('Assets saved successfully:', response.data);
+      
       return Promise.resolve();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving asset preferences:', error);
-      setError('Failed to save your asset preferences');
-      return Promise.reject(error);
+      
+      // If it's a 400 error about invalid assets, try to create them first
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('invalid')) {
+        console.log('Attempting to create missing assets and retry...');
+        
+        try {
+          const selectedSymbols = availableAssets
+            .filter(asset => asset.isSelected)
+            .map(asset => asset.symbol);
+          
+          // Try to create missing assets
+          for (const symbol of selectedSymbols) {
+            try {
+              const asset = availableAssets.find(a => a.symbol === symbol);
+              if (asset) {
+                await axios.post('/api/assets', {
+                  symbol: asset.symbol,
+                  name: asset.name,
+                  logo: asset.logo
+                });
+                console.log(`Created missing asset: ${symbol}`);
+              }
+            } catch (createError) {
+              console.warn(`Could not create asset ${symbol}:`, createError);
+              // Continue with other assets
+            }
+          }
+          
+          // Retry saving assets after creating them
+          console.log('Retrying asset save after creating missing assets...');
+          const retryResponse = await axios.post('/api/users/assets', { assets: selectedSymbols });
+          console.log('Assets saved successfully on retry:', retryResponse.data);
+          
+          return Promise.resolve();
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+          setError('Failed to save your asset preferences. Please try again.');
+          return Promise.reject(retryError);
+        }
+      } else {
+        // For other errors, show user-friendly message
+        const errorMessage = error.response?.data?.message || 'Failed to save your asset preferences';
+        setError(errorMessage);
+        return Promise.reject(error);
+      }
     } finally {
       setIsLoading(false);
     }

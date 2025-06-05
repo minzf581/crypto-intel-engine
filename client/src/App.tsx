@@ -10,6 +10,7 @@ import SettingsPage from './pages/SettingsPage';
 import SocialSentimentPage from './pages/SocialSentimentPage';
 import SystemStatusPage from './pages/SystemStatusPage';
 import NotFoundPage from './pages/NotFoundPage';
+import TestPage from './pages/TestPage';
 import TestDataSourceStatus from './TestDataSourceStatus';
 import { useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
@@ -128,6 +129,7 @@ const App = () => {
                     <Route path="social-sentiment" element={<SocialSentimentPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                     <Route path="system-status" element={<SystemStatusPage />} />
+                    <Route path="test" element={<TestPage />} />
                   </Route>
 
                   {/* Test Data Source Status route */}

@@ -74,33 +74,87 @@ export const updateUserAssets = async (req: Request, res: Response) => {
     const { assets } = req.body;
     const userId = req.userId;
     
+    console.log('Updating user assets - Assets received:', assets);
+    console.log('User ID:', userId);
+    
     // Validate provided assets
     if (!Array.isArray(assets)) {
+      console.error('Assets validation failed: not an array');
       return errorResponse(res, 'Assets must be an array', 400);
     }
     
     // Check if at least one asset is selected
     if (assets.length < 1) {
+      console.error('Assets validation failed: empty array');
       return errorResponse(res, 'You must select at least 1 asset', 400);
     }
     
-    // Validate all asset symbols exist
-    const assetCount = await Asset.count({
-      where: {
-        symbol: assets
+    console.log('Validating asset symbols in database...');
+    
+    // Get all assets in database for debugging
+    const allAssets = await Asset.findAll({ attributes: ['symbol', 'name'] });
+    console.log('All assets in database:', allAssets.map(a => a.symbol));
+    
+    // Find existing assets
+    const existingAssets = await Asset.findAll({
+      where: { symbol: assets },
+      attributes: ['symbol']
+    });
+    const existingSymbols = existingAssets.map(a => a.symbol);
+    const missingSymbols = assets.filter(symbol => !existingSymbols.includes(symbol));
+    
+    console.log('Existing symbols:', existingSymbols);
+    console.log('Missing symbols:', missingSymbols);
+    
+    // Auto-create missing assets with default data
+    if (missingSymbols.length > 0) {
+      console.log('Auto-creating missing assets:', missingSymbols);
+      
+      for (const symbol of missingSymbols) {
+        try {
+          await Asset.create({
+            symbol: symbol,
+            name: symbol, // Use symbol as fallback name
+            logo: `https://via.placeholder.com/64x64/6366f1/ffffff?text=${symbol}`, // Placeholder logo
+            coingeckoId: undefined // Will be resolved later by price service
+          });
+          console.log(`Created asset: ${symbol}`);
+        } catch (createError) {
+          console.error(`Failed to create asset ${symbol}:`, createError);
+          // Continue with next asset instead of failing completely
+        }
       }
+    }
+    
+    // Now validate again after creating missing assets
+    const finalAssetCount = await Asset.count({
+      where: { symbol: assets }
     });
     
-    if (assetCount !== assets.length) {
-      return errorResponse(res, 'One or more asset symbols are invalid', 400);
+    console.log(`Final asset count check: expected ${assets.length}, found ${finalAssetCount}`);
+    
+    if (finalAssetCount !== assets.length) {
+      const stillMissingAssets = await Asset.findAll({
+        where: { symbol: assets },
+        attributes: ['symbol']
+      });
+      const stillMissingSymbols = assets.filter(symbol => 
+        !stillMissingAssets.map(a => a.symbol).includes(symbol)
+      );
+      
+      console.error('Still missing assets after creation:', stillMissingSymbols);
+      return errorResponse(res, `Could not create or find assets: ${stillMissingSymbols.join(', ')}`, 400);
     }
     
     // Find user
     const user = await User.findByPk(userId);
     
     if (!user) {
+      console.error('User not found:', userId);
       return errorResponse(res, 'User not found', 404);
     }
+    
+    console.log('Current user selected assets:', user.selectedAssets);
     
     // Update user asset selection
     user.selectedAssets = assets;
@@ -112,8 +166,11 @@ export const updateUserAssets = async (req: Request, res: Response) => {
     
     await user.save();
     
-    return successResponse(res, assets, 'User assets updated successfully');
+    console.log('Successfully updated user assets to:', assets);
+    
+    return successResponse(res, { selectedAssets: assets }, 'User assets updated successfully');
   } catch (error) {
+    console.error('Error updating user assets:', error);
     return errorResponse(res, 'Error updating user assets', 500, error);
   }
 };

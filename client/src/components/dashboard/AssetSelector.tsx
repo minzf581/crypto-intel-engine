@@ -59,8 +59,13 @@ const AssetSelector = ({ isMobile = false }: AssetSelectorProps) => {
     setIsSaving(true);
     try {
       await saveAssetPreferences();
-    } catch (error) {
+      console.log('Asset preferences saved successfully');
+    } catch (error: any) {
       console.error('Error saving preferences:', error);
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save preferences';
+      
+      alert(`Error: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }
