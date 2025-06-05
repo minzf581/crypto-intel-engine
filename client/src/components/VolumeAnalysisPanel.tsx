@@ -39,9 +39,14 @@ export default function VolumeAnalysisPanel() {
       const response = await api.get('/api/notifications-enhanced/volume-analysis');
       
       if (response.data.success) {
-        setVolumeData(response.data.data);
+        // Limit to 5 most recent assets
+        const limitedData = {
+          ...response.data.data,
+          assets: response.data.data.assets.slice(0, 5)
+        };
+        setVolumeData(limitedData);
       } else {
-        // Set mock data for demonstration
+        // Set limited mock data for demonstration (only 5 items)
         setVolumeData({
           overview: {
             totalVolume: 45892000000,
@@ -85,6 +90,15 @@ export default function VolumeAnalysisPanel() {
               trend: 'up',
               significance: 'high',
               spike: true
+            },
+            {
+              symbol: 'ADA',
+              name: 'Cardano',
+              volume24h: 890000000,
+              volumeChange: -12.3,
+              trend: 'down',
+              significance: 'medium',
+              spike: false
             }
           ]
         });
@@ -93,7 +107,7 @@ export default function VolumeAnalysisPanel() {
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to fetch volume data:', error);
-      // Set mock data on error
+      // Set limited mock data on error (only 5 items)
       setVolumeData({
         overview: {
           totalVolume: 45892000000,
@@ -127,6 +141,24 @@ export default function VolumeAnalysisPanel() {
             volumeChange: -5.8,
             trend: 'down',
             significance: 'low',
+            spike: false
+          },
+          {
+            symbol: 'DOGE',
+            name: 'Dogecoin',
+            volume24h: 1200000000,
+            volumeChange: 45.7,
+            trend: 'up',
+            significance: 'high',
+            spike: true
+          },
+          {
+            symbol: 'ADA',
+            name: 'Cardano',
+            volume24h: 890000000,
+            volumeChange: -12.3,
+            trend: 'down',
+            significance: 'medium',
             spike: false
           }
         ]
@@ -199,7 +231,7 @@ export default function VolumeAnalysisPanel() {
       ) : volumeData ? (
         <div className="space-y-6">
           {/* Overview Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="bg-blue-50 p-4 rounded-lg">
               <div className="text-sm text-blue-600 font-medium">Total Volume</div>
               <div className="text-lg font-bold text-blue-900">
@@ -212,29 +244,20 @@ export default function VolumeAnalysisPanel() {
                 +{safeToFixed(volumeData.overview.avgVolumeChange, 1)}%
               </div>
             </div>
-            <div className="bg-red-50 p-4 rounded-lg">
-              <div className="text-sm text-red-600 font-medium">Spikes</div>
-              <div className="text-lg font-bold text-red-900">
-                {volumeData.overview.spikesDetected}
-              </div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-600 font-medium">Active Assets</div>
-              <div className="text-lg font-bold text-gray-900">
-                {volumeData.overview.activeAssets}
-              </div>
-            </div>
           </div>
 
-          {/* Asset Volume List */}
+          {/* Asset Volume List - Limited to 5 items */}
           <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">Asset Volume Changes</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">Recent Volume Changes</h4>
+              <span className="text-xs text-gray-500">Top 5 Assets</span>
+            </div>
             {volumeData.assets.map((asset, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-2">
                     <span className="font-medium">{asset.symbol}</span>
-                    <span className="text-sm text-gray-600">{asset.name}</span>
+                    <span className="text-sm text-gray-600 truncate max-w-20">{asset.name}</span>
                   </div>
                   {asset.spike && (
                     <ExclamationTriangleIcon className="h-4 w-4 text-orange-500" title="Volume Spike" />

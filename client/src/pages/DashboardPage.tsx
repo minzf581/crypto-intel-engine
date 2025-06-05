@@ -14,8 +14,7 @@ import SignalCard from '@/components/dashboard/SignalCard';
 import SignalDetailModal from '@/components/dashboard/SignalDetailModal';
 import SignalFilters from '@/components/dashboard/SignalFilters';
 import AnalysisOverview from '@/components/dashboard/AnalysisOverview';
-import DataSourceStatus from '@/components/DataSourceStatus';
-import SocialSentimentWidget from '@/components/dashboard/SocialSentimentWidget';
+import SentimentAlertsPanel from '@/components/SentimentAlertsPanel';
 import VolumeAnalysisPanel from '@/components/VolumeAnalysisPanel';
 import NewsAnalysisPanel from '@/components/NewsAnalysisPanel';
 import EnhancedNotificationCenter from '@/components/EnhancedNotificationCenter';
@@ -107,9 +106,6 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      {/* Data Source Status */}
-      <DataSourceStatus />
-
       {/* Show no assets message if user hasn't selected any */}
       {selectedAssets.length === 0 ? (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-8">
@@ -153,7 +149,7 @@ const DashboardPage = () => {
         <>
           {/* Real-time Price Cards */}
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center space-x-2 mb-4">
+            <div className="flex items-center space-x-2 mb-6">
               <CurrencyDollarIcon className="w-6 h-6 text-blue-600" />
               <h2 className="text-xl font-semibold text-gray-900">Real-time Prices</h2>
               <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
@@ -168,7 +164,7 @@ const DashboardPage = () => {
             )}
             
             {priceData.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {priceData.map((data) => (
                   <PriceCard key={data.symbol} priceData={data} />
                 ))}
@@ -189,23 +185,23 @@ const DashboardPage = () => {
             )}
           </div>
 
-          {/* Social Sentiment Analysis Widget */}
-          <SocialSentimentWidget 
-            selectedCoin={selectedAssets.length > 0 ? selectedAssets[0].symbol : 'BTC'}
-            coinName={selectedAssets.length > 0 ? selectedAssets[0].name : 'Bitcoin'}
-          />
-
           {/* Three-column analysis section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Sentiment Alerts Panel */}
+            <SentimentAlertsPanel 
+              coinSymbol={selectedAssets.length > 0 ? selectedAssets[0].symbol : 'BTC'}
+              coinName={selectedAssets.length > 0 ? selectedAssets[0].name : 'Bitcoin'}
+            />
+            
             {/* Volume Analysis */}
             <VolumeAnalysisPanel />
             
             {/* News Analysis */}
             <NewsAnalysisPanel />
-            
-            {/* Enhanced Notification Center */}
-            <EnhancedNotificationCenter />
           </div>
+
+          {/* Enhanced Notification Center */}
+          <EnhancedNotificationCenter />
 
           {/* Signal Analysis Area */}
           <div className="bg-white rounded-lg shadow p-6">
